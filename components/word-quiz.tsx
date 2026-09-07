@@ -115,7 +115,7 @@ export function WordQuiz({ words, accent }: { words: QuizWord[]; accent: string 
         <p className="mt-1.5 text-sm leading-relaxed text-muted-foreground">
           위의 <span className="font-medium text-foreground">&lsquo;단어 입력&rsquo;</span> 탭에서
           <br />
-          아빠가 오늘 외울 단어를 넣어 주세요.
+          오늘 외울 단어를 넣어 주세요.
         </p>
       </div>
     )
