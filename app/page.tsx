@@ -30,7 +30,7 @@ export default async function Page({
     <main className="mx-auto flex min-h-dvh w-full max-w-lg flex-col gap-6 px-4 py-8">
       <header className="flex flex-col gap-1 text-center">
         <h1 className="text-2xl font-black tracking-tight text-foreground">우리집 영단어 숙제</h1>
-        <p className="text-sm text-muted-foreground">딸이 외울 단어를 골라 퀴즈로 연습해요</p>
+        <p className="text-sm text-muted-foreground">외울 단어를 골라 퀴즈로 연습해요</p>
       </header>
 
       <nav className="grid grid-cols-2 gap-2" aria-label="딸 선택">
