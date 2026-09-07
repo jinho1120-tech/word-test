@@ -64,3 +64,23 @@ export async function clearWords(profile: string, date: string) {
     .where(and(eq(wordEntries.profile, profile), eq(wordEntries.assignmentDate, date)))
   revalidatePath("/")
 }
+export async function updateWord(
+  id: number,
+  input: { word: string; meaning: string; example?: string }
+) {
+  const word = input.word.trim()
+  const meaning = input.meaning.trim()
+  const example = input.example?.trim() || null
+
+  if (!word || !meaning) {
+    throw new Error("단어와 뜻을 모두 입력해 주세요.")
+  }
+
+  // 데이터베이스에서 해당 id의 단어 데이터를 새 내용으로 덮어씁니다
+  await db
+    .update(wordEntries)
+    .set({ word, meaning, example })
+    .where(eq(wordEntries.id, id))
+
+  revalidatePath("/")
+}
