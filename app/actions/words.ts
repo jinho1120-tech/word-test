@@ -64,6 +64,29 @@ export async function clearWords(profile: string, date: string) {
     .where(and(eq(wordEntries.profile, profile), eq(wordEntries.assignmentDate, date)))
   revalidatePath("/")
 }
+
+// ▼ 새롭게 추가된 일괄 등록 기능 ▼
+export async function addWordsBulk(inputs: {
+  profile: string
+  date: string
+  words: { word: string; meaning: string; example?: string }[]
+}) {
+  assertProfile(inputs.profile)
+  if (inputs.words.length === 0) return
+
+  const values = inputs.words.map((w) => ({
+    profile: inputs.profile,
+    assignmentDate: inputs.date,
+    word: w.word.trim(),
+    meaning: w.meaning.trim(),
+    example: w.example?.trim() || null,
+  }))
+
+  await db.insert(wordEntries).values(values)
+  revalidatePath("/")
+}
+
+// ▼ 새롭게 추가된 단어 개별 수정 기능 ▼
 export async function updateWord(
   id: number,
   input: { word: string; meaning: string; example?: string }
@@ -76,7 +99,6 @@ export async function updateWord(
     throw new Error("단어와 뜻을 모두 입력해 주세요.")
   }
 
-  // 데이터베이스에서 해당 id의 단어 데이터를 새 내용으로 덮어씁니다
   await db
     .update(wordEntries)
     .set({ word, meaning, example })
