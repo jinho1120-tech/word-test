@@ -133,7 +133,7 @@ export function WordQuiz({ words, accent }: { words: QuizWord[]; accent: string 
           </div>
           <h2 className="mb-2 text-xl font-black text-foreground">오늘의 단어 퀴즈</h2>
           <p className="mb-8 text-pretty text-sm leading-relaxed text-muted-foreground">
-            한국어 뜻을 보고 영단어를 직접 입력하세요.
+            한국어 뜻을 보고 영단어를<br />직접 입력하세요.
             <br />총 {words.length}개의 단어가 준비되어 있어요.
           </p>
           <button
