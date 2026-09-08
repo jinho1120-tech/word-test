@@ -2,7 +2,6 @@
 
 import type React from "react"
 import { useMemo, useRef, useState } from "react"
-// ▼ Volume2 (스피커 아이콘)가 추가되었습니다.
 import { Trophy, Lightbulb, RotateCcw, Check, X, ArrowRight, Play, Volume2 } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { recordQuizResult } from "@/app/actions/words"
@@ -53,13 +52,12 @@ export function WordQuiz({ words, accent }: { words: QuizWord[]; accent: string 
     return Math.round((correctCount / total) * 100)
   }, [correctCount, total])
 
-  // ▼ 브라우저 기본 음성(TTS) 엔진으로 단어를 읽어주는 함수입니다.
   function playPronunciation(word: string) {
     if (typeof window !== "undefined" && "speechSynthesis" in window) {
-      window.speechSynthesis.cancel() // 기존에 재생 중이던 소리를 즉시 멈춤
+      window.speechSynthesis.cancel()
       const utterance = new SpeechSynthesisUtterance(word)
-      utterance.lang = "en-US" // 미국 영어 발음
-      utterance.rate = 0.85 // 받아쓰기용으로 약간 천천히(기본 1.0) 또박또박 읽도록 설정
+      utterance.lang = "en-US"
+      utterance.rate = 0.85
       window.speechSynthesis.speak(utterance)
     }
   }
@@ -98,7 +96,6 @@ export function WordQuiz({ words, accent }: { words: QuizWord[]; accent: string 
     const guess = value.trim().toLowerCase()
     if (!guess) return
 
-    // 정답을 제출하면 재생 중이던 소리를 즉시 끕니다.
     if (typeof window !== "undefined" && "speechSynthesis" in window) {
       window.speechSynthesis.cancel()
     }
@@ -126,8 +123,6 @@ export function WordQuiz({ words, accent }: { words: QuizWord[]; accent: string 
     }
   }
 
-  const wrongWords = answered.filter((a) => !a.correct).map((a) => a.word)
-
   if (words.length === 0) {
     return (
       <div className="rounded-3xl border border-dashed border-border bg-muted/30 px-6 py-12 text-center">
@@ -136,27 +131,32 @@ export function WordQuiz({ words, accent }: { words: QuizWord[]; accent: string 
     )
   }
 
-  return (
-    <div className="overflow-hidden rounded-3xl border border-border bg-card shadow-sm">
-      {phase === "start" && (
-        <div className="flex flex-col items-center px-6 py-12 text-center">
-          <div className="mb-5 flex size-16 items-center justify-center rounded-2xl text-white" style={{ backgroundColor: accent }}>
-            <Play className="size-7" fill="currentColor" />
-          </div>
-          <h2 className="mb-2 text-xl font-black text-foreground">단어 퀴즈</h2>
-          <p className="mb-8 text-pretty text-sm leading-relaxed text-muted-foreground">총 {words.length}개의 단어가 준비되어 있어요.</p>
-          <button onClick={() => begin(words)} className="w-full rounded-2xl py-4 text-lg font-bold text-white shadow-md transition-opacity hover:opacity-90 active:opacity-80" style={{ backgroundColor: accent }}>
-            퀴즈 시작하기
-          </button>
-        </div>
-      )}
-
-      {phase === "quiz" && current && (
-        <>
-          <div className="h-1.5 w-full bg-muted">
+  // ▼ [새 기능] 퀴즈 진행 중일 때는 화면 전체를 덮는 집중 모드(Full Screen Overlay)로 렌더링합니다.
+  if (phase === "quiz" && current) {
+    return (
+      <div className="fixed inset-0 z-50 flex items-center justify-center bg-background sm:bg-background/95 sm:backdrop-blur-sm sm:p-6 animate-in fade-in duration-200">
+        <div className="flex h-full w-full max-w-lg flex-col overflow-hidden bg-card sm:h-auto sm:max-h-[850px] sm:rounded-3xl sm:border sm:border-border sm:shadow-2xl">
+          
+          <div className="h-1.5 w-full bg-muted shrink-0">
             <div className="h-1.5 transition-all duration-300" style={{ width: `${((index + 1) / total) * 100}%`, backgroundColor: accent }} />
           </div>
-          <div className="flex flex-col px-6 py-8">
+
+          {/* ▼ 나가기 버튼: 우측 상단 구석에 작게 배치 */}
+          <div className="flex justify-end p-4 pb-0 shrink-0">
+            <button
+              type="button"
+              onClick={() => {
+                if(window.confirm("퀴즈를 중단하고 나갈까요? 진행 상황은 저장되지 않아요.")) {
+                  setPhase("start")
+                }
+              }}
+              className="flex items-center gap-1 rounded-full bg-muted/50 px-3 py-1.5 text-xs font-bold text-muted-foreground transition-colors hover:bg-red-50 hover:text-red-500"
+            >
+              나가기 <X className="size-3" />
+            </button>
+          </div>
+
+          <div className="flex flex-col px-6 pb-8 pt-4 flex-1 overflow-y-auto">
             <div className="mb-6 flex items-center justify-between text-xs font-medium text-muted-foreground">
               <span>점수 <span className="font-bold text-foreground">{score}</span></span>
               <span className="rounded-full bg-muted px-3 py-1 font-semibold text-foreground">{index + 1} / {total}</span>
@@ -172,7 +172,6 @@ export function WordQuiz({ words, accent }: { words: QuizWord[]; accent: string 
               {current.meaning}
             </h2>
 
-            {/* ▼ 힌트 영역 레이아웃 변경: 힌트 사용 시 스피커 버튼 노출 */}
             <div className="mb-8 flex min-h-24 flex-col items-center justify-center gap-3 rounded-2xl border border-border bg-muted/50 p-4">
               <p className="text-pretty text-center font-serif italic leading-relaxed text-muted-foreground">
                 {hintUsed
@@ -185,11 +184,7 @@ export function WordQuiz({ words, accent }: { words: QuizWord[]; accent: string 
               {hintUsed && (
                 <button
                   type="button"
-                  onMouseDown={(e) => {
-                    // 클릭 시 입력창에서 키보드가 내려가거나 포커스를 잃는 현상을 완벽히 방지합니다.
-                    e.preventDefault() 
-                    playPronunciation(current.word)
-                  }}
+                  onMouseDown={(e) => { e.preventDefault(); playPronunciation(current.word); }}
                   className="flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-bold transition-opacity hover:opacity-80 shadow-sm"
                   style={{ backgroundColor: accent, color: "white" }}
                 >
@@ -211,9 +206,28 @@ export function WordQuiz({ words, accent }: { words: QuizWord[]; accent: string 
               {feedback === "correct" && "잘했어요!"}
               {feedback === "wrong" && "다음 문제로"}
             </button>
-            <button onClick={() => setHintUsed(true)} disabled={hintUsed || feedback !== "idle"} className="mt-3 flex w-full items-center justify-center gap-1.5 rounded-2xl border border-border py-3 text-sm font-semibold text-muted-foreground transition-colors hover:bg-muted disabled:opacity-40"><Lightbulb className="size-4" /> 힌트 보기</button>
+            
+            <button onClick={() => setHintUsed(true)} disabled={hintUsed || feedback !== "idle"} className="mt-3 mb-4 flex w-full items-center justify-center gap-1.5 rounded-2xl border border-border py-3 text-sm font-semibold text-muted-foreground transition-colors hover:bg-muted disabled:opacity-40"><Lightbulb className="size-4" /> 힌트 보기</button>
           </div>
-        </>
+        </div>
+      </div>
+    )
+  }
+
+  // ▼ 퀴즈 대기(start) 및 결과(result) 화면은 기존처럼 평범하게 보여줍니다.
+  return (
+    <div className="overflow-hidden rounded-3xl border border-border bg-card shadow-sm">
+      {phase === "start" && (
+        <div className="flex flex-col items-center px-6 py-12 text-center">
+          <div className="mb-5 flex size-16 items-center justify-center rounded-2xl text-white" style={{ backgroundColor: accent }}>
+            <Play className="size-7" fill="currentColor" />
+          </div>
+          <h2 className="mb-2 text-xl font-black text-foreground">단어 퀴즈</h2>
+          <p className="mb-8 text-pretty text-sm leading-relaxed text-muted-foreground">총 {words.length}개의 단어가 준비되어 있어요.</p>
+          <button onClick={() => begin(words)} className="w-full rounded-2xl py-4 text-lg font-bold text-white shadow-md transition-opacity hover:opacity-90 active:opacity-80" style={{ backgroundColor: accent }}>
+            퀴즈 시작하기
+          </button>
+        </div>
       )}
 
       {phase === "result" && (
