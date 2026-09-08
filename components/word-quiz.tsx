@@ -2,11 +2,11 @@
 
 import type React from "react"
 import { useMemo, useRef, useState } from "react"
-import { Trophy, Lightbulb, RotateCcw, Check, X, ArrowRight, Play } from "lucide-react"
+// ▼ Volume2 (스피커 아이콘)가 추가되었습니다.
+import { Trophy, Lightbulb, RotateCcw, Check, X, ArrowRight, Play, Volume2 } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { recordQuizResult } from "@/app/actions/words"
 
-// ▼ subject 타입 추가
 export type QuizWord = {
   id: number
   word: string
@@ -53,6 +53,17 @@ export function WordQuiz({ words, accent }: { words: QuizWord[]; accent: string 
     return Math.round((correctCount / total) * 100)
   }, [correctCount, total])
 
+  // ▼ 브라우저 기본 음성(TTS) 엔진으로 단어를 읽어주는 함수입니다.
+  function playPronunciation(word: string) {
+    if (typeof window !== "undefined" && "speechSynthesis" in window) {
+      window.speechSynthesis.cancel() // 기존에 재생 중이던 소리를 즉시 멈춤
+      const utterance = new SpeechSynthesisUtterance(word)
+      utterance.lang = "en-US" // 미국 영어 발음
+      utterance.rate = 0.85 // 받아쓰기용으로 약간 천천히(기본 1.0) 또박또박 읽도록 설정
+      window.speechSynthesis.speak(utterance)
+    }
+  }
+
   function begin(list: QuizWord[]) {
     const d = shuffle(list)
     setDeck(d)
@@ -86,6 +97,11 @@ export function WordQuiz({ words, accent }: { words: QuizWord[]; accent: string 
     if (!current || feedback !== "idle") return
     const guess = value.trim().toLowerCase()
     if (!guess) return
+
+    // 정답을 제출하면 재생 중이던 소리를 즉시 끕니다.
+    if (typeof window !== "undefined" && "speechSynthesis" in window) {
+      window.speechSynthesis.cancel()
+    }
 
     if (guess === current.word.toLowerCase()) {
       const newStreak = streak + 1
@@ -148,7 +164,6 @@ export function WordQuiz({ words, accent }: { words: QuizWord[]; accent: string 
             </div>
 
             <h2 className="mb-4 text-balance text-center text-4xl font-black tracking-tight text-foreground">
-              {/* ▼ 퀴즈 도중 단어의 과목을 보여주는 태그 추가 */}
               <div className="mb-3 flex justify-center">
                 <span className="rounded-full bg-muted/80 px-2.5 py-1 text-[11px] font-bold tracking-wide text-muted-foreground">
                   {current.subject}
@@ -157,7 +172,8 @@ export function WordQuiz({ words, accent }: { words: QuizWord[]; accent: string 
               {current.meaning}
             </h2>
 
-            <div className="mb-8 flex min-h-20 items-center justify-center rounded-2xl border border-border bg-muted/50 p-4">
+            {/* ▼ 힌트 영역 레이아웃 변경: 힌트 사용 시 스피커 버튼 노출 */}
+            <div className="mb-8 flex min-h-24 flex-col items-center justify-center gap-3 rounded-2xl border border-border bg-muted/50 p-4">
               <p className="text-pretty text-center font-serif italic leading-relaxed text-muted-foreground">
                 {hintUsed
                   ? current.example
@@ -165,6 +181,21 @@ export function WordQuiz({ words, accent }: { words: QuizWord[]; accent: string 
                     : `첫 글자: ${current.word[0]} (${current.word.length}글자)`
                   : "힌트를 보려면 아래 힌트 버튼을 눌러 주세요."}
               </p>
+              
+              {hintUsed && (
+                <button
+                  type="button"
+                  onMouseDown={(e) => {
+                    // 클릭 시 입력창에서 키보드가 내려가거나 포커스를 잃는 현상을 완벽히 방지합니다.
+                    e.preventDefault() 
+                    playPronunciation(current.word)
+                  }}
+                  className="flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-bold transition-opacity hover:opacity-80 shadow-sm"
+                  style={{ backgroundColor: accent, color: "white" }}
+                >
+                  <Volume2 className="size-4" /> 단어 듣기
+                </button>
+              )}
             </div>
 
             <input ref={inputRef} type="text" value={value} onChange={(e) => setValue(e.target.value)} onKeyDown={onKeyDown} autoComplete="off" autoCorrect="off" autoCapitalize="none" spellCheck={false} disabled={feedback !== "idle"} placeholder="영단어를 입력하세요" className={cn("mb-3 w-full border-b-4 bg-transparent p-3 text-center text-3xl font-bold outline-none transition-colors placeholder:text-base placeholder:font-normal placeholder:text-muted-foreground", feedback === "idle" && "border-border text-foreground", feedback === "correct" && "border-green-500 text-green-600", feedback === "wrong" && "animate-shake border-red-500 text-red-500")} style={feedback === "idle" ? { caretColor: accent } : undefined} />
