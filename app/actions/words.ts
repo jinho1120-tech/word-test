@@ -156,14 +156,12 @@ export async function scanImageWithGemini(base64Image: string, mimeType: string)
     } catch {
       return { success: false, error: `[JSON 파싱 실패] 원문 일부: ${cleanText.slice(0, 200)}` }
     }
-  } catch (e: unknown) {
-    const error = e as Error
-    return { success: false, error: `[서버 내부 문제] ${error.message}` }
+  } catch (e: any) {
+    return { success: false, error: `[서버 내부 문제] ${e.message}` }
   }
 }
 
 export async function getActiveDates(profile: string): Promise<string[]> {
-  assertProfile(profile)
   const results = await db
     .select({ date: wordEntries.assignmentDate })
     .from(wordEntries)
@@ -173,7 +171,6 @@ export async function getActiveDates(profile: string): Promise<string[]> {
 }
 
 export async function getLatestActiveDate(profile: string): Promise<string | null> {
-  assertProfile(profile)
   const result = await db
     .select({ date: wordEntries.assignmentDate })
     .from(wordEntries)
