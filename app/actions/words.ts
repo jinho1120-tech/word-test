@@ -105,26 +105,27 @@ export async function updateWord(
   revalidatePath("/")
 }
 
-// ▼ 캐시 무력화 + 최신 모델명(-latest) + 올바른 규격을 모두 적용한 최종 스캔 로직 ▼
+// ▼ 암호 공백 제거(.trim()) 및 표준 규격을 적용한 최종 스캔 로직 ▼
 export async function scanImageWithGemini(base64Image: string, mimeType: string) {
   try {
-    const apiKey = process.env.GEMINI_API_KEY;
+    // 핵심 해결책: Vercel 환경변수 복사 시 딸려 들어간 공백/줄바꿈을 강제로 잘라냅니다.
+    const apiKey = process.env.GEMINI_API_KEY?.trim();
     if (!apiKey) {
       return { success: false, error: "Vercel 서버에 API 키가 등록되지 않았습니다." };
     }
 
-    // 1. 모델명을 명확한 최신 버전(-latest)으로 수정했습니다.
-    const endpoint = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash-latest:generateContent?key=${apiKey}`;
+    // 가장 안정적인 최신 v1beta 표준 모델 주소
+    const endpoint = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey}`;
 
     const response = await fetch(endpoint, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      cache: "no-store", // 2. Vercel 서버의 고집스러운 캐시(과거 에러 기억)를 강제로 박살냅니다.
+      cache: "no-store",
       body: JSON.stringify({
         contents: [{
           parts: [
             { text: "이 이미지 속의 표나 텍스트에서 '영어 단어'와 '한글 뜻'을 완벽하게 짝지어 추출해줘. 추출한 결과는 반드시 [{\"word\": \"apple\", \"meaning\": \"사과\"}] 형태의 순수한 JSON 배열 형식으로만 대답해. 마크다운 기호나 설명은 절대 추가하지 마." },
-            { inline_data: { mime_type: mimeType, data: base64Image } } // 3. 구글이 좋아하는 언더바 규격 원상복구
+            { inline_data: { mime_type: mimeType, data: base64Image } }
           ]
         }],
         generationConfig: { temperature: 0.1 }
