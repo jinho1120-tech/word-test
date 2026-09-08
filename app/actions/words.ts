@@ -105,14 +105,13 @@ export async function updateWord(
   revalidatePath("/")
 }
 
-// ▼ 새롭게 추가된 Gemini AI 사진 스캔 로직 ▼
+// ▼ 수정된 Gemini AI 사진 스캔 로직 (통신 규격 에러 완벽 수정본) ▼
 export async function scanImageWithGemini(base64Image: string, mimeType: string) {
   const apiKey = process.env.GEMINI_API_KEY;
   if (!apiKey) {
-    throw new Error("Vercel 서버에 GEMINI_API_KEY가 설정되지 않았습니다.");
+    throw new Error("Vercel 서버에 API 키가 설정되지 않았습니다.");
   }
 
-  // Gemini 1.5 Flash 모델 호출 (빠르고 가벼움)
   const endpoint = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey}`;
 
   const response = await fetch(endpoint, {
@@ -121,8 +120,8 @@ export async function scanImageWithGemini(base64Image: string, mimeType: string)
     body: JSON.stringify({
       contents: [{
         parts: [
-          { text: "이 이미지 속의 표나 텍스트에서 '영어 단어'와 '한글 뜻'을 완벽하게 짝지어 추출해줘. 추출한 결과는 반드시 [{'word': 'apple', 'meaning': '사과'}, ...] 형태의 순수한 JSON 배열 형식으로만 대답해. 마크다운 기호나 설명은 절대 추가하지 마." },
-          { inline_data: { mime_type: mimeType, data: base64Image } }
+          { text: "이 이미지 속의 표나 텍스트에서 '영어 단어'와 '한글 뜻'을 완벽하게 짝지어 추출해줘. 추출한 결과는 반드시 [{\"word\": \"apple\", \"meaning\": \"사과\"}] 형태의 순수한 JSON 배열 형식으로만 대답해. 마크다운 기호나 설명은 절대 추가하지 마." },
+          { inlineData: { mimeType: mimeType, data: base64Image } } // 통신 에러의 원인이었던 언더바(_)를 제거했습니다.
         ]
       }],
       generationConfig: { temperature: 0.1 }
@@ -130,14 +129,15 @@ export async function scanImageWithGemini(base64Image: string, mimeType: string)
   });
 
   if (!response.ok) {
-    throw new Error("AI가 사진을 분석하는 데 실패했습니다.");
+    const errorText = await response.text();
+    console.error("Gemini API Error:", errorText);
+    throw new Error("AI 서버와 통신하는 중 문제가 발생했습니다.");
   }
 
   const data = await response.json();
   const text = data.candidates?.[0]?.content?.parts?.[0]?.text || "[]";
   
   try {
-    // AI가 습관적으로 넣는 마크다운(```) 기호 제거 후 안전하게 변환
     const cleanText = text.replace(/```json/g, '').replace(/```/g, '').trim();
     return JSON.parse(cleanText);
   } catch (e) {
