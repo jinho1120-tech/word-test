@@ -4,7 +4,7 @@ import type React from "react"
 import { useState, useTransition, useRef } from "react"
 import { useRouter } from "next/navigation"
 import { Plus, Trash2, Loader2, BookMarked, AlignLeft, MousePointerClick, Pencil, X, Check, Camera } from "lucide-react"
-import { addWord, deleteWord, addWordsBulk, updateWord, scanImageWithGemini, type Profile } from "@/app/actions/words"
+import { addWord, deleteWord, clearWords, addWordsBulk, updateWord, scanImageWithGemini, type Profile } from "@/app/actions/words"
 import type { QuizWord } from "@/components/word-quiz"
 import { cn } from "@/lib/utils"
 
@@ -69,11 +69,10 @@ export function WordManager({
       const base64Data = compressedDataUrl.split(',')[1]
       const mimeType = 'image/jpeg'
       
-      // 진짜 에러 원인을 받아옵니다
       const result = await scanImageWithGemini(base64Data, mimeType)
       
       if (!result.success) {
-        setError(result.error) // 화면에 구체적인 에러 메시지를 띄웁니다!
+        setError(result.error)
         setIsScanning(false)
         if (fileInputRef.current) fileInputRef.current.value = ""
         return
@@ -151,6 +150,17 @@ export function WordManager({
     startTransition(async () => { await deleteWord(id); router.refresh() })
   }
 
+  // ▼ 새롭게 추가된 일괄 삭제 기능 ▼
+  function handleClearAll() {
+    if (!window.confirm("오늘 추가한 모든 단어를 정말로 삭제하시겠습니까? (이 작업은 되돌릴 수 없습니다)")) {
+      return
+    }
+    startTransition(async () => {
+      await clearWords(profile, date)
+      router.refresh()
+    })
+  }
+
   return (
     <div className="flex flex-col gap-6">
       <input type="file" accept="image/*" ref={fileInputRef} onChange={handleImageUpload} className="hidden" />
@@ -186,7 +196,7 @@ export function WordManager({
           </form>
         ) : (
           <form onSubmit={handleBulkSubmit} className="flex flex-col gap-3 mt-2">
-            <textarea value={bulkText} onChange={(e) => setBulkText(e.target.value)} placeholder={isScanning ? "제미나이(Gemini)가 표를 분석하고 있습니다. 잠시만요..." : "사진을 스캔하거나 직접 입력하세요.\n(예: apple, 사과)"} className="min-h-40 rounded-xl border border-input bg-background px-4 py-3 text-sm outline-none focus:ring-2 focus:ring-ring resize-y" />
+            <textarea value={bulkText} onChange={(e) => setBulkText(e.target.value)} placeholder={isScanning ? "AI가 표를 분석하고 있습니다. 잠시만요..." : "사진을 스캔하거나 직접 입력하세요.\n(예: apple, 사과)"} className="min-h-40 rounded-xl border border-input bg-background px-4 py-3 text-sm outline-none focus:ring-2 focus:ring-ring resize-y" />
             {error && <p className="text-sm font-bold text-red-500 break-words bg-red-50 p-3 rounded-lg border border-red-200">{error}</p>}
             <button type="submit" disabled={isPending || isScanning || !bulkText.trim()} className="flex items-center justify-center gap-1.5 rounded-xl py-3 text-sm font-bold text-white shadow-sm transition-opacity hover:opacity-90 disabled:opacity-60" style={{ backgroundColor: accent }}>
               {isPending ? <Loader2 className="size-4 animate-spin" /> : <AlignLeft className="size-4" />} 일괄 저장하기
@@ -196,9 +206,22 @@ export function WordManager({
       </div>
 
       <div>
-        <div className="mb-2 flex items-center gap-1.5 text-sm font-semibold text-foreground">
-          <BookMarked className="size-4" style={{ color: accent }} /> 오늘의 단어 목록 ({words.length})
+        <div className="mb-2 flex items-center justify-between">
+          <div className="flex items-center gap-1.5 text-sm font-semibold text-foreground">
+            <BookMarked className="size-4" style={{ color: accent }} /> 오늘의 단어 목록 ({words.length})
+          </div>
+          {/* ▼ 단어가 1개 이상일 때만 나타나는 일괄 삭제 버튼 ▼ */}
+          {words.length > 0 && (
+            <button 
+              onClick={handleClearAll} 
+              disabled={isPending}
+              className="flex items-center gap-1 rounded-md bg-red-50 px-2.5 py-1.5 text-xs font-bold text-red-500 transition-colors hover:bg-red-100 disabled:opacity-50"
+            >
+              <Trash2 className="size-3" /> 전체 삭제
+            </button>
+          )}
         </div>
+        
         {words.length === 0 ? (
           <p className="rounded-2xl border border-dashed border-border bg-muted/30 px-4 py-8 text-center text-sm text-muted-foreground">아직 추가된 단어가 없어요.</p>
         ) : (
