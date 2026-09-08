@@ -105,7 +105,7 @@ export async function updateWord(
   revalidatePath("/")
 }
 
-// ▼ 암호 공백 제거(.trim()) 및 표준 규격을 적용한 최종 스캔 로직 ▼
+// ▼ 구글이 요구한 최신 모델(gemini-3.6-flash)로 수정한 최종 스캔 로직 ▼
 export async function scanImageWithGemini(base64Image: string, mimeType: string) {
   try {
     const apiKey = process.env.GEMINI_API_KEY?.trim();
@@ -113,8 +113,8 @@ export async function scanImageWithGemini(base64Image: string, mimeType: string)
       return { success: false, error: "Vercel 서버에 API 키가 등록되지 않았습니다." };
     }
 
-    // gemini-1.5-flash는 서비스 종료되어 항상 404가 남 → gemini-2.5-flash로 교체
-    const endpoint = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`;
+    // 에러 메시지 지침에 따라 모델명을 gemini-3.6-flash로 교체했습니다.
+    const endpoint = `https://generativelanguage.googleapis.com/v1beta/models/gemini-3.6-flash:generateContent?key=${apiKey}`;
 
     const response = await fetch(endpoint, {
       method: "POST",
@@ -129,7 +129,7 @@ export async function scanImageWithGemini(base64Image: string, mimeType: string)
         }],
         generationConfig: {
           temperature: 0.1,
-          responseMimeType: "application/json", // 마크다운으로 감싸져 나오는 문제 자체를 방지
+          responseMimeType: "application/json",
         }
       })
     });
