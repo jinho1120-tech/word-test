@@ -105,7 +105,7 @@ export async function updateWord(
   revalidatePath("/")
 }
 
-// ▼ 수정된 Gemini AI 사진 스캔 로직 (통신 규격 에러 완벽 수정본) ▼
+// ▼ 통신 규격(언더바)을 원상 복구한 최종 스캔 로직 ▼
 export async function scanImageWithGemini(base64Image: string, mimeType: string) {
   const apiKey = process.env.GEMINI_API_KEY;
   if (!apiKey) {
@@ -121,7 +121,7 @@ export async function scanImageWithGemini(base64Image: string, mimeType: string)
       contents: [{
         parts: [
           { text: "이 이미지 속의 표나 텍스트에서 '영어 단어'와 '한글 뜻'을 완벽하게 짝지어 추출해줘. 추출한 결과는 반드시 [{\"word\": \"apple\", \"meaning\": \"사과\"}] 형태의 순수한 JSON 배열 형식으로만 대답해. 마크다운 기호나 설명은 절대 추가하지 마." },
-          { inlineData: { mimeType: mimeType, data: base64Image } } // 통신 에러의 원인이었던 언더바(_)를 제거했습니다.
+          { inline_data: { mime_type: mimeType, data: base64Image } } // ← 구글 서버가 요구하는 올바른 형태(언더바 포함)로 원상 복구했습니다!
         ]
       }],
       generationConfig: { temperature: 0.1 }
@@ -129,9 +129,7 @@ export async function scanImageWithGemini(base64Image: string, mimeType: string)
   });
 
   if (!response.ok) {
-    const errorText = await response.text();
-    console.error("Gemini API Error:", errorText);
-    throw new Error("AI 서버와 통신하는 중 문제가 발생했습니다.");
+    throw new Error("AI 서버 통신 에러가 발생했습니다.");
   }
 
   const data = await response.json();
@@ -141,6 +139,6 @@ export async function scanImageWithGemini(base64Image: string, mimeType: string)
     const cleanText = text.replace(/```json/g, '').replace(/```/g, '').trim();
     return JSON.parse(cleanText);
   } catch (e) {
-    throw new Error("사진에서 단어를 명확하게 분리하지 못했습니다. 더 선명하게 찍어주세요.");
+    throw new Error("사진에서 단어를 분리하지 못했습니다.");
   }
 }
