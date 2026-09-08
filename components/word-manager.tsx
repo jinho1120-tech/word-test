@@ -150,7 +150,6 @@ export function WordManager({
     startTransition(async () => { await deleteWord(id); router.refresh() })
   }
 
-  // ▼ 새롭게 추가된 일괄 삭제 기능 ▼
   function handleClearAll() {
     if (!window.confirm("오늘 추가한 모든 단어를 정말로 삭제하시겠습니까? (이 작업은 되돌릴 수 없습니다)")) {
       return
@@ -165,25 +164,36 @@ export function WordManager({
     <div className="flex flex-col gap-6">
       <input type="file" accept="image/*" ref={fileInputRef} onChange={handleImageUpload} className="hidden" />
 
-      <div className="flex flex-col gap-3 rounded-3xl border border-border bg-card p-5 shadow-sm">
-        <div className="flex items-center justify-between">
-          <p className="text-sm font-semibold text-foreground">{profile}의 오늘 단어 추가</p>
-          <div className="flex gap-2 bg-muted/50 p-1 rounded-lg overflow-x-auto">
-            <button onClick={() => { setIsBulkMode(false); setError(null); }} className={cn("px-2.5 py-1.5 text-xs font-bold rounded-md flex items-center gap-1 shrink-0", !isBulkMode ? "bg-card shadow-sm text-foreground" : "text-muted-foreground")}>
-              <MousePointerClick className="size-3" /> 하나씩
+      <div className="flex flex-col gap-4 rounded-3xl border border-border bg-card p-5 shadow-sm">
+        {/* ▼ 모바일 최적화: 제목과 버튼이 좁은 화면에서 위아래로 깔끔하게 배치되도록 수정 ▼ */}
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+          <p className="text-sm font-semibold text-foreground pl-1">{profile}의 오늘 단어 추가</p>
+          <div className="grid grid-cols-3 gap-1 bg-muted/50 p-1 rounded-lg w-full sm:w-auto sm:flex">
+            <button 
+              onClick={() => { setIsBulkMode(false); setError(null); }} 
+              className={cn("flex items-center justify-center gap-1.5 rounded-md py-2 px-1 sm:px-3 text-[11px] sm:text-xs font-bold transition-all", !isBulkMode ? "bg-card shadow-sm text-foreground" : "text-muted-foreground")}
+            >
+              <MousePointerClick className="size-3 hidden sm:inline-block" /> 하나씩
             </button>
-            <button onClick={() => { setIsBulkMode(true); setError(null); }} className={cn("px-2.5 py-1.5 text-xs font-bold rounded-md flex items-center gap-1 shrink-0", isBulkMode ? "bg-card shadow-sm text-foreground" : "text-muted-foreground")}>
-              <AlignLeft className="size-3" /> 일괄 입력
+            <button 
+              onClick={() => { setIsBulkMode(true); setError(null); }} 
+              className={cn("flex items-center justify-center gap-1.5 rounded-md py-2 px-1 sm:px-3 text-[11px] sm:text-xs font-bold transition-all", isBulkMode ? "bg-card shadow-sm text-foreground" : "text-muted-foreground")}
+            >
+              <AlignLeft className="size-3 hidden sm:inline-block" /> 일괄 입력
             </button>
-            <button onClick={() => fileInputRef.current?.click()} disabled={isScanning} className="px-2.5 py-1.5 text-xs font-bold rounded-md flex items-center gap-1 shrink-0 bg-blue-50 text-blue-600 hover:bg-blue-100 transition-colors">
-              {isScanning ? <Loader2 className="size-3 animate-spin" /> : <Camera className="size-3" />}
-              {isScanning ? "AI 분석 중..." : "AI 사진 스캔"}
+            <button 
+              onClick={() => fileInputRef.current?.click()} 
+              disabled={isScanning} 
+              className="flex items-center justify-center gap-1.5 rounded-md py-2 px-1 sm:px-3 text-[11px] sm:text-xs font-bold bg-blue-50 text-blue-600 hover:bg-blue-100 transition-colors"
+            >
+              {isScanning ? <Loader2 className="size-3 animate-spin" /> : <Camera className="size-3 hidden sm:inline-block" />}
+              {isScanning ? "분석중" : "AI 스캔"}
             </button>
           </div>
         </div>
 
         {!isBulkMode ? (
-          <form onSubmit={handleSingleSubmit} className="flex flex-col gap-3 mt-2">
+          <form onSubmit={handleSingleSubmit} className="flex flex-col gap-3 mt-1">
             <div className="flex flex-col gap-3 sm:flex-row">
               <input value={word} onChange={(e) => setWord(e.target.value)} placeholder="영단어 (예: apple)" className="flex-1 rounded-xl border border-input bg-background px-4 py-2.5 text-sm outline-none focus:ring-2 focus:ring-ring" />
               <input value={meaning} onChange={(e) => setMeaning(e.target.value)} placeholder="뜻 (예: 사과)" className="flex-1 rounded-xl border border-input bg-background px-4 py-2.5 text-sm outline-none focus:ring-2 focus:ring-ring" />
@@ -195,7 +205,7 @@ export function WordManager({
             </button>
           </form>
         ) : (
-          <form onSubmit={handleBulkSubmit} className="flex flex-col gap-3 mt-2">
+          <form onSubmit={handleBulkSubmit} className="flex flex-col gap-3 mt-1">
             <textarea value={bulkText} onChange={(e) => setBulkText(e.target.value)} placeholder={isScanning ? "AI가 표를 분석하고 있습니다. 잠시만요..." : "사진을 스캔하거나 직접 입력하세요.\n(예: apple, 사과)"} className="min-h-40 rounded-xl border border-input bg-background px-4 py-3 text-sm outline-none focus:ring-2 focus:ring-ring resize-y" />
             {error && <p className="text-sm font-bold text-red-500 break-words bg-red-50 p-3 rounded-lg border border-red-200">{error}</p>}
             <button type="submit" disabled={isPending || isScanning || !bulkText.trim()} className="flex items-center justify-center gap-1.5 rounded-xl py-3 text-sm font-bold text-white shadow-sm transition-opacity hover:opacity-90 disabled:opacity-60" style={{ backgroundColor: accent }}>
@@ -210,7 +220,6 @@ export function WordManager({
           <div className="flex items-center gap-1.5 text-sm font-semibold text-foreground">
             <BookMarked className="size-4" style={{ color: accent }} /> 오늘의 단어 목록 ({words.length})
           </div>
-          {/* ▼ 단어가 1개 이상일 때만 나타나는 일괄 삭제 버튼 ▼ */}
           {words.length > 0 && (
             <button 
               onClick={handleClearAll} 
