@@ -175,7 +175,7 @@ export function WordManager({
 
       <div className="flex flex-col gap-3 rounded-3xl border border-border bg-card p-5 shadow-sm">
         <div className="flex items-center justify-between">
-          <p className="text-sm font-semibold text-foreground">{profile}의 오늘 단어 추가</p>
+          <p className="text-sm font-semibold text-foreground">{profile}의<br /> 오늘 단어 추가</p>
           <div className="flex gap-2 bg-muted/50 p-1 rounded-lg overflow-x-auto">
             <button onClick={() => { setIsBulkMode(false); setError(null); }} className={cn("px-2.5 py-1.5 text-xs font-bold rounded-md flex items-center gap-1 shrink-0", !isBulkMode ? "bg-card shadow-sm text-foreground" : "text-muted-foreground")}>
               <MousePointerClick className="size-3" /> 하나씩
@@ -185,7 +185,7 @@ export function WordManager({
             </button>
             <button onClick={() => fileInputRef.current?.click()} disabled={isScanning} className="px-2.5 py-1.5 text-xs font-bold rounded-md flex items-center gap-1 shrink-0 bg-blue-50 text-blue-600 hover:bg-blue-100 transition-colors">
               {isScanning ? <Loader2 className="size-3 animate-spin" /> : <Camera className="size-3" />}
-              {isScanning ? "AI 분석 중..." : "AI 사진 스캔"}
+              {isScanning ? "AI 분석 중..." : "AI 사진"}
             </button>
           </div>
         </div>
