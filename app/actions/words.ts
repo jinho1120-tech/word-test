@@ -105,7 +105,7 @@ export async function updateWord(
   revalidatePath("/")
 }
 
-// ▼ 구글이 요구한 최신 모델(gemini-3.6-flash)로 수정한 최종 스캔 로직 ▼
+// ▼ 영영 뜻/힌트(English Definition) 추출이 추가된 AI 스캔 로직 ▼
 export async function scanImageWithGemini(base64Image: string, mimeType: string) {
   try {
     const apiKey = process.env.GEMINI_API_KEY?.trim();
@@ -113,8 +113,16 @@ export async function scanImageWithGemini(base64Image: string, mimeType: string)
       return { success: false, error: "Vercel 서버에 API 키가 등록되지 않았습니다." };
     }
 
-    // 에러 메시지 지침에 따라 모델명을 gemini-3.6-flash로 교체했습니다.
     const endpoint = `https://generativelanguage.googleapis.com/v1beta/models/gemini-3.6-flash:generateContent?key=${apiKey}`;
+
+    const promptText = `
+이 이미지 속의 표나 텍스트에서 항목들을 추출해줘.
+1. 'word': 영어 단어
+2. 'meaning': 한글 뜻
+3. 'example': 이미지 표 안에 '영어 뜻(English Definition)'이나 '예문' 열이 있다면 그 텍스트를 그대로 추출해줘. 없으면 ""(빈 문자열)로 둬.
+
+결과는 반드시 [{"word": "apple", "meaning": "사과", "example": "a round red fruit"}] 형태의 순수한 JSON 배열 형식으로만 대답해.
+    `.trim();
 
     const response = await fetch(endpoint, {
       method: "POST",
@@ -123,7 +131,7 @@ export async function scanImageWithGemini(base64Image: string, mimeType: string)
       body: JSON.stringify({
         contents: [{
           parts: [
-            { text: "이 이미지 속의 표나 텍스트에서 '영어 단어'와 '한글 뜻'을 완벽하게 짝지어 추출해줘. 추출한 결과는 반드시 [{\"word\": \"apple\", \"meaning\": \"사과\"}] 형태의 순수한 JSON 배열 형식으로만 대답해. 마크다운 기호나 설명은 절대 추가하지 마." },
+            { text: promptText },
             { inline_data: { mime_type: mimeType, data: base64Image } }
           ]
         }],
