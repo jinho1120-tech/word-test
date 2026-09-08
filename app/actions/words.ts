@@ -105,7 +105,7 @@ export async function updateWord(
   revalidatePath("/")
 }
 
-// ▼ 에러를 숨기지 않고 투명하게 보여주는 새로운 스캔 로직 ▼
+// ▼ 구글 정식 v1 주소로 올바르게 수정한 최종 스캔 로직 ▼
 export async function scanImageWithGemini(base64Image: string, mimeType: string) {
   try {
     const apiKey = process.env.GEMINI_API_KEY;
@@ -113,7 +113,8 @@ export async function scanImageWithGemini(base64Image: string, mimeType: string)
       return { success: false, error: "Vercel 서버에 API 키(GEMINI_API_KEY)가 등록되지 않았습니다." };
     }
 
-    const endpoint = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey}`;
+    // v1beta 대신 v1 정식 규격 endpoint 사용
+    const endpoint = `https://generativelanguage.googleapis.com/v1/models/gemini-1.5-flash:generateContent?key=${apiKey}`;
 
     const response = await fetch(endpoint, {
       method: "POST",
