@@ -186,7 +186,7 @@ export function WordQuiz({ words, accent }: { words: QuizWord[]; accent: string 
                         (m) => `${m[0]}${"·".repeat(Math.max(0, m.length - 1))}`,
                       )
                     : `첫 글자: ${current.word[0]} (${current.word.length}글자)`
-                  : "예문을 보려면 아래 힌트 버튼을 눌러 주세요."}
+                  : "힌트를 보려면 아래 힌트 버튼을 눌러 주세요."}
               </p>
             </div>
 
