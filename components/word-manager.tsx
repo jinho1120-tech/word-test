@@ -38,7 +38,7 @@ export function WordManager({
   const [error, setError] = useState<string | null>(null)
   const [isPending, startTransition] = useTransition()
 
-  // 📷 Gemini AI 사진 스캔 처리
+  // 📷 Gemini AI 사진 스캔 및 압축 처리 (업그레이드 버전)
   async function handleImageUpload(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0]
     if (!file) return
@@ -48,37 +48,47 @@ export function WordManager({
     setIsBulkMode(true)
 
     try {
-      const reader = new FileReader()
-      reader.readAsDataURL(file)
-      reader.onload = async () => {
-        try {
-          const base64Data = (reader.result as string).split(',')[1]
-          const mimeType = file.type
-          
-          // 백엔드 서버(Gemini)에 사진 전달 후 결과 받기
-          const wordsList = await scanImageWithGemini(base64Data, mimeType)
-          
-          if (Array.isArray(wordsList) && wordsList.length > 0) {
-            // 받아온 JSON 데이터를 "단어, 뜻" 형태로 텍스트창에 예쁘게 입력
-            const formattedText = wordsList.map((w: any) => `${w.word}, ${w.meaning}`).join('\n')
-            setBulkText((prev) => prev ? prev + '\n' + formattedText : formattedText)
-          } else {
-            setError("단어를 찾지 못했습니다. 표가 잘 보이게 다시 찍어주세요.")
-          }
-        } catch (err) {
-          setError(err instanceof Error ? err.message : "분석 중 오류가 발생했습니다.")
-        } finally {
-          setIsScanning(false)
-          if (fileInputRef.current) fileInputRef.current.value = ""
-        }
-      }
-      reader.onerror = () => {
-        setError("파일을 읽는 데 실패했습니다.")
-        setIsScanning(false)
+      // 1. 스마트폰 고화질 원본 사진(3~5MB)을 화면에서 작게 압축(100kb 내외)하여 서버 부담 최소화
+      const image = new Image()
+      const objectUrl = URL.createObjectURL(file)
+      image.src = objectUrl
+      await new Promise((resolve) => { image.onload = resolve })
+      URL.revokeObjectURL(objectUrl)
+
+      const canvas = document.createElement('canvas')
+      // 가로 길이를 최대 1000픽셀로 줄임 (단어 인식에는 충분한 화질)
+      const MAX_WIDTH = 1000
+      const scale = Math.min(MAX_WIDTH / image.width, 1)
+      
+      canvas.width = image.width * scale
+      canvas.height = image.height * scale
+      
+      const ctx = canvas.getContext('2d')
+      if (!ctx) throw new Error("이미지 처리 중 오류가 발생했습니다.")
+      
+      ctx.drawImage(image, 0, 0, canvas.width, canvas.height)
+      
+      // 2. JPEG 형식으로 화질 70% 압축 변환
+      const compressedDataUrl = canvas.toDataURL('image/jpeg', 0.7)
+      const base64Data = compressedDataUrl.split(',')[1]
+      const mimeType = 'image/jpeg'
+      
+      // 3. 백엔드 서버(Gemini)에 아주 가벼워진 사진을 전달
+      const wordsList = await scanImageWithGemini(base64Data, mimeType)
+      
+      if (Array.isArray(wordsList) && wordsList.length > 0) {
+        // 받아온 JSON 데이터를 "단어, 뜻" 형태로 예쁘게 정렬
+        const formattedText = wordsList.map((w: any) => `${w.word}, ${w.meaning}`).join('\n')
+        setBulkText((prev) => prev ? prev + '\n' + formattedText : formattedText)
+      } else {
+        setError("단어를 찾지 못했습니다. 표가 잘 보이게 다시 찍어주세요.")
       }
     } catch (err) {
-      setError("오류가 발생했습니다.")
+      console.error(err)
+      setError("AI 분석 중 오류가 발생했습니다. 잠시 후 다시 시도해 주세요.")
+    } finally {
       setIsScanning(false)
+      if (fileInputRef.current) fileInputRef.current.value = ""
     }
   }
 
