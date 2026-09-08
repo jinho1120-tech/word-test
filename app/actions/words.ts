@@ -108,14 +108,13 @@ export async function updateWord(
 // ▼ 암호 공백 제거(.trim()) 및 표준 규격을 적용한 최종 스캔 로직 ▼
 export async function scanImageWithGemini(base64Image: string, mimeType: string) {
   try {
-    // 핵심 해결책: Vercel 환경변수 복사 시 딸려 들어간 공백/줄바꿈을 강제로 잘라냅니다.
     const apiKey = process.env.GEMINI_API_KEY?.trim();
     if (!apiKey) {
       return { success: false, error: "Vercel 서버에 API 키가 등록되지 않았습니다." };
     }
 
-    // 가장 안정적인 최신 v1beta 표준 모델 주소
-    const endpoint = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey}`;
+    // gemini-1.5-flash는 서비스 종료되어 항상 404가 남 → gemini-2.5-flash로 교체
+    const endpoint = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`;
 
     const response = await fetch(endpoint, {
       method: "POST",
@@ -128,7 +127,10 @@ export async function scanImageWithGemini(base64Image: string, mimeType: string)
             { inline_data: { mime_type: mimeType, data: base64Image } }
           ]
         }],
-        generationConfig: { temperature: 0.1 }
+        generationConfig: {
+          temperature: 0.1,
+          responseMimeType: "application/json", // 마크다운으로 감싸져 나오는 문제 자체를 방지
+        }
       })
     });
 
@@ -138,12 +140,24 @@ export async function scanImageWithGemini(base64Image: string, mimeType: string)
     }
 
     const data = await response.json();
+
+    if (!data.candidates || data.candidates.length === 0) {
+      const blockReason = data.promptFeedback?.blockReason;
+      return {
+        success: false,
+        error: `[응답 없음] Gemini가 결과를 반환하지 않았습니다.${blockReason ? ` (사유: ${blockReason})` : ""}`,
+      };
+    }
+
     const text = data.candidates?.[0]?.content?.parts?.[0]?.text || "[]";
-    
-    const cleanText = text.replace(/```json/g, '').replace(/```/g, '').trim();
-    const words = JSON.parse(cleanText);
-    return { success: true, words };
-    
+    const cleanText = text.replace(/```json/g, "").replace(/```/g, "").trim();
+
+    try {
+      const words = JSON.parse(cleanText);
+      return { success: true, words };
+    } catch {
+      return { success: false, error: `[JSON 파싱 실패] 원문 일부: ${cleanText.slice(0, 200)}` };
+    }
   } catch (e: any) {
     return { success: false, error: `[서버 내부 문제] ${e.message}` };
   }
