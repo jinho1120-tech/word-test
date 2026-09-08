@@ -38,7 +38,6 @@ export function WordManager({
   const [error, setError] = useState<string | null>(null)
   const [isPending, startTransition] = useTransition()
 
-  // 📷 Gemini AI 사진 스캔 및 압축 처리 (업그레이드 버전)
   async function handleImageUpload(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0]
     if (!file) return
@@ -48,7 +47,6 @@ export function WordManager({
     setIsBulkMode(true)
 
     try {
-      // 1. 스마트폰 고화질 원본 사진(3~5MB)을 화면에서 작게 압축(100kb 내외)하여 서버 부담 최소화
       const image = new Image()
       const objectUrl = URL.createObjectURL(file)
       image.src = objectUrl
@@ -56,7 +54,6 @@ export function WordManager({
       URL.revokeObjectURL(objectUrl)
 
       const canvas = document.createElement('canvas')
-      // 가로 길이를 최대 1000픽셀로 줄임 (단어 인식에는 충분한 화질)
       const MAX_WIDTH = 1000
       const scale = Math.min(MAX_WIDTH / image.width, 1)
       
@@ -64,28 +61,34 @@ export function WordManager({
       canvas.height = image.height * scale
       
       const ctx = canvas.getContext('2d')
-      if (!ctx) throw new Error("이미지 처리 중 오류가 발생했습니다.")
+      if (!ctx) throw new Error("사진 변환 중 오류가 발생했습니다.")
       
       ctx.drawImage(image, 0, 0, canvas.width, canvas.height)
       
-      // 2. JPEG 형식으로 화질 70% 압축 변환
       const compressedDataUrl = canvas.toDataURL('image/jpeg', 0.7)
       const base64Data = compressedDataUrl.split(',')[1]
       const mimeType = 'image/jpeg'
       
-      // 3. 백엔드 서버(Gemini)에 아주 가벼워진 사진을 전달
-      const wordsList = await scanImageWithGemini(base64Data, mimeType)
+      // 진짜 에러 원인을 받아옵니다
+      const result = await scanImageWithGemini(base64Data, mimeType)
       
+      if (!result.success) {
+        setError(result.error) // 화면에 구체적인 에러 메시지를 띄웁니다!
+        setIsScanning(false)
+        if (fileInputRef.current) fileInputRef.current.value = ""
+        return
+      }
+
+      const wordsList = result.words
       if (Array.isArray(wordsList) && wordsList.length > 0) {
-        // 받아온 JSON 데이터를 "단어, 뜻" 형태로 예쁘게 정렬
         const formattedText = wordsList.map((w: any) => `${w.word}, ${w.meaning}`).join('\n')
         setBulkText((prev) => prev ? prev + '\n' + formattedText : formattedText)
       } else {
         setError("단어를 찾지 못했습니다. 표가 잘 보이게 다시 찍어주세요.")
       }
-    } catch (err) {
+    } catch (err: any) {
       console.error(err)
-      setError("AI 분석 중 오류가 발생했습니다. 잠시 후 다시 시도해 주세요.")
+      setError(`[앱 사진 처리 에러] ${err.message || '알 수 없는 오류'}`)
     } finally {
       setIsScanning(false)
       if (fileInputRef.current) fileInputRef.current.value = ""
@@ -176,7 +179,7 @@ export function WordManager({
               <input value={meaning} onChange={(e) => setMeaning(e.target.value)} placeholder="뜻 (예: 사과)" className="flex-1 rounded-xl border border-input bg-background px-4 py-2.5 text-sm outline-none focus:ring-2 focus:ring-ring" />
             </div>
             <input value={example} onChange={(e) => setExample(e.target.value)} placeholder="예문 (선택)" className="rounded-xl border border-input bg-background px-4 py-2.5 text-sm outline-none focus:ring-2 focus:ring-ring" />
-            {error && <p className="text-sm font-medium text-red-500">{error}</p>}
+            {error && <p className="text-sm font-medium text-red-500 break-words">{error}</p>}
             <button type="submit" disabled={isPending} className="flex items-center justify-center gap-1.5 rounded-xl py-3 text-sm font-bold text-white shadow-sm transition-opacity hover:opacity-90 disabled:opacity-60" style={{ backgroundColor: accent }}>
               {isPending ? <Loader2 className="size-4 animate-spin" /> : <Plus className="size-4" />} 단어 추가
             </button>
@@ -184,7 +187,7 @@ export function WordManager({
         ) : (
           <form onSubmit={handleBulkSubmit} className="flex flex-col gap-3 mt-2">
             <textarea value={bulkText} onChange={(e) => setBulkText(e.target.value)} placeholder={isScanning ? "제미나이(Gemini)가 표를 분석하고 있습니다. 잠시만요..." : "사진을 스캔하거나 직접 입력하세요.\n(예: apple, 사과)"} className="min-h-40 rounded-xl border border-input bg-background px-4 py-3 text-sm outline-none focus:ring-2 focus:ring-ring resize-y" />
-            {error && <p className="text-sm font-medium text-red-500">{error}</p>}
+            {error && <p className="text-sm font-bold text-red-500 break-words bg-red-50 p-3 rounded-lg border border-red-200">{error}</p>}
             <button type="submit" disabled={isPending || isScanning || !bulkText.trim()} className="flex items-center justify-center gap-1.5 rounded-xl py-3 text-sm font-bold text-white shadow-sm transition-opacity hover:opacity-90 disabled:opacity-60" style={{ backgroundColor: accent }}>
               {isPending ? <Loader2 className="size-4 animate-spin" /> : <AlignLeft className="size-4" />} 일괄 저장하기
             </button>
