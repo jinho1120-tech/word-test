@@ -105,25 +105,26 @@ export async function updateWord(
   revalidatePath("/")
 }
 
-// ▼ 대소문자 규격(camelCase)을 완벽하게 맞춘 찐 최종 스캔 로직 ▼
+// ▼ 캐시 무력화 + 최신 모델명(-latest) + 올바른 규격을 모두 적용한 최종 스캔 로직 ▼
 export async function scanImageWithGemini(base64Image: string, mimeType: string) {
   try {
     const apiKey = process.env.GEMINI_API_KEY;
     if (!apiKey) {
-      return { success: false, error: "Vercel 서버에 API 키(GEMINI_API_KEY)가 등록되지 않았습니다." };
+      return { success: false, error: "Vercel 서버에 API 키가 등록되지 않았습니다." };
     }
 
-    // 버전을 v1beta로 되돌리고, 통신 규격을 대문자가 포함된 올바른 형태(inlineData, mimeType)로 수정했습니다.
-    const endpoint = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey}`;
+    // 1. 모델명을 명확한 최신 버전(-latest)으로 수정했습니다.
+    const endpoint = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash-latest:generateContent?key=${apiKey}`;
 
     const response = await fetch(endpoint, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
+      cache: "no-store", // 2. Vercel 서버의 고집스러운 캐시(과거 에러 기억)를 강제로 박살냅니다.
       body: JSON.stringify({
         contents: [{
           parts: [
             { text: "이 이미지 속의 표나 텍스트에서 '영어 단어'와 '한글 뜻'을 완벽하게 짝지어 추출해줘. 추출한 결과는 반드시 [{\"word\": \"apple\", \"meaning\": \"사과\"}] 형태의 순수한 JSON 배열 형식으로만 대답해. 마크다운 기호나 설명은 절대 추가하지 마." },
-            { inlineData: { mimeType: mimeType, data: base64Image } }
+            { inline_data: { mime_type: mimeType, data: base64Image } } // 3. 구글이 좋아하는 언더바 규격 원상복구
           ]
         }],
         generationConfig: { temperature: 0.1 }
