@@ -164,3 +164,17 @@ export async function scanImageWithGemini(base64Image: string, mimeType: string)
     return { success: false, error: `서버 에러: ${e.message}` };
   }
 }
+// ▼ 달력에 표시하기 위해 단어가 존재하는 날짜들만 가져오는 기능 ▼
+export async function getActiveDates(profile: string): Promise<string[]> {
+  assertProfile(profile)
+  
+  // 해당 프로필의 모든 날짜 데이터를 가져옵니다.
+  const results = await db
+    .select({ date: wordEntries.assignmentDate })
+    .from(wordEntries)
+    .where(eq(wordEntries.profile, profile))
+
+  // 중복 날짜를 제거하고 순수한 날짜 배열만 반환합니다.
+  const uniqueDates = Array.from(new Set(results.map((r) => r.date)))
+  return uniqueDates
+}
