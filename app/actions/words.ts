@@ -105,7 +105,6 @@ export async function updateWord(
   revalidatePath("/")
 }
 
-// ▼ 영영 뜻/힌트(English Definition) 추출이 추가된 AI 스캔 로직 ▼
 export async function scanImageWithGemini(base64Image: string, mimeType: string) {
   try {
     const apiKey = process.env.GEMINI_API_KEY?.trim();
@@ -116,12 +115,18 @@ export async function scanImageWithGemini(base64Image: string, mimeType: string)
     const endpoint = `https://generativelanguage.googleapis.com/v1beta/models/gemini-3.6-flash:generateContent?key=${apiKey}`;
 
     const promptText = `
-이 이미지 속의 표나 텍스트에서 항목들을 추출해줘.
-1. 'word': 영어 단어
-2. 'meaning': 한글 뜻
-3. 'example': 이미지 표 안에 '영어 뜻(English Definition)'이나 '예문' 열이 있다면 그 텍스트를 그대로 추출해줘. 없으면 ""(빈 문자열)로 둬.
+이 이미지 속 표나 텍스트에서 '단어' 목록만 필터링하여 추출해줘.
 
-결과는 반드시 [{"word": "apple", "meaning": "사과", "example": "a round red fruit"}] 형태의 순수한 JSON 배열 형식으로만 대답해.
+[필터링 예외 규칙]
+1. 단순 회화 문장(예: "Where are you from?", "I'm from Singapore.", 마침표/물음표로 끝나는 문장)은 단어가 아니므로 **절대 제외**해.
+2. 오직 단어나 명사구(예: Canada, the United Kingdom)만 추출해.
+
+[추출 항목]
+- 'word': 영어 단어
+- 'meaning': 한글 뜻 (뜻이 따로 기재되지 않은 경우 빈값 "")
+- 'example': '영어 뜻(English Definition)'이나 '영영 풀이' 열이 있는 경우에만 해당 텍스트를 추출 (없으면 빈값 "")
+
+결과는 반드시 [{"word": "Canada", "meaning": "캐나다", "example": ""}] 형태의 순수 JSON 배열로만 출력해.
     `.trim();
 
     const response = await fetch(endpoint, {
