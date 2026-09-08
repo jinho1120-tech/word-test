@@ -68,7 +68,7 @@ export function WordManager({
 
       setBulkText((prev) => prev ? prev + '\n' + formattedText : formattedText)
     } catch (err) {
-      setError("사진 분석 중 오류가 발생했습니다. 사진을 다시 찍어주세요.")
+      setError("사진 분석 중 오류가 발생했습니다. 다른 사진으로 시도해 주세요.")
     } finally {
       setIsScanning(false)
       if (fileInputRef.current) fileInputRef.current.value = ""
@@ -133,7 +133,8 @@ export function WordManager({
 
   return (
     <div className="flex flex-col gap-6">
-      <input type="file" accept="image/*" capture="environment" ref={fileInputRef} onChange={handleImageUpload} className="hidden" />
+      {/* 바로 이 부분에서 capture 속성을 제거했습니다 */}
+      <input type="file" accept="image/*" ref={fileInputRef} onChange={handleImageUpload} className="hidden" />
 
       <div className="flex flex-col gap-3 rounded-3xl border border-border bg-card p-5 shadow-sm">
         <div className="flex items-center justify-between">
