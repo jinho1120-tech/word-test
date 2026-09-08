@@ -1,5 +1,5 @@
 import Link from "next/link"
-import { getWords, type Profile } from "@/app/actions/words"
+import { getWords, getWrongWords, type Profile } from "@/app/actions/words"
 import { StudyApp } from "@/components/study-app"
 import { DateNav } from "@/components/date-nav"
 import { cn } from "@/lib/utils"
@@ -24,7 +24,9 @@ export default async function Page({
     params.date && /^\d{4}-\d{2}-\d{2}$/.test(params.date) ? params.date : todayInSeoul()
   const active = PROFILES.find((p) => p.name === profile)!
 
+  // 날짜별 단어(words)와 누적 오답 단어(wrongWords)를 동시에 불러옵니다
   const words = await getWords(profile, date)
+  const wrongWords = await getWrongWords(profile)
 
   return (
     <main className="mx-auto flex min-h-dvh w-full max-w-lg flex-col gap-6 px-4 py-8">
@@ -57,7 +59,8 @@ export default async function Page({
 
       <DateNav profile={profile} date={date} today={todayInSeoul()} accent={active.accent} />
 
-      <StudyApp profile={profile} date={date} words={words} accent={active.accent} />
+      {/* StudyApp에 오답 노트 데이터(wrongWords)를 추가로 넘겨줍니다 */}
+      <StudyApp profile={profile} date={date} words={words} wrongWords={wrongWords} accent={active.accent} />
     </main>
   )
 }
