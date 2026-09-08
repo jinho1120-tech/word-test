@@ -105,40 +105,43 @@ export async function updateWord(
   revalidatePath("/")
 }
 
-// ▼ 통신 규격(언더바)을 원상 복구한 최종 스캔 로직 ▼
+// ▼ 에러를 숨기지 않고 투명하게 보여주는 새로운 스캔 로직 ▼
 export async function scanImageWithGemini(base64Image: string, mimeType: string) {
-  const apiKey = process.env.GEMINI_API_KEY;
-  if (!apiKey) {
-    throw new Error("Vercel 서버에 API 키가 설정되지 않았습니다.");
-  }
-
-  const endpoint = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey}`;
-
-  const response = await fetch(endpoint, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      contents: [{
-        parts: [
-          { text: "이 이미지 속의 표나 텍스트에서 '영어 단어'와 '한글 뜻'을 완벽하게 짝지어 추출해줘. 추출한 결과는 반드시 [{\"word\": \"apple\", \"meaning\": \"사과\"}] 형태의 순수한 JSON 배열 형식으로만 대답해. 마크다운 기호나 설명은 절대 추가하지 마." },
-          { inline_data: { mime_type: mimeType, data: base64Image } } // ← 구글 서버가 요구하는 올바른 형태(언더바 포함)로 원상 복구했습니다!
-        ]
-      }],
-      generationConfig: { temperature: 0.1 }
-    })
-  });
-
-  if (!response.ok) {
-    throw new Error("AI 서버 통신 에러가 발생했습니다.");
-  }
-
-  const data = await response.json();
-  const text = data.candidates?.[0]?.content?.parts?.[0]?.text || "[]";
-  
   try {
+    const apiKey = process.env.GEMINI_API_KEY;
+    if (!apiKey) {
+      return { success: false, error: "Vercel 서버에 API 키(GEMINI_API_KEY)가 등록되지 않았습니다." };
+    }
+
+    const endpoint = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey}`;
+
+    const response = await fetch(endpoint, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        contents: [{
+          parts: [
+            { text: "이 이미지 속의 표나 텍스트에서 '영어 단어'와 '한글 뜻'을 완벽하게 짝지어 추출해줘. 추출한 결과는 반드시 [{\"word\": \"apple\", \"meaning\": \"사과\"}] 형태의 순수한 JSON 배열 형식으로만 대답해. 마크다운 기호나 설명은 절대 추가하지 마." },
+            { inline_data: { mime_type: mimeType, data: base64Image } }
+          ]
+        }],
+        generationConfig: { temperature: 0.1 }
+      })
+    });
+
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({}));
+      return { success: false, error: `[구글 AI 거부] ${errorData?.error?.message || response.statusText}` };
+    }
+
+    const data = await response.json();
+    const text = data.candidates?.[0]?.content?.parts?.[0]?.text || "[]";
+    
     const cleanText = text.replace(/```json/g, '').replace(/```/g, '').trim();
-    return JSON.parse(cleanText);
-  } catch (e) {
-    throw new Error("사진에서 단어를 분리하지 못했습니다.");
+    const words = JSON.parse(cleanText);
+    return { success: true, words };
+    
+  } catch (e: any) {
+    return { success: false, error: `[서버 내부 문제] ${e.message}` };
   }
 }
