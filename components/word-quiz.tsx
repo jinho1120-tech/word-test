@@ -1,10 +1,11 @@
 "use client"
 
 import type React from "react"
-
 import { useMemo, useRef, useState } from "react"
 import { Trophy, Lightbulb, RotateCcw, Check, X, ArrowRight, Play } from "lucide-react"
 import { cn } from "@/lib/utils"
+// ▼ 정답/오답 기록을 DB로 보내는 액션을 불러옵니다.
+import { recordQuizResult } from "@/app/actions/words"
 
 export type QuizWord = {
   id: number
@@ -90,10 +91,14 @@ export function WordQuiz({ words, accent }: { words: QuizWord[]; accent: string 
       setStreak(newStreak)
       setBestStreak((b) => Math.max(b, newStreak))
       setFeedback("correct")
+      // ▼ 정답 시 틀린 횟수 차감 처리 (백그라운드 실행)
+      recordQuizResult(current.id, true).catch(console.error)
       setTimeout(() => advance({ word: current, correct: true }), 900)
     } else {
       setStreak(0)
       setFeedback("wrong")
+      // ▼ 오답 시 틀린 횟수 증가 처리 (백그라운드 실행)
+      recordQuizResult(current.id, false).catch(console.error)
       setTimeout(() => advance({ word: current, correct: false }), 1600)
     }
   }
