@@ -8,7 +8,6 @@ import { addWord, deleteWord, clearWords, addWordsBulk, updateWord, scanImageWit
 import type { QuizWord } from "@/components/word-quiz"
 import { cn } from "@/lib/utils"
 
-// ▼ 스피킹 과목 유지
 const INPUT_SUBJECTS = ["리딩", "스피킹", "문법", "단어"]
 
 export function WordManager({
@@ -153,8 +152,6 @@ export function WordManager({
           <div className="flex gap-2 bg-muted/50 p-1 rounded-lg overflow-x-auto">
             <button onClick={() => { setIsBulkMode(false); setError(null); }} className={cn("px-2.5 py-1.5 text-xs font-bold rounded-md flex items-center gap-1 shrink-0", !isBulkMode ? "bg-card shadow-sm text-foreground" : "text-muted-foreground")}><MousePointerClick className="size-3" /> 하나씩</button>
             <button onClick={() => { setIsBulkMode(true); setError(null); }} className={cn("px-2.5 py-1.5 text-xs font-bold rounded-md flex items-center gap-1 shrink-0", isBulkMode ? "bg-card shadow-sm text-foreground" : "text-muted-foreground")}><AlignLeft className="size-3" /> 일괄 입력</button>
-            
-            {/* ▼ 사라졌던 빙글빙글 아이콘(Loader2) 복구 위치입니다! */}
             <button onClick={() => fileInputRef.current?.click()} disabled={isScanning} className="px-2.5 py-1.5 text-xs font-bold rounded-md flex items-center gap-1 shrink-0 bg-blue-50 text-blue-600 hover:bg-blue-100 transition-colors">
               {isScanning ? <Loader2 className="size-3 animate-spin" /> : <Camera className="size-3" />}
               {isScanning ? "AI 분석 중..." : "AI 사진"}
@@ -207,14 +204,17 @@ export function WordManager({
             <li key={w.id} className="flex flex-col sm:flex-row sm:items-center gap-3 rounded-2xl border border-border bg-card px-4 py-3">
               {editingId === w.id ? (
                 <div className="flex w-full flex-col gap-2">
-                  <div className="flex gap-2">
-                    <select value={editSubject} onChange={(e) => setEditSubject(e.target.value)} className="rounded-lg border px-2 py-1.5 text-xs font-bold text-muted-foreground outline-none">
-                      {INPUT_SUBJECTS.map(s => <option key={s} value={s}>{s}</option>)}
-                    </select>
-                    <input value={editWord} onChange={(e) => setEditWord(e.target.value)} className="flex-1 rounded-lg border border-input px-3 py-1.5 text-sm font-bold outline-none focus:border-primary" placeholder="단어" />
-                    <input value={editMeaning} onChange={(e) => setEditMeaning(e.target.value)} className="flex-1 rounded-lg border border-input px-3 py-1.5 text-sm outline-none focus:border-primary" placeholder="뜻" />
+                  {/* ▼ 수정 폼 부분 레이아웃 수정: 모바일에서는 2줄로 위아래 배치, 태블릿/PC에서는 1줄 배치 */}
+                  <div className="flex flex-col gap-2 sm:flex-row">
+                    <div className="flex flex-1 gap-2">
+                      <select value={editSubject} onChange={(e) => setEditSubject(e.target.value)} className="shrink-0 rounded-lg border border-input px-2 py-1.5 text-xs font-bold text-muted-foreground outline-none focus:border-primary">
+                        {INPUT_SUBJECTS.map(s => <option key={s} value={s}>{s}</option>)}
+                      </select>
+                      <input value={editWord} onChange={(e) => setEditWord(e.target.value)} className="flex-1 min-w-0 rounded-lg border border-input px-3 py-1.5 text-sm font-bold outline-none focus:border-primary" placeholder="단어" />
+                    </div>
+                    <input value={editMeaning} onChange={(e) => setEditMeaning(e.target.value)} className="flex-1 min-w-0 rounded-lg border border-input px-3 py-1.5 text-sm outline-none focus:border-primary" placeholder="뜻" />
                   </div>
-                  <input value={editExample} onChange={(e) => setEditExample(e.target.value)} className="w-full rounded-lg border border-input px-3 py-1.5 text-sm outline-none focus:border-primary" placeholder="힌트" />
+                  <input value={editExample} onChange={(e) => setEditExample(e.target.value)} className="w-full min-w-0 rounded-lg border border-input px-3 py-1.5 text-sm outline-none focus:border-primary" placeholder="힌트" />
                   <div className="flex justify-end gap-2 mt-1">
                     <button onClick={() => setEditingId(null)} disabled={isPending} className="flex items-center gap-1 rounded-lg bg-muted px-3 py-1.5 text-xs font-semibold text-muted-foreground hover:bg-muted/80"><X className="size-3 inline" /> 취소</button>
                     <button onClick={() => handleUpdateSubmit(w.id)} disabled={isPending} className="flex items-center gap-1 rounded-lg px-3 py-1.5 text-xs font-bold text-white shadow-sm" style={{ backgroundColor: accent }}><Check className="size-3 inline" /> 저장</button>
