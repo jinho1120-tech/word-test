@@ -2,7 +2,8 @@
 
 import { db } from "@/lib/db"
 import { wordEntries, type WordEntry } from "@/lib/db/schema"
-import { and, asc, eq } from "drizzle-orm"
+// ▼ gt(크다), desc(내림차순) 등의 명령어가 추가되었습니다.
+import { and, asc, desc, eq, gt } from "drizzle-orm"
 import { revalidatePath } from "next/cache"
 
 export type Profile = "지온" | "예온"
@@ -22,6 +23,32 @@ export async function getWords(profile: string, date: string): Promise<WordEntry
     .from(wordEntries)
     .where(and(eq(wordEntries.profile, profile), eq(wordEntries.assignmentDate, date)))
     .orderBy(asc(wordEntries.createdAt))
+}
+
+// ▼ [새 기능] 오답 퀴즈용 단어 불러오기 (날짜 상관없이, 틀린 횟수가 1 이상인 단어만, 많이 틀린 순서대로)
+export async function getWrongWords(profile: string): Promise<WordEntry[]> {
+  assertProfile(profile)
+  return db
+    .select()
+    .from(wordEntries)
+    .where(and(eq(wordEntries.profile, profile), gt(wordEntries.wrongCount, 0)))
+    .orderBy(desc(wordEntries.wrongCount), asc(wordEntries.createdAt))
+}
+
+// ▼ [새 기능] 퀴즈 정/오답 기록하기
+export async function recordQuizResult(id: number, isCorrect: boolean) {
+  const [word] = await db.select().from(wordEntries).where(eq(wordEntries.id, id))
+  if (!word) return
+
+  // 맞히면 틀린 횟수 1 차감 (최소 0), 틀리면 1 증가
+  const newCount = isCorrect ? Math.max(0, word.wrongCount - 1) : word.wrongCount + 1
+
+  await db
+    .update(wordEntries)
+    .set({ wrongCount: newCount })
+    .where(eq(wordEntries.id, id))
+  
+  revalidatePath("/")
 }
 
 export async function addWord(input: {
@@ -118,7 +145,7 @@ export async function scanImageWithGemini(base64Image: string, mimeType: string)
 이 이미지 속 표나 텍스트에서 '단어' 목록만 필터링하여 추출해줘.
 
 [필터링 예외 규칙]
-1. 단순 회화 문장(예: "Where are you from?", "I'm from Singapore.", 마침표/물음표로 끝나는 문장)은 단어가 아니므로 **절대 제외**해.
+1. 단순 회화 문장(예: "Where are you from?", "I'm from Singapore.", 마침표/물음표로 끝나는 문장)은 단어가 아니므로 절대 제외해.
 2. 오직 단어나 명사구(예: Canada, the United Kingdom)만 추출해.
 
 [추출 항목]
