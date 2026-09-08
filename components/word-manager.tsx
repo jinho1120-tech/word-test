@@ -204,7 +204,6 @@ export function WordManager({
             <li key={w.id} className="flex flex-col sm:flex-row sm:items-center gap-3 rounded-2xl border border-border bg-card px-4 py-3">
               {editingId === w.id ? (
                 <div className="flex w-full flex-col gap-2">
-                  {/* ▼ 수정 폼 부분 레이아웃 수정: 모바일에서는 2줄로 위아래 배치, 태블릿/PC에서는 1줄 배치 */}
                   <div className="flex flex-col gap-2 sm:flex-row">
                     <div className="flex flex-1 gap-2">
                       <select value={editSubject} onChange={(e) => setEditSubject(e.target.value)} className="shrink-0 rounded-lg border border-input px-2 py-1.5 text-xs font-bold text-muted-foreground outline-none focus:border-primary">
@@ -232,7 +231,8 @@ export function WordManager({
                   </div>
                   <div className="flex shrink-0 items-center gap-1">
                     <button onClick={() => startEditing(w)} disabled={isPending} className="flex size-8 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-muted hover:text-foreground disabled:opacity-50"><Pencil className="size-4" /></button>
-                    <button onClick={() => { startTransition(async () => { await deleteWord(w.id); router.refresh() }) }} disabled={isPending} className="flex size-8 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-red-50 hover:text-red-500 disabled:opacity-50"><Trash2 className="size-4" /></button>
+                    {/* ▼ 낱개 삭제 시에도 window.confirm으로 되묻는 기능이 추가되었습니다. */}
+                    <button onClick={() => { if(window.confirm("정말 이 단어를 삭제할까요?")) { startTransition(async () => { await deleteWord(w.id); router.refresh() }) } }} disabled={isPending} className="flex size-8 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-red-50 hover:text-red-500 disabled:opacity-50"><Trash2 className="size-4" /></button>
                   </div>
                 </>
               )}
