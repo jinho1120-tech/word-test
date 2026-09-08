@@ -8,7 +8,7 @@ import { addWord, deleteWord, clearWords, addWordsBulk, updateWord, scanImageWit
 import type { QuizWord } from "@/components/word-quiz"
 import { cn } from "@/lib/utils"
 
-// ▼ '리스닝'을 '스피킹'으로 변경했습니다.
+// ▼ 스피킹 과목 유지
 const INPUT_SUBJECTS = ["리딩", "스피킹", "문법", "단어"]
 
 export function WordManager({
@@ -153,7 +153,12 @@ export function WordManager({
           <div className="flex gap-2 bg-muted/50 p-1 rounded-lg overflow-x-auto">
             <button onClick={() => { setIsBulkMode(false); setError(null); }} className={cn("px-2.5 py-1.5 text-xs font-bold rounded-md flex items-center gap-1 shrink-0", !isBulkMode ? "bg-card shadow-sm text-foreground" : "text-muted-foreground")}><MousePointerClick className="size-3" /> 하나씩</button>
             <button onClick={() => { setIsBulkMode(true); setError(null); }} className={cn("px-2.5 py-1.5 text-xs font-bold rounded-md flex items-center gap-1 shrink-0", isBulkMode ? "bg-card shadow-sm text-foreground" : "text-muted-foreground")}><AlignLeft className="size-3" /> 일괄 입력</button>
-            <button onClick={() => fileInputRef.current?.click()} disabled={isScanning} className="px-2.5 py-1.5 text-xs font-bold rounded-md flex items-center gap-1 shrink-0 bg-blue-50 text-blue-600 hover:bg-blue-100"><Camera className="size-3" />{isScanning ? "분석 중" : "AI 사진"}</button>
+            
+            {/* ▼ 사라졌던 빙글빙글 아이콘(Loader2) 복구 위치입니다! */}
+            <button onClick={() => fileInputRef.current?.click()} disabled={isScanning} className="px-2.5 py-1.5 text-xs font-bold rounded-md flex items-center gap-1 shrink-0 bg-blue-50 text-blue-600 hover:bg-blue-100 transition-colors">
+              {isScanning ? <Loader2 className="size-3 animate-spin" /> : <Camera className="size-3" />}
+              {isScanning ? "AI 분석 중..." : "AI 사진"}
+            </button>
           </div>
         </div>
 
@@ -169,20 +174,20 @@ export function WordManager({
         {!isBulkMode ? (
           <form onSubmit={handleSingleSubmit} className="flex flex-col gap-3">
             <div className="flex flex-col gap-3 sm:flex-row">
-              <input value={word} onChange={(e) => setWord(e.target.value)} placeholder="영단어 (예: apple)" className="flex-1 rounded-xl border px-4 py-2.5 text-sm" />
-              <input value={meaning} onChange={(e) => setMeaning(e.target.value)} placeholder="뜻" className="flex-1 rounded-xl border px-4 py-2.5 text-sm" />
+              <input value={word} onChange={(e) => setWord(e.target.value)} placeholder="영단어 (예: apple)" className="flex-1 rounded-xl border border-input px-4 py-2.5 text-sm outline-none focus:ring-2 focus:ring-ring" />
+              <input value={meaning} onChange={(e) => setMeaning(e.target.value)} placeholder="뜻" className="flex-1 rounded-xl border border-input px-4 py-2.5 text-sm outline-none focus:ring-2 focus:ring-ring" />
             </div>
-            <input value={example} onChange={(e) => setExample(e.target.value)} placeholder="영어 뜻/힌트 (선택)" className="rounded-xl border px-4 py-2.5 text-sm" />
-            {error && <p className="text-sm text-red-500">{error}</p>}
-            <button type="submit" disabled={isPending} className="flex justify-center gap-1.5 rounded-xl py-3 text-sm font-bold text-white shadow-sm" style={{ backgroundColor: accent }}>
+            <input value={example} onChange={(e) => setExample(e.target.value)} placeholder="영어 뜻/힌트 (선택)" className="rounded-xl border border-input px-4 py-2.5 text-sm outline-none focus:ring-2 focus:ring-ring" />
+            {error && <p className="text-sm font-medium text-red-500 break-words">{error}</p>}
+            <button type="submit" disabled={isPending} className="flex justify-center items-center gap-1.5 rounded-xl py-3 text-sm font-bold text-white shadow-sm transition-opacity hover:opacity-90 disabled:opacity-60" style={{ backgroundColor: accent }}>
               {isPending ? <Loader2 className="size-4 animate-spin" /> : <Plus className="size-4" />} [{subject}] 단어 추가
             </button>
           </form>
         ) : (
           <form onSubmit={handleBulkSubmit} className="flex flex-col gap-3">
-            <textarea value={bulkText} onChange={(e) => setBulkText(e.target.value)} placeholder="단어 | 뜻 | 힌트" className="min-h-40 rounded-xl border px-4 py-3 text-sm resize-y" />
-            {error && <p className="text-sm font-bold text-red-500 bg-red-50 p-3 rounded-lg border">{error}</p>}
-            <button type="submit" disabled={isPending || isScanning || !bulkText.trim()} className="flex justify-center gap-1.5 rounded-xl py-3 text-sm font-bold text-white shadow-sm" style={{ backgroundColor: accent }}>
+            <textarea value={bulkText} onChange={(e) => setBulkText(e.target.value)} placeholder="단어 | 뜻 | 힌트" className="min-h-40 rounded-xl border border-input px-4 py-3 text-sm outline-none focus:ring-2 focus:ring-ring resize-y" />
+            {error && <p className="text-sm font-bold text-red-500 bg-red-50 p-3 rounded-lg border border-red-200">{error}</p>}
+            <button type="submit" disabled={isPending || isScanning || !bulkText.trim()} className="flex justify-center items-center gap-1.5 rounded-xl py-3 text-sm font-bold text-white shadow-sm transition-opacity hover:opacity-90 disabled:opacity-60" style={{ backgroundColor: accent }}>
               {isPending ? <Loader2 className="size-4 animate-spin" /> : <AlignLeft className="size-4" />} [{subject}] 일괄 저장
             </button>
           </form>
@@ -191,28 +196,28 @@ export function WordManager({
 
       <div>
         <div className="mb-2 flex items-center justify-between">
-          <div className="flex items-center gap-1.5 text-sm font-semibold"><BookMarked className="size-4" style={{ color: accent }} /> 단어 목록 ({words.length})</div>
+          <div className="flex items-center gap-1.5 text-sm font-semibold text-foreground"><BookMarked className="size-4" style={{ color: accent }} /> 단어 목록 ({words.length})</div>
           {words.length > 0 && (
-            <button onClick={() => { if(window.confirm("오늘 추가한 단어를 정말 모두 삭제할까요?")) { startTransition(async () => { await clearWords(profile, date); router.refresh() }) } }} className="flex items-center gap-1 rounded-md bg-red-50 px-2.5 py-1.5 text-xs font-bold text-red-500"><Trash2 className="size-3" /> 날짜 전체삭제</button>
+            <button onClick={() => { if(window.confirm("오늘 추가한 단어를 정말 모두 삭제할까요?")) { startTransition(async () => { await clearWords(profile, date); router.refresh() }) } }} disabled={isPending} className="flex items-center gap-1 rounded-md bg-red-50 px-2.5 py-1.5 text-xs font-bold text-red-500 transition-colors hover:bg-red-100 disabled:opacity-50"><Trash2 className="size-3" /> 날짜 전체삭제</button>
           )}
         </div>
         
         <ul className="flex flex-col gap-2">
           {words.map((w) => (
-            <li key={w.id} className="flex flex-col sm:flex-row sm:items-center gap-3 rounded-2xl border bg-card px-4 py-3">
+            <li key={w.id} className="flex flex-col sm:flex-row sm:items-center gap-3 rounded-2xl border border-border bg-card px-4 py-3">
               {editingId === w.id ? (
                 <div className="flex w-full flex-col gap-2">
                   <div className="flex gap-2">
                     <select value={editSubject} onChange={(e) => setEditSubject(e.target.value)} className="rounded-lg border px-2 py-1.5 text-xs font-bold text-muted-foreground outline-none">
                       {INPUT_SUBJECTS.map(s => <option key={s} value={s}>{s}</option>)}
                     </select>
-                    <input value={editWord} onChange={(e) => setEditWord(e.target.value)} className="flex-1 rounded-lg border px-3 py-1.5 text-sm font-bold outline-none" placeholder="단어" />
-                    <input value={editMeaning} onChange={(e) => setEditMeaning(e.target.value)} className="flex-1 rounded-lg border px-3 py-1.5 text-sm outline-none" placeholder="뜻" />
+                    <input value={editWord} onChange={(e) => setEditWord(e.target.value)} className="flex-1 rounded-lg border border-input px-3 py-1.5 text-sm font-bold outline-none focus:border-primary" placeholder="단어" />
+                    <input value={editMeaning} onChange={(e) => setEditMeaning(e.target.value)} className="flex-1 rounded-lg border border-input px-3 py-1.5 text-sm outline-none focus:border-primary" placeholder="뜻" />
                   </div>
-                  <input value={editExample} onChange={(e) => setEditExample(e.target.value)} className="w-full rounded-lg border px-3 py-1.5 text-sm outline-none" placeholder="힌트" />
+                  <input value={editExample} onChange={(e) => setEditExample(e.target.value)} className="w-full rounded-lg border border-input px-3 py-1.5 text-sm outline-none focus:border-primary" placeholder="힌트" />
                   <div className="flex justify-end gap-2 mt-1">
-                    <button onClick={() => setEditingId(null)} className="rounded-lg bg-muted px-3 py-1.5 text-xs font-semibold text-muted-foreground"><X className="size-3 inline" /> 취소</button>
-                    <button onClick={() => handleUpdateSubmit(w.id)} className="rounded-lg px-3 py-1.5 text-xs font-bold text-white" style={{ backgroundColor: accent }}><Check className="size-3 inline" /> 저장</button>
+                    <button onClick={() => setEditingId(null)} disabled={isPending} className="flex items-center gap-1 rounded-lg bg-muted px-3 py-1.5 text-xs font-semibold text-muted-foreground hover:bg-muted/80"><X className="size-3 inline" /> 취소</button>
+                    <button onClick={() => handleUpdateSubmit(w.id)} disabled={isPending} className="flex items-center gap-1 rounded-lg px-3 py-1.5 text-xs font-bold text-white shadow-sm" style={{ backgroundColor: accent }}><Check className="size-3 inline" /> 저장</button>
                   </div>
                 </div>
               ) : (
@@ -225,9 +230,9 @@ export function WordManager({
                     </p>
                     {w.example && <p className="mt-1 truncate text-xs italic text-muted-foreground">{w.example}</p>}
                   </div>
-                  <div className="flex shrink-0 gap-1">
-                    <button onClick={() => startEditing(w)} className="p-2 text-muted-foreground hover:bg-muted rounded-lg"><Pencil className="size-4" /></button>
-                    <button onClick={() => { startTransition(async () => { await deleteWord(w.id); router.refresh() }) }} className="p-2 text-muted-foreground hover:bg-red-50 hover:text-red-500 rounded-lg"><Trash2 className="size-4" /></button>
+                  <div className="flex shrink-0 items-center gap-1">
+                    <button onClick={() => startEditing(w)} disabled={isPending} className="flex size-8 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-muted hover:text-foreground disabled:opacity-50"><Pencil className="size-4" /></button>
+                    <button onClick={() => { startTransition(async () => { await deleteWord(w.id); router.refresh() }) }} disabled={isPending} className="flex size-8 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-red-50 hover:text-red-500 disabled:opacity-50"><Trash2 className="size-4" /></button>
                   </div>
                 </>
               )}
