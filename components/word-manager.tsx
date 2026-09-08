@@ -80,7 +80,14 @@ export function WordManager({
 
       const wordsList = result.words
       if (Array.isArray(wordsList) && wordsList.length > 0) {
-        const formattedText = wordsList.map((w: any) => `${w.word}, ${w.meaning}`).join('\n')
+        // 3번째 항목(영어 뜻/예문)이 있으면 함께 포맷팅하여 출력
+        const formattedText = wordsList.map((w: any) => {
+          if (w.example && w.example.trim() !== "") {
+            return `${w.word}, ${w.meaning}, ${w.example}`
+          }
+          return `${w.word}, ${w.meaning}`
+        }).join('\n')
+        
         setBulkText((prev) => prev ? prev + '\n' + formattedText : formattedText)
       } else {
         setError("단어를 찾지 못했습니다. 표가 잘 보이게 다시 찍어주세요.")
@@ -114,13 +121,15 @@ export function WordManager({
     e.preventDefault()
     setError(null)
     const lines = bulkText.split("\n").filter(line => line.trim() !== "")
+    
+    // 쉼표(,)를 기준으로 단어, 한글뜻, 영어뜻(예문) 3개 파트를 모두 추출
     const parsedWords = lines.map(line => {
       const parts = line.split(/[\t,]/).map(p => p.trim())
       return { word: parts[0] || "", meaning: parts[1] || "", example: parts[2] || "" }
     }).filter(w => w.word && w.meaning)
 
     if (parsedWords.length === 0) {
-      setError("단어와 뜻을 쉼표(,)로 구분해 주세요. (예: apple, 사과)")
+      setError("단어와 뜻을 쉼표(,)로 구분해 주세요. (예: apple, 사과, 영어뜻)")
       return
     }
 
@@ -151,7 +160,7 @@ export function WordManager({
   }
 
   function handleClearAll() {
-    if (!window.confirm("오늘 추가한 모든 단어를 정말로 삭제하시겠습니까? (이 작업은 되돌릴 수 없습니다)")) {
+    if (!window.confirm("오늘 추가한 모든 단어를 정말로 삭제하시겠습니까?")) {
       return
     }
     startTransition(async () => {
@@ -164,49 +173,38 @@ export function WordManager({
     <div className="flex flex-col gap-6">
       <input type="file" accept="image/*" ref={fileInputRef} onChange={handleImageUpload} className="hidden" />
 
-      <div className="flex flex-col gap-4 rounded-3xl border border-border bg-card p-5 shadow-sm">
-        {/* ▼ 모바일 최적화: 제목과 버튼이 좁은 화면에서 위아래로 깔끔하게 배치되도록 수정 ▼ */}
-        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-          <p className="text-sm font-semibold text-foreground pl-1">{profile}의 오늘 단어 추가</p>
-          <div className="grid grid-cols-3 gap-1 bg-muted/50 p-1 rounded-lg w-full sm:w-auto sm:flex">
-            <button 
-              onClick={() => { setIsBulkMode(false); setError(null); }} 
-              className={cn("flex items-center justify-center gap-1.5 rounded-md py-2 px-1 sm:px-3 text-[11px] sm:text-xs font-bold transition-all", !isBulkMode ? "bg-card shadow-sm text-foreground" : "text-muted-foreground")}
-            >
-              <MousePointerClick className="size-3 hidden sm:inline-block" /> 하나씩
+      <div className="flex flex-col gap-3 rounded-3xl border border-border bg-card p-5 shadow-sm">
+        <div className="flex items-center justify-between">
+          <p className="text-sm font-semibold text-foreground">{profile}의 오늘 단어 추가</p>
+          <div className="flex gap-2 bg-muted/50 p-1 rounded-lg overflow-x-auto">
+            <button onClick={() => { setIsBulkMode(false); setError(null); }} className={cn("px-2.5 py-1.5 text-xs font-bold rounded-md flex items-center gap-1 shrink-0", !isBulkMode ? "bg-card shadow-sm text-foreground" : "text-muted-foreground")}>
+              <MousePointerClick className="size-3" /> 하나씩
             </button>
-            <button 
-              onClick={() => { setIsBulkMode(true); setError(null); }} 
-              className={cn("flex items-center justify-center gap-1.5 rounded-md py-2 px-1 sm:px-3 text-[11px] sm:text-xs font-bold transition-all", isBulkMode ? "bg-card shadow-sm text-foreground" : "text-muted-foreground")}
-            >
-              <AlignLeft className="size-3 hidden sm:inline-block" /> 일괄 입력
+            <button onClick={() => { setIsBulkMode(true); setError(null); }} className={cn("px-2.5 py-1.5 text-xs font-bold rounded-md flex items-center gap-1 shrink-0", isBulkMode ? "bg-card shadow-sm text-foreground" : "text-muted-foreground")}>
+              <AlignLeft className="size-3" /> 일괄 입력
             </button>
-            <button 
-              onClick={() => fileInputRef.current?.click()} 
-              disabled={isScanning} 
-              className="flex items-center justify-center gap-1.5 rounded-md py-2 px-1 sm:px-3 text-[11px] sm:text-xs font-bold bg-blue-50 text-blue-600 hover:bg-blue-100 transition-colors"
-            >
-              {isScanning ? <Loader2 className="size-3 animate-spin" /> : <Camera className="size-3 hidden sm:inline-block" />}
-              {isScanning ? "분석중" : "AI 스캔"}
+            <button onClick={() => fileInputRef.current?.click()} disabled={isScanning} className="px-2.5 py-1.5 text-xs font-bold rounded-md flex items-center gap-1 shrink-0 bg-blue-50 text-blue-600 hover:bg-blue-100 transition-colors">
+              {isScanning ? <Loader2 className="size-3 animate-spin" /> : <Camera className="size-3" />}
+              {isScanning ? "AI 분석 중..." : "AI 사진 스캔"}
             </button>
           </div>
         </div>
 
         {!isBulkMode ? (
-          <form onSubmit={handleSingleSubmit} className="flex flex-col gap-3 mt-1">
+          <form onSubmit={handleSingleSubmit} className="flex flex-col gap-3 mt-2">
             <div className="flex flex-col gap-3 sm:flex-row">
               <input value={word} onChange={(e) => setWord(e.target.value)} placeholder="영단어 (예: apple)" className="flex-1 rounded-xl border border-input bg-background px-4 py-2.5 text-sm outline-none focus:ring-2 focus:ring-ring" />
               <input value={meaning} onChange={(e) => setMeaning(e.target.value)} placeholder="뜻 (예: 사과)" className="flex-1 rounded-xl border border-input bg-background px-4 py-2.5 text-sm outline-none focus:ring-2 focus:ring-ring" />
             </div>
-            <input value={example} onChange={(e) => setExample(e.target.value)} placeholder="예문 (선택)" className="rounded-xl border border-input bg-background px-4 py-2.5 text-sm outline-none focus:ring-2 focus:ring-ring" />
+            <input value={example} onChange={(e) => setExample(e.target.value)} placeholder="영어 뜻/힌트 (선택)" className="rounded-xl border border-input bg-background px-4 py-2.5 text-sm outline-none focus:ring-2 focus:ring-ring" />
             {error && <p className="text-sm font-medium text-red-500 break-words">{error}</p>}
             <button type="submit" disabled={isPending} className="flex items-center justify-center gap-1.5 rounded-xl py-3 text-sm font-bold text-white shadow-sm transition-opacity hover:opacity-90 disabled:opacity-60" style={{ backgroundColor: accent }}>
               {isPending ? <Loader2 className="size-4 animate-spin" /> : <Plus className="size-4" />} 단어 추가
             </button>
           </form>
         ) : (
-          <form onSubmit={handleBulkSubmit} className="flex flex-col gap-3 mt-1">
-            <textarea value={bulkText} onChange={(e) => setBulkText(e.target.value)} placeholder={isScanning ? "AI가 표를 분석하고 있습니다. 잠시만요..." : "사진을 스캔하거나 직접 입력하세요.\n(예: apple, 사과)"} className="min-h-40 rounded-xl border border-input bg-background px-4 py-3 text-sm outline-none focus:ring-2 focus:ring-ring resize-y" />
+          <form onSubmit={handleBulkSubmit} className="flex flex-col gap-3 mt-2">
+            <textarea value={bulkText} onChange={(e) => setBulkText(e.target.value)} placeholder={isScanning ? "AI가 표를 분석하고 있습니다. 잠시만요..." : "사진을 스캔하거나 직접 입력하세요.\n(예: apple, 사과, a round red fruit)"} className="min-h-40 rounded-xl border border-input bg-background px-4 py-3 text-sm outline-none focus:ring-2 focus:ring-ring resize-y" />
             {error && <p className="text-sm font-bold text-red-500 break-words bg-red-50 p-3 rounded-lg border border-red-200">{error}</p>}
             <button type="submit" disabled={isPending || isScanning || !bulkText.trim()} className="flex items-center justify-center gap-1.5 rounded-xl py-3 text-sm font-bold text-white shadow-sm transition-opacity hover:opacity-90 disabled:opacity-60" style={{ backgroundColor: accent }}>
               {isPending ? <Loader2 className="size-4 animate-spin" /> : <AlignLeft className="size-4" />} 일괄 저장하기
@@ -243,7 +241,7 @@ export function WordManager({
                       <input value={editWord} onChange={(e) => setEditWord(e.target.value)} className="flex-1 rounded-lg border border-input px-3 py-1.5 text-sm font-bold outline-none focus:border-primary" placeholder="단어" />
                       <input value={editMeaning} onChange={(e) => setEditMeaning(e.target.value)} className="flex-1 rounded-lg border border-input px-3 py-1.5 text-sm outline-none focus:border-primary" placeholder="뜻" />
                     </div>
-                    <input value={editExample} onChange={(e) => setEditExample(e.target.value)} className="w-full rounded-lg border border-input px-3 py-1.5 text-sm outline-none focus:border-primary" placeholder="예문" />
+                    <input value={editExample} onChange={(e) => setEditExample(e.target.value)} className="w-full rounded-lg border border-input px-3 py-1.5 text-sm outline-none focus:border-primary" placeholder="영어 뜻/힌트" />
                     <div className="flex justify-end gap-2 mt-1">
                       <button onClick={() => setEditingId(null)} disabled={isPending} className="flex items-center gap-1 rounded-lg bg-muted px-3 py-1.5 text-xs font-semibold text-muted-foreground hover:bg-muted/80"><X className="size-3" /> 취소</button>
                       <button onClick={() => handleUpdateSubmit(w.id)} disabled={isPending} className="flex items-center gap-1 rounded-lg px-3 py-1.5 text-xs font-bold text-white shadow-sm" style={{ backgroundColor: accent }}>{isPending ? <Loader2 className="size-3 animate-spin" /> : <Check className="size-3" />} 저장</button>
