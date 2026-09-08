@@ -65,7 +65,6 @@ export async function clearWords(profile: string, date: string) {
   revalidatePath("/")
 }
 
-// ▼ 새롭게 추가된 일괄 등록 기능 ▼
 export async function addWordsBulk(inputs: {
   profile: string
   date: string
@@ -86,7 +85,6 @@ export async function addWordsBulk(inputs: {
   revalidatePath("/")
 }
 
-// ▼ 새롭게 추가된 단어 개별 수정 기능 ▼
 export async function updateWord(
   id: number,
   input: { word: string; meaning: string; example?: string }
@@ -105,4 +103,44 @@ export async function updateWord(
     .where(eq(wordEntries.id, id))
 
   revalidatePath("/")
+}
+
+// ▼ 새롭게 추가된 Gemini AI 사진 스캔 로직 ▼
+export async function scanImageWithGemini(base64Image: string, mimeType: string) {
+  const apiKey = process.env.GEMINI_API_KEY;
+  if (!apiKey) {
+    throw new Error("Vercel 서버에 GEMINI_API_KEY가 설정되지 않았습니다.");
+  }
+
+  // Gemini 1.5 Flash 모델 호출 (빠르고 가벼움)
+  const endpoint = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey}`;
+
+  const response = await fetch(endpoint, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      contents: [{
+        parts: [
+          { text: "이 이미지 속의 표나 텍스트에서 '영어 단어'와 '한글 뜻'을 완벽하게 짝지어 추출해줘. 추출한 결과는 반드시 [{'word': 'apple', 'meaning': '사과'}, ...] 형태의 순수한 JSON 배열 형식으로만 대답해. 마크다운 기호나 설명은 절대 추가하지 마." },
+          { inline_data: { mime_type: mimeType, data: base64Image } }
+        ]
+      }],
+      generationConfig: { temperature: 0.1 }
+    })
+  });
+
+  if (!response.ok) {
+    throw new Error("AI가 사진을 분석하는 데 실패했습니다.");
+  }
+
+  const data = await response.json();
+  const text = data.candidates?.[0]?.content?.parts?.[0]?.text || "[]";
+  
+  try {
+    // AI가 습관적으로 넣는 마크다운(```) 기호 제거 후 안전하게 변환
+    const cleanText = text.replace(/```json/g, '').replace(/```/g, '').trim();
+    return JSON.parse(cleanText);
+  } catch (e) {
+    throw new Error("사진에서 단어를 명확하게 분리하지 못했습니다. 더 선명하게 찍어주세요.");
+  }
 }
