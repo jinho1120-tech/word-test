@@ -4,7 +4,7 @@ import type React from "react"
 import { useState, useTransition, useRef } from "react"
 import { useRouter } from "next/navigation"
 import { Plus, Trash2, Loader2, BookMarked, AlignLeft, MousePointerClick, Pencil, X, Check, Camera } from "lucide-react"
-import { addWord, deleteWord, addWordsBulk, updateWord, type Profile } from "@/app/actions/words"
+import { addWord, deleteWord, addWordsBulk, updateWord, scanImageWithGemini, type Profile } from "@/app/actions/words"
 import type { QuizWord } from "@/components/word-quiz"
 import { cn } from "@/lib/utils"
 
@@ -38,6 +38,7 @@ export function WordManager({
   const [error, setError] = useState<string | null>(null)
   const [isPending, startTransition] = useTransition()
 
+  // 📷 Gemini AI 사진 스캔 처리
   async function handleImageUpload(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0]
     if (!file) return
@@ -47,31 +48,37 @@ export function WordManager({
     setIsBulkMode(true)
 
     try {
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      if (!(window as any).Tesseract) {
-        const script = document.createElement("script")
-        script.src = "https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"
-        document.head.appendChild(script)
-        await new Promise((resolve) => { script.onload = resolve })
+      const reader = new FileReader()
+      reader.readAsDataURL(file)
+      reader.onload = async () => {
+        try {
+          const base64Data = (reader.result as string).split(',')[1]
+          const mimeType = file.type
+          
+          // 백엔드 서버(Gemini)에 사진 전달 후 결과 받기
+          const wordsList = await scanImageWithGemini(base64Data, mimeType)
+          
+          if (Array.isArray(wordsList) && wordsList.length > 0) {
+            // 받아온 JSON 데이터를 "단어, 뜻" 형태로 텍스트창에 예쁘게 입력
+            const formattedText = wordsList.map((w: any) => `${w.word}, ${w.meaning}`).join('\n')
+            setBulkText((prev) => prev ? prev + '\n' + formattedText : formattedText)
+          } else {
+            setError("단어를 찾지 못했습니다. 표가 잘 보이게 다시 찍어주세요.")
+          }
+        } catch (err) {
+          setError(err instanceof Error ? err.message : "분석 중 오류가 발생했습니다.")
+        } finally {
+          setIsScanning(false)
+          if (fileInputRef.current) fileInputRef.current.value = ""
+        }
       }
-
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const Tesseract = (window as any).Tesseract
-      const result = await Tesseract.recognize(file, 'eng+kor')
-      
-      const rawText = result.data.text
-      const formattedText = rawText
-        .split('\n')
-        .map((line: string) => line.trim().replace(/\s{2,}/g, ', '))
-        .filter((line: string) => line.length > 0)
-        .join('\n')
-
-      setBulkText((prev) => prev ? prev + '\n' + formattedText : formattedText)
+      reader.onerror = () => {
+        setError("파일을 읽는 데 실패했습니다.")
+        setIsScanning(false)
+      }
     } catch (err) {
-      setError("사진 분석 중 오류가 발생했습니다. 다른 사진으로 시도해 주세요.")
-    } finally {
+      setError("오류가 발생했습니다.")
       setIsScanning(false)
-      if (fileInputRef.current) fileInputRef.current.value = ""
     }
   }
 
@@ -133,7 +140,6 @@ export function WordManager({
 
   return (
     <div className="flex flex-col gap-6">
-      {/* 바로 이 부분에서 capture 속성을 제거했습니다 */}
       <input type="file" accept="image/*" ref={fileInputRef} onChange={handleImageUpload} className="hidden" />
 
       <div className="flex flex-col gap-3 rounded-3xl border border-border bg-card p-5 shadow-sm">
@@ -148,7 +154,7 @@ export function WordManager({
             </button>
             <button onClick={() => fileInputRef.current?.click()} disabled={isScanning} className="px-2.5 py-1.5 text-xs font-bold rounded-md flex items-center gap-1 shrink-0 bg-blue-50 text-blue-600 hover:bg-blue-100 transition-colors">
               {isScanning ? <Loader2 className="size-3 animate-spin" /> : <Camera className="size-3" />}
-              {isScanning ? "분석 중..." : "사진 스캔"}
+              {isScanning ? "AI 분석 중..." : "AI 사진 스캔"}
             </button>
           </div>
         </div>
@@ -167,7 +173,7 @@ export function WordManager({
           </form>
         ) : (
           <form onSubmit={handleBulkSubmit} className="flex flex-col gap-3 mt-2">
-            <textarea value={bulkText} onChange={(e) => setBulkText(e.target.value)} placeholder={isScanning ? "사진 속 글자를 읽고 있습니다..." : "사진을 스캔하거나 직접 입력하세요.\n(예: apple, 사과)"} className="min-h-40 rounded-xl border border-input bg-background px-4 py-3 text-sm outline-none focus:ring-2 focus:ring-ring resize-y" />
+            <textarea value={bulkText} onChange={(e) => setBulkText(e.target.value)} placeholder={isScanning ? "제미나이(Gemini)가 표를 분석하고 있습니다. 잠시만요..." : "사진을 스캔하거나 직접 입력하세요.\n(예: apple, 사과)"} className="min-h-40 rounded-xl border border-input bg-background px-4 py-3 text-sm outline-none focus:ring-2 focus:ring-ring resize-y" />
             {error && <p className="text-sm font-medium text-red-500">{error}</p>}
             <button type="submit" disabled={isPending || isScanning || !bulkText.trim()} className="flex items-center justify-center gap-1.5 rounded-xl py-3 text-sm font-bold text-white shadow-sm transition-opacity hover:opacity-90 disabled:opacity-60" style={{ backgroundColor: accent }}>
               {isPending ? <Loader2 className="size-4 animate-spin" /> : <AlignLeft className="size-4" />} 일괄 저장하기
