@@ -1,10 +1,10 @@
 import Link from "next/link"
-import { getWords, getWrongWords, type Profile } from "@/app/actions/words"
+import { getWords, getWrongWords, getLatestActiveDate, type Profile } from "@/app/actions/words"
 import { StudyApp } from "@/components/study-app"
 import { DateNav } from "@/components/date-nav"
 import { cn } from "@/lib/utils"
 
-// ▼ 이 한 줄을 반드시 추가해 주세요! (캐시 박제 방지, 항상 서버 실시간 접속) ▼
+// 캐시 박제 방지, 항상 서버 실시간 접속
 export const dynamic = "force-dynamic"
 
 const PROFILES: { name: Profile; accent: string }[] = [
@@ -23,11 +23,29 @@ export default async function Page({
 }) {
   const params = await searchParams
   const profile: Profile = params.profile === "예온" ? "예온" : "지온"
-  const date =
-    params.date && /^\d{4}-\d{2}-\d{2}$/.test(params.date) ? params.date : todayInSeoul()
+  const today = todayInSeoul()
+  
+  // URL에 지정된 날짜가 있는지 확인합니다.
+  let date = params.date && /^\d{4}-\d{2}-\d{2}$/.test(params.date) ? params.date : undefined
+
+  // 지정된 날짜가 없을 때 (앱 처음 켰을 때 / 북마크로 들어왔을 때)
+  if (!date) {
+    const todayWords = await getWords(profile, today)
+    
+    // 1. 오늘 등록된 단어가 없다면
+    if (todayWords.length === 0) {
+      const latestDate = await getLatestActiveDate(profile)
+      // 주소창(URL)을 강제로 바꾸지 않고, 화면에 그릴 '기준 날짜'만 조용히 최신 날짜로 바꿉니다.
+      date = latestDate || today
+    } else {
+      // 2. 단어가 있으면 오늘 날짜 유지
+      date = today
+    }
+  }
+
   const active = PROFILES.find((p) => p.name === profile)!
 
-  // 날짜별 단어(words)와 누적 오답 단어(wrongWords)를 동시에 불러옵니다
+  // 결정된 날짜를 바탕으로 단어 데이터를 불러옵니다
   const words = await getWords(profile, date)
   const wrongWords = await getWrongWords(profile)
 
@@ -60,11 +78,9 @@ export default async function Page({
         })}
       </nav>
 
-      <DateNav profile={profile} date={date} today={todayInSeoul()} accent={active.accent} />
+      <DateNav profile={profile} date={date} today={today} accent={active.accent} />
 
-      {/* StudyApp에 오답 노트 데이터(wrongWords)를 추가로 넘겨줍니다 */}
       <StudyApp profile={profile} date={date} words={words} wrongWords={wrongWords} accent={active.accent} />
     </main>
   )
 }
-// 이상무?
