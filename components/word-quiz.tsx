@@ -356,24 +356,32 @@ export function WordQuiz({ words, accent }: { words: QuizWord[]; accent: string 
                   
                   {score === 100 && (
                     <div className="mt-6 pt-6 border-t border-border">
-                      {!drawnCoupon ? (
-                        <button 
-                          onClick={handleDrawCoupon} 
-                          className="flex w-full items-center justify-center gap-2 rounded-2xl bg-gradient-to-r from-amber-400 to-orange-500 py-3.5 text-base font-black text-white shadow-lg transition-transform hover:scale-105 active:scale-95"
-                        >
-                          <Gift className="size-5 animate-bounce" /> 100점 달성! 보상 뽑기
-                        </button>
+                      {/* ▼ 10문제 미만일 때와 10문제 이상일 때를 나누어 처리합니다 ▼ */}
+                      {total >= 10 ? (
+                        !drawnCoupon ? (
+                          <button 
+                            onClick={handleDrawCoupon} 
+                            className="flex w-full items-center justify-center gap-2 rounded-2xl bg-gradient-to-r from-amber-400 to-orange-500 py-3.5 text-base font-black text-white shadow-lg transition-transform hover:scale-105 active:scale-95"
+                          >
+                            <Gift className="size-5 animate-bounce" /> 100점 달성! 보상 뽑기
+                          </button>
+                        ) : (
+                          <div className="flex flex-col items-center justify-center rounded-2xl border-2 border-dashed border-amber-500 bg-amber-100 p-5 animate-in zoom-in duration-500">
+                            <span className="mb-1.5 text-xs font-bold text-amber-700">
+                              {drawnCoupon.includes("꽝!") ? "앗, 이런! 😅" : "축하합니다! 쿠폰 당첨 🎉"}
+                            </span>
+                            <span className={cn(
+                              "text-lg font-black text-center break-keep", 
+                              drawnCoupon.includes("꽝!") ? "text-red-600" : "text-amber-950"
+                            )}>
+                              {drawnCoupon}
+                            </span>
+                          </div>
+                        )
                       ) : (
-                        // ▼ 여기를 황금빛 티켓으로 완전 고정했습니다! 다크모드에서도 변하지 않습니다. ▼
-                        <div className="flex flex-col items-center justify-center rounded-2xl border-2 border-dashed border-amber-500 bg-amber-100 p-5 animate-in zoom-in duration-500">
-                          <span className="mb-1.5 text-xs font-bold text-amber-700">
-                            {drawnCoupon.includes("꽝!") ? "앗, 이런! 😅" : "축하합니다! 쿠폰 당첨 🎉"}
-                          </span>
-                          <span className={cn(
-                            "text-lg font-black text-center break-keep", 
-                            drawnCoupon.includes("꽝!") ? "text-red-600" : "text-amber-950"
-                          )}>
-                            {drawnCoupon}
+                        <div className="flex flex-col items-center justify-center rounded-2xl bg-muted/50 p-4">
+                          <span className="text-sm font-bold text-muted-foreground">
+                            💡 단어가 10개 이상일 때 만점을 받으면 쿠폰 뽑기가 나타나요!
                           </span>
                         </div>
                       )}
