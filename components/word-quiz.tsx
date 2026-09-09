@@ -2,9 +2,13 @@
 
 import type React from "react"
 import { useMemo, useRef, useState } from "react"
-import { Trophy, Lightbulb, RotateCcw, Check, X, ArrowRight, Play, Volume2, Gift } from "lucide-react"
+import { Trophy, Lightbulb, RotateCcw, Check, X, ArrowRight, Play, Volume2, Gift, MessageCircle } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { recordQuizResult } from "@/app/actions/words"
+
+// ▼ 원장님 휴대폰 번호를 숫자만 입력해 주세요! (예: "01012345678")
+// 이 번호가 있어야 아이들이 버튼을 눌렀을 때 아빠한테 바로 iMessage가 갑니다!
+const DAD_PHONE = "01032854101" 
 
 export type QuizWord = {
   id: number
@@ -146,15 +150,22 @@ export function WordQuiz({ words, accent }: { words: QuizWord[]; accent: string 
       console.error("음성 취소 중 에러 발생:", e)
     }
 
-    // ▼ 이스터에그 (정답 처리 안 하고 팝업만 띄운 뒤 다시 입력하게 만듭니다!)
+    // ▼ 이스터에그 발동 시 iMessage 연동!
     if (guess === "아빠최고" || guess === "아빠사랑해" || guess === "지온천재" || guess === "예온천재") {
-      alert(`🎉 삐빅- 비밀 편지 발견!\n\n"아빠도 우리 ${currentName}이 엄청 사랑해! ❤️\n(자, 이제 진짜 영단어 정답을 맞춰볼까?)"`)
-      setValue("") // 입력창 비워주기
+      alert(`🎉 삐빅- 비밀 치트키 발견!\n\n아빠한테 진짜 iMessage 문자를 보냅니다! ❤️\n(문자 보내고 돌아와서 진짜 정답을 맞춰봐요!)`)
+      setValue("") // 정답 처리는 안 하고 입력창만 비워줍니다.
+      
+      const message = guess.includes("천재") 
+        ? `아빠! 영단어 퀴즈 풀고 있는 천재 ${currentName}이에요! 😎` 
+        : `아빠 최고! 퀴즈 풀다가 아빠 생각나서 문자 보내요! 사랑해 ❤️`;
+        
+      // 아이폰 iMessage(문자) 앱 호출
+      window.location.href = DAD_PHONE ? `sms:${DAD_PHONE}&body=${encodeURIComponent(message)}` : `sms:&body=${encodeURIComponent(message)}`;
+      
       requestAnimationFrame(() => inputRef.current?.focus())
-      return // 다음 문제로 넘어가지 않고 그대로 멈춤
+      return
     }
 
-    // 일반 정답 확인
     if (guess === current.word.toLowerCase()) {
       const newStreak = streak + 1
       setStreak(newStreak)
@@ -373,6 +384,19 @@ export function WordQuiz({ words, accent }: { words: QuizWord[]; accent: string 
                             )}>
                               {drawnCoupon}
                             </span>
+                            
+                            {/* ▼ 아빠한테 iMessage 보내는 버튼 추가! ▼ */}
+                            <button 
+                              onClick={() => {
+                                const msg = drawnCoupon.includes("꽝!") 
+                                  ? `아빠! 나 영단어 만점 받았는데 뽑기에서 꽝 나왔어 ㅠㅠ\n\n🎯 ${drawnCoupon}`
+                                  : `아빠! 나 영단어 만점 받아서 쿠폰 뽑았어! 빨리 약속 지켜줘!\n\n🎁 당첨된 쿠폰: ${drawnCoupon}`
+                                window.location.href = DAD_PHONE ? `sms:${DAD_PHONE}&body=${encodeURIComponent(msg)}` : `sms:&body=${encodeURIComponent(msg)}`
+                              }}
+                              className="mt-5 flex w-full items-center justify-center gap-1.5 rounded-xl bg-[#007AFF] py-3 text-sm font-bold text-white shadow-md transition-transform hover:scale-105 active:scale-95"
+                            >
+                              <MessageCircle className="size-4" /> 아빠한테 문자 보내기
+                            </button>
                           </div>
                         )
                       ) : (
