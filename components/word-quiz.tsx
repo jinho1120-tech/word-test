@@ -43,6 +43,9 @@ export function WordQuiz({ words, accent }: { words: QuizWord[]; accent: string 
   const [bestStreak, setBestStreak] = useState(0)
   const [hintUsed, setHintUsed] = useState(false)
   
+  // ▼ 퀴즈 중에 치트키를 한 번이라도 썼는지 기억하는 상태 변수 추가!
+  const [cheatUsed, setCheatUsed] = useState(false)
+  
   const [quizType, setQuizType] = useState<QuizType>("standard")
   const [drawnCoupon, setDrawnCoupon] = useState<string | null>(null)
   const inputRef = useRef<HTMLInputElement>(null)
@@ -103,6 +106,7 @@ export function WordQuiz({ words, accent }: { words: QuizWord[]; accent: string 
     setStreak(0)
     setBestStreak(0)
     setHintUsed(false)
+    setCheatUsed(false) // ▼ 새 퀴즈 시작할 때 치트키 사용 기록 초기화!
     setDrawnCoupon(null)
     setPhase("quiz")
     requestAnimationFrame(() => inputRef.current?.focus())
@@ -148,6 +152,7 @@ export function WordQuiz({ words, accent }: { words: QuizWord[]; accent: string 
 
     if (guess === "아빠최고" || guess === "아빠사랑해" || guess === "지온천재" || guess === "예온천재") {
       alert(`🎉 삐빅- 비밀 치트키가 발동되었습니다!\n\n"아빠도 우리 ${currentName}이 엄청 사랑해! 무조건 정답 처리! ❤️"`)
+      setCheatUsed(true) // ▼ 치트키를 쓰면 "너 썼지!" 하고 기록해 둡니다.
       const newStreak = streak + 1
       setStreak(newStreak)
       setBestStreak((b) => Math.max(b, newStreak))
@@ -356,32 +361,42 @@ export function WordQuiz({ words, accent }: { words: QuizWord[]; accent: string 
                   
                   {score === 100 && (
                     <div className="mt-6 pt-6 border-t border-border">
-                      {/* ▼ 10문제 미만일 때와 10문제 이상일 때를 나누어 처리합니다 ▼ */}
                       {total >= 10 ? (
-                        !drawnCoupon ? (
-                          <button 
-                            onClick={handleDrawCoupon} 
-                            className="flex w-full items-center justify-center gap-2 rounded-2xl bg-gradient-to-r from-amber-400 to-orange-500 py-3.5 text-base font-black text-white shadow-lg transition-transform hover:scale-105 active:scale-95"
-                          >
-                            <Gift className="size-5 animate-bounce" /> 100점 달성! 보상 뽑기
-                          </button>
+                        // ▼ 치트키를 쓰지 않았을 때만 정상적으로 뽑기가 나옵니다. ▼
+                        !cheatUsed ? (
+                          !drawnCoupon ? (
+                            <button 
+                              onClick={handleDrawCoupon} 
+                              className="flex w-full items-center justify-center gap-2 rounded-2xl bg-gradient-to-r from-amber-400 to-orange-500 py-3.5 text-base font-black text-white shadow-lg transition-transform hover:scale-105 active:scale-95"
+                            >
+                              <Gift className="size-5 animate-bounce" /> 100점 달성! 보상 뽑기
+                            </button>
+                          ) : (
+                            <div className="flex flex-col items-center justify-center rounded-2xl border-2 border-dashed border-amber-500 bg-amber-100 p-5 animate-in zoom-in duration-500">
+                              <span className="mb-1.5 text-xs font-bold text-amber-700">
+                                {drawnCoupon.includes("꽝!") ? "앗, 이런! 😅" : "축하합니다! 쿠폰 당첨 🎉"}
+                              </span>
+                              <span className={cn(
+                                "text-lg font-black text-center break-keep", 
+                                drawnCoupon.includes("꽝!") ? "text-red-600" : "text-amber-950"
+                              )}>
+                                {drawnCoupon}
+                              </span>
+                            </div>
+                          )
                         ) : (
-                          <div className="flex flex-col items-center justify-center rounded-2xl border-2 border-dashed border-amber-500 bg-amber-100 p-5 animate-in zoom-in duration-500">
-                            <span className="mb-1.5 text-xs font-bold text-amber-700">
-                              {drawnCoupon.includes("꽝!") ? "앗, 이런! 😅" : "축하합니다! 쿠폰 당첨 🎉"}
-                            </span>
-                            <span className={cn(
-                              "text-lg font-black text-center break-keep", 
-                              drawnCoupon.includes("꽝!") ? "text-red-600" : "text-amber-950"
-                            )}>
-                              {drawnCoupon}
+                          // ▼ 치트키를 써서 100점을 받았을 때 뜨는 장난스러운 문구 ▼
+                          <div className="flex flex-col items-center justify-center rounded-2xl bg-muted/50 p-4 text-center">
+                            <span className="text-sm font-bold text-muted-foreground leading-relaxed">
+                              💡 치트키를 써서 받은 100점은 쿠폰이 안 나와요! 😜<br/>
+                              정정당당하게 다시 도전해 보세요!
                             </span>
                           </div>
                         )
                       ) : (
-                        <div className="flex flex-col items-center justify-center rounded-2xl bg-muted/50 p-4">
+                        <div className="flex flex-col items-center justify-center rounded-2xl bg-muted/50 p-4 text-center">
                           <span className="text-sm font-bold text-muted-foreground">
-                            💡 단어가 10개 이상일 때 만점을 받으면 쿠폰 뽑기가 나타나요!
+                            💡 단어가 10개 이상일 때 만점을 받으면<br/>쿠폰 뽑기가 나타나요!
                           </span>
                         </div>
                       )}
