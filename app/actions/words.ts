@@ -178,4 +178,15 @@ export async function getActiveDates(profile: string): Promise<string[]> {
   const uniqueDates = Array.from(new Set(results.map((r) => r.date)))
   return uniqueDates
 }
-// 이상무?
+// ▼ [새로 추가됨] 가장 최근에 단어가 등록된 날짜를 찾는 기능 ▼
+export async function getLatestActiveDate(profile: string): Promise<string | null> {
+  assertProfile(profile)
+  const result = await db
+    .select({ date: wordEntries.assignmentDate })
+    .from(wordEntries)
+    .where(eq(wordEntries.profile, profile))
+    .orderBy(desc(wordEntries.assignmentDate))
+    .limit(1)
+
+  return result.length > 0 ? result[0].date : null
+}
