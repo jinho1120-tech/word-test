@@ -16,6 +16,7 @@ export type QuizWord = {
 
 type Phase = "start" | "quiz" | "result"
 type Feedback = "idle" | "correct" | "wrong"
+type QuizType = "standard" | "listening"
 
 type Answered = {
   word: QuizWord
@@ -41,6 +42,10 @@ export function WordQuiz({ words, accent }: { words: QuizWord[]; accent: string 
   const [streak, setStreak] = useState(0)
   const [bestStreak, setBestStreak] = useState(0)
   const [hintUsed, setHintUsed] = useState(false)
+  
+  // ▼ 퀴즈 모드 상태 추가
+  const [quizType, setQuizType] = useState<QuizType>("standard")
+  
   const inputRef = useRef<HTMLInputElement>(null)
 
   const current = deck[index]
@@ -52,7 +57,6 @@ export function WordQuiz({ words, accent }: { words: QuizWord[]; accent: string 
     return Math.round((correctCount / total) * 100)
   }, [correctCount, total])
 
-  // 모바일 기기(아이폰 등)에서 간헐적으로 발생하는 음성 엔진 충돌을 막기 위해 안전장치(try-catch) 추가
   function playPronunciation(word: string) {
     try {
       if (typeof window !== "undefined" && "speechSynthesis" in window) {
@@ -79,17 +83,29 @@ export function WordQuiz({ words, accent }: { words: QuizWord[]; accent: string 
     setHintUsed(false)
     setPhase("quiz")
     requestAnimationFrame(() => inputRef.current?.focus())
+    
+    // 리스닝 모드일 경우 시작과 동시에 첫 단어 읽어주기
+    if (quizType === "listening" && d.length > 0) {
+      setTimeout(() => playPronunciation(d[0].word), 300)
+    }
   }
 
   function advance(record: Answered) {
     const nextAnswered = [...answered, record]
-    if (index + 1 < total) {
+    const nextIndex = index + 1
+    
+    if (nextIndex < total) {
       setAnswered(nextAnswered)
-      setIndex(index + 1)
+      setIndex(nextIndex)
       setValue("")
       setFeedback("idle")
       setHintUsed(false)
       requestAnimationFrame(() => inputRef.current?.focus())
+      
+      // 리스닝 모드일 경우 다음 문제로 넘어갈 때 자동으로 읽어주기
+      if (quizType === "listening") {
+        setTimeout(() => playPronunciation(deck[nextIndex].word), 300)
+      }
     } else {
       setAnswered(nextAnswered)
       setPhase("result")
@@ -134,7 +150,6 @@ export function WordQuiz({ words, accent }: { words: QuizWord[]; accent: string 
 
   const wrongWords = answered.filter((a) => !a.correct).map((a) => a.word)
 
-  // 화면이 뻗는 현상을 막기 위해 렌더링 구조(뼈대)를 하나로 묶고 안정화했습니다.
   return (
     <>
       {words.length === 0 ? (
@@ -143,7 +158,6 @@ export function WordQuiz({ words, accent }: { words: QuizWord[]; accent: string 
         </div>
       ) : (
         <>
-          {/* 1. 퀴즈 진행 중일 때 나타나는 전체 화면 오버레이 */}
           {phase === "quiz" && current && (
             <div className="fixed inset-0 z-50 flex items-center justify-center bg-background sm:bg-background/95 sm:backdrop-blur-sm sm:p-6 animate-in fade-in duration-200">
               <div className="flex h-full w-full max-w-lg flex-col overflow-hidden bg-card sm:h-auto sm:max-h-[850px] sm:rounded-3xl sm:border sm:border-border sm:shadow-2xl">
@@ -172,25 +186,47 @@ export function WordQuiz({ words, accent }: { words: QuizWord[]; accent: string 
                     <span>연속 <span className="font-bold" style={{ color: accent }}>{streak}</span></span>
                   </div>
 
-                  <h2 className="mb-4 text-balance text-center text-4xl font-black tracking-tight text-foreground">
-                    <div className="mb-3 flex justify-center">
-                      <span className="rounded-full bg-muted/80 px-2.5 py-1 text-[11px] font-bold tracking-wide text-muted-foreground">
-                        {current.subject}
-                      </span>
+                  {/* ▼ 모드에 따라 문제 화면이 다르게 표시됩니다 */}
+                  {quizType === "standard" ? (
+                    <h2 className="mb-4 text-balance text-center text-4xl font-black tracking-tight text-foreground">
+                      <div className="mb-3 flex justify-center">
+                        <span className="rounded-full bg-muted/80 px-2.5 py-1 text-[11px] font-bold tracking-wide text-muted-foreground">
+                          {current.subject}
+                        </span>
+                      </div>
+                      {current.meaning}
+                    </h2>
+                  ) : (
+                    <div className="mb-4 flex flex-col items-center justify-center">
+                      <div className="mb-3 flex justify-center">
+                        <span className="rounded-full bg-muted/80 px-2.5 py-1 text-[11px] font-bold tracking-wide text-muted-foreground">
+                          {current.subject}
+                        </span>
+                      </div>
+                      <button 
+                        type="button" 
+                        onClick={() => playPronunciation(current.word)} 
+                        className="mb-3 flex size-20 items-center justify-center rounded-full text-white shadow-lg transition-transform hover:scale-105 active:scale-95" 
+                        style={{ backgroundColor: accent }}
+                      >
+                        <Volume2 className="size-10" />
+                      </button>
+                      <p className="text-sm font-bold text-muted-foreground">버튼을 눌러 다시 들을 수 있어요</p>
                     </div>
-                    {current.meaning}
-                  </h2>
+                  )}
 
                   <div className="mb-8 flex min-h-24 flex-col items-center justify-center gap-3 rounded-2xl border border-border bg-muted/50 p-4">
                     <p className="text-pretty text-center font-serif italic leading-relaxed text-muted-foreground">
                       {hintUsed
-                        ? current.example
-                          ? current.example.replace(new RegExp(current.word, "gi"), (m) => `${m[0]}${"·".repeat(Math.max(0, m.length - 1))}`)
-                          : `첫 글자: ${current.word[0]} (${current.word.length}글자)`
+                        ? quizType === "listening"
+                          ? `뜻: ${current.meaning}`
+                          : current.example
+                            ? current.example.replace(new RegExp(current.word, "gi"), (m) => `${m[0]}${"·".repeat(Math.max(0, m.length - 1))}`)
+                            : `첫 글자: ${current.word[0]} (${current.word.length}글자)`
                         : "힌트를 보려면 아래 힌트 버튼을 눌러 주세요."}
                     </p>
                     
-                    {hintUsed && (
+                    {hintUsed && quizType === "standard" && (
                       <button
                         type="button"
                         onMouseDown={(e) => { e.preventDefault(); playPronunciation(current.word); }}
@@ -207,7 +243,7 @@ export function WordQuiz({ words, accent }: { words: QuizWord[]; accent: string 
                   <div className="mb-6 flex min-h-6 items-center justify-center">
                     {feedback === "correct" && <p className="flex items-center gap-1.5 text-sm font-semibold text-green-600"><Check className="size-4" /> 정답입니다!</p>}
                     {feedback === "wrong" && <p className="flex items-center gap-1.5 text-sm font-semibold text-red-500"><X className="size-4" /> 정답: {current.word}</p>}
-                    {feedback === "idle" && hintUsed && <p className="text-sm text-muted-foreground">첫 글자: <span className="font-bold text-foreground">{current.word[0]}</span></p>}
+                    {feedback === "idle" && hintUsed && quizType === "standard" && <p className="text-sm text-muted-foreground">첫 글자: <span className="font-bold text-foreground">{current.word[0]}</span></p>}
                   </div>
 
                   <button onClick={submit} disabled={feedback !== "idle" || !value.trim()} className={cn("flex w-full items-center justify-center gap-2 rounded-2xl py-4 text-lg font-bold text-white shadow-md transition-colors disabled:opacity-60", feedback === "correct" && "bg-green-500", feedback === "wrong" && "bg-red-500")} style={feedback === "idle" ? { backgroundColor: accent } : undefined}>
@@ -222,7 +258,6 @@ export function WordQuiz({ words, accent }: { words: QuizWord[]; accent: string 
             </div>
           )}
 
-          {/* 2. 대기 화면 및 결과 화면 (항상 화면에 깔려 있어서 에러를 방지함) */}
           <div className={cn(
             "overflow-hidden rounded-3xl border border-border bg-card shadow-sm",
             phase === "quiz" ? "hidden" : "block"
@@ -233,7 +268,24 @@ export function WordQuiz({ words, accent }: { words: QuizWord[]; accent: string 
                   <Play className="size-7" fill="currentColor" />
                 </div>
                 <h2 className="mb-2 text-xl font-black text-foreground">단어 퀴즈</h2>
-                <p className="mb-8 text-pretty text-sm leading-relaxed text-muted-foreground">총 {words.length}개의 단어가 준비되어 있어요.</p>
+                <p className="mb-6 text-pretty text-sm leading-relaxed text-muted-foreground">총 {words.length}개의 단어가 준비되어 있어요.</p>
+                
+                {/* ▼ 모드 선택 토글 버튼 추가 */}
+                <div className="mb-8 flex w-full rounded-xl bg-muted p-1">
+                  <button 
+                    onClick={() => setQuizType("standard")} 
+                    className={cn("flex-1 rounded-lg py-3 text-sm font-bold transition-all", quizType === "standard" ? "bg-background text-foreground shadow-sm" : "text-muted-foreground hover:bg-muted-foreground/10")}
+                  >
+                    📖 뜻 보고 쓰기
+                  </button>
+                  <button 
+                    onClick={() => setQuizType("listening")} 
+                    className={cn("flex-1 rounded-lg py-3 text-sm font-bold transition-all", quizType === "listening" ? "bg-background text-foreground shadow-sm" : "text-muted-foreground hover:bg-muted-foreground/10")}
+                  >
+                    🎧 소리 듣고 쓰기
+                  </button>
+                </div>
+
                 <button onClick={() => begin(words)} className="w-full rounded-2xl py-4 text-lg font-bold text-white shadow-md transition-opacity hover:opacity-90 active:opacity-80" style={{ backgroundColor: accent }}>
                   퀴즈 시작하기
                 </button>
