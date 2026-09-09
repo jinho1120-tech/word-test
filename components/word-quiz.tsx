@@ -1,10 +1,14 @@
 "use client"
 
 import type React from "react"
-import { useMemo, useRef, useState } from "react"
+// ▼ useEffect가 추가되었습니다.
+import { useMemo, useRef, useState, useEffect } from "react"
 import { Trophy, Lightbulb, RotateCcw, Check, X, ArrowRight, Play, Volume2, Gift, MessageCircle } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { recordQuizResult } from "@/app/actions/words"
+
+// ▼ 폭죽 라이브러리를 불러옵니다!
+import confetti from "canvas-confetti"
 
 // ▼ 원장님 휴대폰 번호를 숫자만 입력해 주세요! (예: "01012345678")
 // 이 번호가 있어야 아이들이 버튼을 눌렀을 때 아빠한테 바로 iMessage가 갑니다!
@@ -61,6 +65,38 @@ export function WordQuiz({ words, accent }: { words: QuizWord[]; accent: string 
     if (total === 0) return 0
     return Math.round((correctCount / total) * 100)
   }, [correctCount, total])
+
+  // ▼ 폭죽 파티 효과 추가! (10문제 이상 + 100점 달성 시 3초 동안 화려하게 터집니다)
+  useEffect(() => {
+    if (phase === "result" && score === 100 && total >= 10) {
+      const duration = 3000;
+      const animationEnd = Date.now() + duration;
+      const defaults = { startVelocity: 30, spread: 360, ticks: 60, zIndex: 9999 };
+
+      const randomInRange = (min: number, max: number) => Math.random() * (max - min) + min;
+
+      const interval: any = setInterval(function() {
+        const timeLeft = animationEnd - Date.now();
+        if (timeLeft <= 0) {
+          return clearInterval(interval);
+        }
+        
+        const particleCount = 50 * (timeLeft / duration);
+        confetti({
+          ...defaults, 
+          particleCount,
+          origin: { x: randomInRange(0.1, 0.3), y: Math.random() - 0.2 }
+        });
+        confetti({
+          ...defaults, 
+          particleCount,
+          origin: { x: randomInRange(0.7, 0.9), y: Math.random() - 0.2 }
+        });
+      }, 250);
+      
+      return () => clearInterval(interval);
+    }
+  }, [phase, score, total]);
 
   function playPronunciation(word: string) {
     try {
