@@ -72,12 +72,10 @@ export function WordQuiz({ words, accent }: { words: QuizWord[]; accent: string 
     }
   }
 
-  // ▼ '꽝(아빠의 사심 벌칙)'이 추가된 뽑기 함수
   function handleDrawCoupon() {
     const rand = Math.random() * 100
     
     if (rand < 20) {
-      // 20% 확률로 3가지 꽝 중 하나가 당첨!
       const penalties = [
         "💥 꽝! (벌칙: 아빠 볼에 뽀뽀 3번 하기 😘)",
         "💥 꽝! (벌칙: 아빠한테 하트 날리며 사랑해요 외치기 🫶)",
@@ -85,13 +83,13 @@ export function WordQuiz({ words, accent }: { words: QuizWord[]; accent: string 
       ]
       setDrawnCoupon(penalties[Math.floor(Math.random() * penalties.length)])
     } else if (rand < 35) {
-      setDrawnCoupon("아빠의 엉덩이 춤 관람권 🕺") // 15%
+      setDrawnCoupon("아빠의 엉덩이 춤 관람권 🕺")
     } else if (rand < 55) {
-      setDrawnCoupon("인간 놀이기구 탑승권 ✈️") // 20%
+      setDrawnCoupon("인간 놀이기구 탑승권 ✈️")
     } else if (rand < 80) {
-      setDrawnCoupon("침대까지 어부바 특급열차 🚂") // 25%
+      setDrawnCoupon("침대까지 어부바 특급열차 🚂")
     } else {
-      setDrawnCoupon("아빠의 특급 안마 3분 💆‍♀️") // 20%
+      setDrawnCoupon("아빠의 특급 안마 3분 💆‍♀️")
     }
   }
 
@@ -361,18 +359,19 @@ export function WordQuiz({ words, accent }: { words: QuizWord[]; accent: string 
                       {!drawnCoupon ? (
                         <button 
                           onClick={handleDrawCoupon} 
-                          className="flex w-full items-center justify-center gap-2 rounded-2xl bg-gradient-to-r from-yellow-400 to-orange-500 py-3.5 text-base font-black text-white shadow-lg transition-transform hover:scale-105 active:scale-95"
+                          className="flex w-full items-center justify-center gap-2 rounded-2xl bg-gradient-to-r from-amber-400 to-orange-500 py-3.5 text-base font-black text-white shadow-lg transition-transform hover:scale-105 active:scale-95"
                         >
                           <Gift className="size-5 animate-bounce" /> 100점 달성! 보상 뽑기
                         </button>
                       ) : (
-                        <div className="flex flex-col items-center justify-center rounded-2xl border-2 border-dashed border-yellow-400 bg-yellow-50/50 p-5 animate-in zoom-in duration-500">
-                          <span className="mb-1.5 text-xs font-bold text-yellow-600">
+                        // ▼ 다크 모드에서도 깨끗하게 보이도록 색상(dark:bg-amber-900/20 등)을 수정했습니다! ▼
+                        <div className="flex flex-col items-center justify-center rounded-2xl border-2 border-dashed border-amber-500/50 bg-amber-50 dark:bg-amber-900/20 p-5 animate-in zoom-in duration-500">
+                          <span className="mb-1.5 text-xs font-bold text-amber-600 dark:text-amber-400">
                             {drawnCoupon.includes("꽝!") ? "앗, 이런! 😅" : "축하합니다! 쿠폰 당첨 🎉"}
                           </span>
                           <span className={cn(
                             "text-lg font-black text-center break-keep", 
-                            drawnCoupon.includes("꽝!") ? "text-red-500" : "text-foreground"
+                            drawnCoupon.includes("꽝!") ? "text-red-500 dark:text-red-400" : "text-foreground"
                           )}>
                             {drawnCoupon}
                           </span>
