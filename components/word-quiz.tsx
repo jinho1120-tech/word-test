@@ -43,9 +43,7 @@ export function WordQuiz({ words, accent }: { words: QuizWord[]; accent: string 
   const [bestStreak, setBestStreak] = useState(0)
   const [hintUsed, setHintUsed] = useState(false)
   
-  // ▼ 퀴즈 모드 상태 추가
   const [quizType, setQuizType] = useState<QuizType>("standard")
-  
   const inputRef = useRef<HTMLInputElement>(null)
 
   const current = deck[index]
@@ -69,20 +67,6 @@ export function WordQuiz({ words, accent }: { words: QuizWord[]; accent: string 
     } catch (e) {
       console.error("음성 재생 중 에러 발생:", e)
     }
-    // ▼▼▼ 여기서부터 복사해서 끼워 넣어주세요! (맞춤형 이스터에그) ▼▼▼
-    // 테마 색상(accent)을 단서로 현재 문제를 풀고 있는 딸의 이름을 알아냅니다.
-    const currentName = accent === "#6366f1" ? "지온이" : "예온이"
-    
-    if (guess === "아빠최고" || guess === "아빠사랑해" || guess === "지온천재" || guess === "예온천재") {
-      alert(`🎉 삐빅- 비밀 치트키가 발동되었습니다!\n\n"아빠도 우리 ${currentName} 엄청 사랑해! 무조건 정답 처리! ❤️"`)
-      const newStreak = streak + 1
-      setStreak(newStreak)
-      setBestStreak((b) => Math.max(b, newStreak))
-      setFeedback("correct")
-      recordQuizResult(current.id, true).catch(console.error)
-      setTimeout(() => advance({ word: current, correct: true }), 1500)
-      return
-    }
   }
 
   function begin(list: QuizWord[]) {
@@ -98,7 +82,6 @@ export function WordQuiz({ words, accent }: { words: QuizWord[]; accent: string 
     setPhase("quiz")
     requestAnimationFrame(() => inputRef.current?.focus())
     
-    // 리스닝 모드일 경우 시작과 동시에 첫 단어 읽어주기
     if (quizType === "listening" && d.length > 0) {
       setTimeout(() => playPronunciation(d[0].word), 300)
     }
@@ -116,7 +99,6 @@ export function WordQuiz({ words, accent }: { words: QuizWord[]; accent: string 
       setHintUsed(false)
       requestAnimationFrame(() => inputRef.current?.focus())
       
-      // 리스닝 모드일 경우 다음 문제로 넘어갈 때 자동으로 읽어주기
       if (quizType === "listening") {
         setTimeout(() => playPronunciation(deck[nextIndex].word), 300)
       }
@@ -126,6 +108,7 @@ export function WordQuiz({ words, accent }: { words: QuizWord[]; accent: string 
     }
   }
 
+  // ▼ 정답을 확인하는 submit 함수 안에 치트키가 잘 들어갔습니다!
   function submit() {
     if (!current || feedback !== "idle") return
     const guess = value.trim().toLowerCase()
@@ -139,6 +122,21 @@ export function WordQuiz({ words, accent }: { words: QuizWord[]; accent: string 
       console.error("음성 취소 중 에러 발생:", e)
     }
 
+    const currentName = accent === "#6366f1" ? "지온이" : "예온이"
+    
+    // 치트키 발동!
+    if (guess === "아빠최고" || guess === "아빠사랑해" || guess === "지온천재" || guess === "예온천재") {
+      alert(`🎉 삐빅- 비밀 치트키가 발동되었습니다!\n\n"아빠도 우리 ${currentName} 엄청 사랑해! 무조건 정답 처리! ❤️"`)
+      const newStreak = streak + 1
+      setStreak(newStreak)
+      setBestStreak((b) => Math.max(b, newStreak))
+      setFeedback("correct")
+      recordQuizResult(current.id, true).catch(console.error)
+      setTimeout(() => advance({ word: current, correct: true }), 1500)
+      return
+    }
+
+    // 일반 정답 확인
     if (guess === current.word.toLowerCase()) {
       const newStreak = streak + 1
       setStreak(newStreak)
@@ -200,7 +198,6 @@ export function WordQuiz({ words, accent }: { words: QuizWord[]; accent: string 
                     <span>연속 <span className="font-bold" style={{ color: accent }}>{streak}</span></span>
                   </div>
 
-                  {/* ▼ 모드에 따라 문제 화면이 다르게 표시됩니다 */}
                   {quizType === "standard" ? (
                     <h2 className="mb-4 text-balance text-center text-4xl font-black tracking-tight text-foreground">
                       <div className="mb-3 flex justify-center">
@@ -284,7 +281,6 @@ export function WordQuiz({ words, accent }: { words: QuizWord[]; accent: string 
                 <h2 className="mb-2 text-xl font-black text-foreground">단어 퀴즈</h2>
                 <p className="mb-6 text-pretty text-sm leading-relaxed text-muted-foreground">총 {words.length}개의 단어가 준비되어 있어요.</p>
                 
-                {/* ▼ 모드 선택 토글 버튼 추가 */}
                 <div className="mb-8 flex w-full rounded-xl bg-muted p-1">
                   <button 
                     onClick={() => setQuizType("standard")} 
