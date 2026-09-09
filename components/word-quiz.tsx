@@ -69,6 +69,20 @@ export function WordQuiz({ words, accent }: { words: QuizWord[]; accent: string 
     } catch (e) {
       console.error("음성 재생 중 에러 발생:", e)
     }
+    // ▼▼▼ 여기서부터 복사해서 끼워 넣어주세요! (맞춤형 이스터에그) ▼▼▼
+    // 테마 색상(accent)을 단서로 현재 문제를 풀고 있는 딸의 이름을 알아냅니다.
+    const currentName = accent === "#6366f1" ? "지온이" : "예온이"
+    
+    if (guess === "아빠최고" || guess === "아빠사랑해" || guess === "지온천재" || guess === "예온천재") {
+      alert(`🎉 삐빅- 비밀 치트키가 발동되었습니다!\n\n"아빠도 우리 ${currentName} 엄청 사랑해! 무조건 정답 처리! ❤️"`)
+      const newStreak = streak + 1
+      setStreak(newStreak)
+      setBestStreak((b) => Math.max(b, newStreak))
+      setFeedback("correct")
+      recordQuizResult(current.id, true).catch(console.error)
+      setTimeout(() => advance({ word: current, correct: true }), 1500)
+      return
+    }
   }
 
   function begin(list: QuizWord[]) {
