@@ -364,14 +364,14 @@ export function WordQuiz({ words, accent }: { words: QuizWord[]; accent: string 
                           <Gift className="size-5 animate-bounce" /> 100점 달성! 보상 뽑기
                         </button>
                       ) : (
-                        // ▼ 다크 모드에서도 깨끗하게 보이도록 색상(dark:bg-amber-900/20 등)을 수정했습니다! ▼
-                        <div className="flex flex-col items-center justify-center rounded-2xl border-2 border-dashed border-amber-500/50 bg-amber-50 dark:bg-amber-900/20 p-5 animate-in zoom-in duration-500">
-                          <span className="mb-1.5 text-xs font-bold text-amber-600 dark:text-amber-400">
+                        // ▼ 여기를 황금빛 티켓으로 완전 고정했습니다! 다크모드에서도 변하지 않습니다. ▼
+                        <div className="flex flex-col items-center justify-center rounded-2xl border-2 border-dashed border-amber-500 bg-amber-100 p-5 animate-in zoom-in duration-500">
+                          <span className="mb-1.5 text-xs font-bold text-amber-700">
                             {drawnCoupon.includes("꽝!") ? "앗, 이런! 😅" : "축하합니다! 쿠폰 당첨 🎉"}
                           </span>
                           <span className={cn(
                             "text-lg font-black text-center break-keep", 
-                            drawnCoupon.includes("꽝!") ? "text-red-500 dark:text-red-400" : "text-foreground"
+                            drawnCoupon.includes("꽝!") ? "text-red-600" : "text-amber-950"
                           )}>
                             {drawnCoupon}
                           </span>
