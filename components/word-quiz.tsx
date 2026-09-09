@@ -49,6 +49,9 @@ export function WordQuiz({ words, accent }: { words: QuizWord[]; accent: string 
   const current = deck[index]
   const total = deck.length
   const correctCount = answered.filter((a) => a.correct).length
+  
+  // 현재 접속 중인 아이의 이름
+  const currentName = accent === "#6366f1" ? "지온" : "예온"
 
   const score = useMemo(() => {
     if (total === 0) return 0
@@ -108,7 +111,6 @@ export function WordQuiz({ words, accent }: { words: QuizWord[]; accent: string 
     }
   }
 
-  // ▼ 정답을 확인하는 submit 함수 안에 치트키가 잘 들어갔습니다!
   function submit() {
     if (!current || feedback !== "idle") return
     const guess = value.trim().toLowerCase()
@@ -122,11 +124,9 @@ export function WordQuiz({ words, accent }: { words: QuizWord[]; accent: string 
       console.error("음성 취소 중 에러 발생:", e)
     }
 
-    const currentName = accent === "#6366f1" ? "지온이" : "예온이"
-    
-    // 치트키 발동!
+    // 치트키 발동
     if (guess === "아빠최고" || guess === "아빠사랑해" || guess === "지온천재" || guess === "예온천재") {
-      alert(`🎉 삐빅- 비밀 치트키가 발동되었습니다!\n\n"아빠도 우리 ${currentName} 엄청 사랑해! 무조건 정답 처리! ❤️"`)
+      alert(`🎉 삐빅- 비밀 치트키가 발동되었습니다!\n\n"아빠도 우리 ${currentName}이 엄청 사랑해! 무조건 정답 처리! ❤️"`)
       const newStreak = streak + 1
       setStreak(newStreak)
       setBestStreak((b) => Math.max(b, newStreak))
@@ -172,9 +172,13 @@ export function WordQuiz({ words, accent }: { words: QuizWord[]; accent: string 
         <>
           {phase === "quiz" && current && (
             <div className="fixed inset-0 z-50 flex items-center justify-center bg-background sm:bg-background/95 sm:backdrop-blur-sm sm:p-6 animate-in fade-in duration-200">
-              <div className="flex h-full w-full max-w-lg flex-col overflow-hidden bg-card sm:h-auto sm:max-h-[850px] sm:rounded-3xl sm:border sm:border-border sm:shadow-2xl">
+              {/* ▼ 폭주 모드일 때 테두리에 금빛 후광 효과 추가 */}
+              <div 
+                className="relative flex h-full w-full max-w-lg flex-col overflow-hidden bg-card sm:h-auto sm:max-h-[850px] sm:rounded-3xl sm:border sm:border-border sm:shadow-2xl transition-all duration-500"
+                style={streak >= 5 ? { boxShadow: "0 0 30px rgba(245, 158, 11, 0.4)", borderColor: "#f59e0b" } : undefined}
+              >
                 <div className="h-1.5 w-full bg-muted shrink-0">
-                  <div className="h-1.5 transition-all duration-300" style={{ width: `${((index + 1) / total) * 100}%`, backgroundColor: accent }} />
+                  <div className="h-1.5 transition-all duration-300" style={{ width: `${((index + 1) / total) * 100}%`, backgroundColor: streak >= 5 ? "#f59e0b" : accent }} />
                 </div>
 
                 <div className="flex justify-end p-4 pb-0 shrink-0">
@@ -191,11 +195,28 @@ export function WordQuiz({ words, accent }: { words: QuizWord[]; accent: string 
                   </button>
                 </div>
 
-                <div className="flex flex-col px-6 pb-8 pt-4 flex-1 overflow-y-auto">
-                  <div className="mb-6 flex items-center justify-between text-xs font-medium text-muted-foreground">
+                <div className="flex flex-col px-6 pb-8 pt-2 flex-1 overflow-y-auto">
+                  <div className="mb-4 flex items-center justify-between text-xs font-medium text-muted-foreground">
                     <span>점수 <span className="font-bold text-foreground">{score}</span></span>
                     <span className="rounded-full bg-muted px-3 py-1 font-semibold text-foreground">{index + 1} / {total}</span>
-                    <span>연속 <span className="font-bold" style={{ color: accent }}>{streak}</span></span>
+                    {/* ▼ 5연속 이상이면 연속 카운터가 불타오릅니다! */}
+                    <span className={cn(streak >= 5 && "text-orange-500 animate-pulse font-bold")}>
+                      연속 <span className="font-black text-sm" style={streak >= 5 ? {} : { color: accent }}>{streak}</span>
+                    </span>
+                  </div>
+
+                  {/* ▼ 콤보 배너 애니메이션 (3연속 정답부터 등장) */}
+                  <div className="h-10 w-full flex justify-center mb-2">
+                    {streak >= 3 && (
+                      <div key={streak} className="animate-in slide-in-from-bottom-2 fade-in zoom-in duration-300">
+                        <span className={cn(
+                          "rounded-full px-4 py-1.5 text-sm font-black text-white shadow-lg",
+                          streak >= 10 ? "bg-gradient-to-r from-red-500 to-orange-600 scale-110 shadow-red-500/50" : "bg-gradient-to-r from-amber-400 to-orange-500 shadow-orange-500/40"
+                        )}>
+                          {streak >= 10 ? `🔥🔥 ${currentName} 폭주 중!! 멈출 수 없어!` : `🔥 ${currentName} ${streak}연속 정답!`}
+                        </span>
+                      </div>
+                    )}
                   </div>
 
                   {quizType === "standard" ? (
