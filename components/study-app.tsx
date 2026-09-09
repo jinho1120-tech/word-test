@@ -1,6 +1,7 @@
 "use client"
 
-import { useState } from "react"
+// ▼ useMemo와 useEffect를 추가로 불러옵니다
+import { useState, useMemo, useEffect } from "react"
 import { GraduationCap, Pencil, Ghost } from "lucide-react"
 import { WordQuiz, type QuizWord } from "@/components/word-quiz"
 import { WordManager } from "@/components/word-manager"
@@ -9,7 +10,8 @@ import { cn } from "@/lib/utils"
 
 type Mode = "quiz" | "wrong" | "manage"
 
-const SUBJECTS = ["전체", "리딩", "스피킹", "문법", "단어"]
+// 전체 과목 목록
+const ALL_SUBJECTS = ["전체", "리딩", "스피킹", "문법", "단어"]
 
 export function StudyApp({
   profile,
@@ -26,6 +28,20 @@ export function StudyApp({
 }) {
   const [mode, setMode] = useState<Mode>("quiz")
   const [filter, setFilter] = useState("전체")
+
+  // ▼ 핵심 로직: 오늘 등록된 단어들을 검사해서, 존재하는 과목의 버튼만 남깁니다! ('전체'는 무조건 유지)
+  const availableSubjects = useMemo(() => {
+    return ALL_SUBJECTS.filter(
+      (subject) => subject === "전체" || words.some((word) => word.subject === subject)
+    )
+  }, [words])
+
+  // ▼ 혹시라도 단어 입력 모드에서 단어를 다 지워서 과목 버튼이 사라졌을 때, 화면이 멈추지 않고 '전체'로 부드럽게 돌아가도록 돕는 안전장치입니다.
+  useEffect(() => {
+    if (!availableSubjects.includes(filter)) {
+      setFilter("전체")
+    }
+  }, [availableSubjects, filter])
 
   const displayWords = filter === "전체" ? words : words.filter((w) => w.subject === filter)
   const displayWrongWords = filter === "전체" ? wrongWords : wrongWords.filter((w) => w.subject === filter)
@@ -59,8 +75,9 @@ export function StudyApp({
         </button>
       </div>
 
+      {/* ▼ 텅 빈 과목은 숨기고, 단어가 있는 과목 버튼만 띄워줍니다. */}
       <div className="flex gap-2 overflow-x-auto pb-1 scrollbar-hide">
-        {SUBJECTS.map((s) => (
+        {availableSubjects.map((s) => (
           <button
             key={s}
             onClick={() => setFilter(s)}
