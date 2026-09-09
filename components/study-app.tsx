@@ -40,12 +40,14 @@ export function StudyApp({
           <GraduationCap className="size-4 shrink-0" /> <span className="hidden sm:inline">날짜별</span> 퀴즈
         </button>
         
-        {/* ▼ 오답 노트가 '오답 몬스터'로 진화했습니다! 귀여운 유령(Ghost) 아이콘을 썼어요. */}
         <button
           onClick={() => setMode("wrong")}
           className={cn("flex items-center justify-center gap-1 sm:gap-1.5 rounded-xl py-2.5 text-xs sm:text-sm font-semibold transition-colors", mode === "wrong" ? "bg-card text-foreground shadow-sm" : "text-muted-foreground")}
         >
-          <Ghost className={cn("size-4 shrink-0", mode === "wrong" ? "text-purple-500 animate-bounce" : "")} /> 
+          <Ghost 
+            className={cn("size-4 shrink-0", mode === "wrong" ? "animate-bounce" : "")} 
+            style={mode === "wrong" ? { color: accent } : undefined} 
+          /> 
           <span className="hidden sm:inline">오답</span> 몬스터
         </button>
         
@@ -75,15 +77,14 @@ export function StudyApp({
 
       {mode === "quiz" && <WordQuiz key={`quiz-${filter}`} words={displayWords} accent={accent} />}
       
-      {/* ▼ 오답 몬스터 모드일 때, 남은 단어가 없으면 멋진 승리 화면을 보여줍니다! */}
       {mode === "wrong" && (
         displayWrongWords.length > 0 ? (
           <WordQuiz key={`wrong-${filter}`} words={displayWrongWords} accent={accent} />
         ) : (
-          <div className="flex flex-col items-center justify-center rounded-3xl border-2 border-dashed border-green-200 bg-green-50/50 px-6 py-16 text-center animate-in fade-in zoom-in duration-500">
-            <div className="mb-4 text-6xl drop-shadow-md">✨🛡️✨</div>
-            <h3 className="mb-2 text-2xl font-black text-green-700">몬스터 전멸!</h3>
-            <p className="font-bold text-green-600/80 leading-relaxed">
+          <div className="flex flex-col items-center justify-center rounded-3xl border border-dashed border-border bg-muted/30 px-6 py-16 text-center animate-in fade-in zoom-in duration-500">
+            <div className="mb-5 text-6xl drop-shadow-md">✨🛡️✨</div>
+            <h3 className="mb-2 text-2xl font-black text-foreground">몬스터 전멸!</h3>
+            <p className="text-sm font-bold text-muted-foreground leading-relaxed">
               완벽해요! 더 이상 물리칠 오답 몬스터가 없어요.<br />우리 동네의 평화를 지켜냈습니다!
             </p>
           </div>
