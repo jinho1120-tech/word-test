@@ -4,6 +4,9 @@ import { StudyApp } from "@/components/study-app"
 import { DateNav } from "@/components/date-nav"
 import { cn } from "@/lib/utils"
 
+// ▼ 이 한 줄을 반드시 추가해 주세요! (캐시 박제 방지, 항상 서버 실시간 접속) ▼
+export const dynamic = "force-dynamic"
+
 const PROFILES: { name: Profile; accent: string }[] = [
   { name: "지온", accent: "#6366f1" },
   { name: "예온", accent: "#ec4899" },
