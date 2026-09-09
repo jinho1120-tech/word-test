@@ -1,5 +1,5 @@
 import Link from "next/link"
-import { getWords, getWrongWords, type Profile } from "@/app/actions/words"
+import { getWords, getWrongWords, getLatestActiveDate, type Profile } from "@/app/actions/words"
 import { StudyApp } from "@/components/study-app"
 import { DateNav } from "@/components/date-nav"
 import { cn } from "@/lib/utils"
@@ -23,8 +23,25 @@ export default async function Page({
 }) {
   const params = await searchParams
   const profile: Profile = params.profile === "예온" ? "예온" : "지온"
-  const date =
-    params.date && /^\d{4}-\d{2}-\d{2}$/.test(params.date) ? params.date : todayInSeoul()
+  const today = todayInSeoul()
+  
+  // 1. URL에 명시된 날짜가 있는지 확인합니다 (없으면 undefined)
+  let date = params.date && /^\d{4}-\d{2}-\d{2}$/.test(params.date) ? params.date : undefined
+
+  // 2. URL에 날짜가 없을 때 (북마크/홈 화면 아이콘으로 처음 접속 시)
+  if (!date) {
+    const todayWords = await getWords(profile, today)
+    
+    if (todayWords.length === 0) {
+      // 오늘 등록한 단어가 없으면 최신 날짜를 찾아서 화면에 띄울 날짜로 설정 (주소창은 안 바뀜!)
+      const latestDate = await getLatestActiveDate(profile)
+      date = latestDate || today
+    } else {
+      // 오늘 등록한 단어가 있으면 오늘 날짜 유지
+      date = today
+    }
+  }
+
   const active = PROFILES.find((p) => p.name === profile)!
 
   // 날짜별 단어(words)와 누적 오답 단어(wrongWords)를 동시에 불러옵니다
@@ -60,11 +77,10 @@ export default async function Page({
         })}
       </nav>
 
-      <DateNav profile={profile} date={date} today={todayInSeoul()} accent={active.accent} />
+      <DateNav profile={profile} date={date} today={today} accent={active.accent} />
 
       {/* StudyApp에 오답 노트 데이터(wrongWords)를 추가로 넘겨줍니다 */}
       <StudyApp profile={profile} date={date} words={words} wrongWords={wrongWords} accent={active.accent} />
     </main>
   )
 }
-// 이상무?
