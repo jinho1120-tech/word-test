@@ -70,9 +70,11 @@ export function StudyApp({
         ))}
       </div>
 
-      {mode === "quiz" && <WordQuiz words={displayWords} accent={accent} />}
-      {mode === "wrong" && <WordQuiz words={displayWrongWords} accent={accent} />}
+      {/* ▼ 여기에 key 속성을 추가해서 과목(filter)이 바뀔 때마다 퀴즈 화면이 초기화되도록 만들었습니다! ▼ */}
+      {mode === "quiz" && <WordQuiz key={`quiz-${filter}`} words={displayWords} accent={accent} />}
+      {mode === "wrong" && <WordQuiz key={`wrong-${filter}`} words={displayWrongWords} accent={accent} />}
       {mode === "manage" && <WordManager profile={profile} date={date} words={displayWords} accent={accent} />}
     </div>
   )
+}
 }
