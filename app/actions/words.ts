@@ -200,7 +200,7 @@ export async function generateContextQuiz(words: { word: string, meaning: string
     if (!apiKey) return { success: false, error: "API 키가 등록되지 않았습니다." };
 
     // 안전하고 가장 빠른 1.5-flash 모델 사용
-    const endpoint = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey}`;
+    const endpoint = `https://generativelanguage.googleapis.com/v1beta/models/gemini-3.6-flash:generateContent?key=${apiKey}`;
     
     const promptText = `
     너는 한국의 초등학생을 위한 친절하고 다정한 영어 선생님이야.
