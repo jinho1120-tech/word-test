@@ -44,7 +44,6 @@ export function WordQuiz({ words, accent }: { words: QuizWord[]; accent: string 
   const [streak, setStreak] = useState(0)
   const [bestStreak, setBestStreak] = useState(0)
   const [hintUsed, setHintUsed] = useState(false)
-  // ▼ 퀴즈 전체 진행 동안 힌트를 한 번이라도 썼는지 추적하는 상태 추가
   const [usedHintInQuiz, setUsedHintInQuiz] = useState(false)
   
   const [quizType, setQuizType] = useState<QuizType>("standard")
@@ -154,7 +153,7 @@ export function WordQuiz({ words, accent }: { words: QuizWord[]; accent: string 
     setStreak(0)
     setBestStreak(0)
     setHintUsed(false)
-    setUsedHintInQuiz(false) // 퀴즈 시작 시 힌트 사용 기록 초기화
+    setUsedHintInQuiz(false)
     setPhase("quiz")
     
     requestAnimationFrame(() => inputRef.current?.focus())
@@ -190,22 +189,30 @@ export function WordQuiz({ words, accent }: { words: QuizWord[]; accent: string 
       return
     }
 
-    if (guess === current.word.toLowerCase()) {
+    const isCorrect = guess === current.word.toLowerCase()
+
+    if (isCorrect) {
       const newStreak = streak + 1
-      setStreak(newStreak); setBestStreak((b) => Math.max(b, newStreak)); setFeedback("correct")
-      recordQuizResult(current.id, true).catch(console.error)
-      setTimeout(() => advance({ word: current, correct: true }), 900)
+      setStreak(newStreak)
+      setBestStreak((b) => Math.max(b, newStreak))
+      setFeedback("correct")
+      // 일반/듣기 퀴즈일 때만 DB 오답노트에 반영
+      if (quizType !== "context") {
+        recordQuizResult(current.id, true).catch(console.error)
+      }
     } else {
-      setStreak(0); setFeedback("wrong")
-      recordQuizResult(current.id, false).catch(console.error)
-      setTimeout(() => advance({ word: current, correct: false }), quizType === "context" ? 3000 : 1600)
+      setStreak(0)
+      setFeedback("wrong")
+      // AI 문장 퀴즈일 때는 몬스터 단어장(DB) 오답에 포함하지 않음
+      if (quizType !== "context") {
+        recordQuizResult(current.id, false).catch(console.error)
+      }
     }
   }
 
-  // 힌트 버튼 클릭 처리
   function handleUseHint() {
     setHintUsed(true)
-    setUsedHintInQuiz(true) // 전체 퀴즈 힌트 사용 기록 설정
+    setUsedHintInQuiz(true)
   }
 
   const wrongWords = answered.filter((a) => !a.correct).map((a) => a.word)
@@ -320,7 +327,7 @@ export function WordQuiz({ words, accent }: { words: QuizWord[]; accent: string 
                 {hintUsed && quizType === "standard" && <button type="button" onMouseDown={(e) => { e.preventDefault(); playPronunciation(current.word); }} className="flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-bold transition-opacity hover:opacity-80 shadow-sm" style={{ backgroundColor: accent, color: "white" }}><Volume2 className="size-4" /> 단어 듣기</button>}
               </div>
 
-              <input ref={inputRef} type="text" value={value} onChange={(e) => setValue(e.target.value)} onKeyDown={(e) => { if (e.key === "Enter" && !e.nativeEvent.isComposing) { e.preventDefault(); submit(); } }} autoComplete="off" autoCorrect="off" autoCapitalize="none" spellCheck={false} disabled={feedback !== "idle"} placeholder="영단어를 입력하세요" className={cn("mb-3 w-full border-b-4 bg-transparent p-3 text-center text-3xl font-bold outline-none transition-colors placeholder:text-base placeholder:font-normal placeholder:text-muted-foreground", feedback === "idle" && "border-border text-foreground", feedback === "correct" && "border-green-500 text-green-600", feedback === "wrong" && "animate-shake border-red-500 text-red-500")} style={feedback === "idle" ? { caretColor: accent } : undefined} />
+              <input ref={inputRef} type="text" value={value} onChange={(e) => setValue(e.target.value)} onKeyDown={(e) => { if (e.key === "Enter" && !e.nativeEvent.isComposing) { e.preventDefault(); if (feedback === "idle") submit(); else advance({ word: current, correct: feedback === "correct" }); } }} autoComplete="off" autoCorrect="off" autoCapitalize="none" spellCheck={false} disabled={feedback !== "idle"} placeholder="영단어를 입력하세요" className={cn("mb-3 w-full border-b-4 bg-transparent p-3 text-center text-3xl font-bold outline-none transition-colors placeholder:text-base placeholder:font-normal placeholder:text-muted-foreground", feedback === "idle" && "border-border text-foreground", feedback === "correct" && "border-green-500 text-green-600", feedback === "wrong" && "animate-shake border-red-500 text-red-500")} style={feedback === "idle" ? { caretColor: accent } : undefined} />
               
               <div className="mb-6 flex min-h-6 items-center justify-center">
                 {feedback === "correct" && <p className="flex items-center gap-1.5 text-sm font-semibold text-green-600"><Check className="size-4" /> 정답입니다!</p>}
@@ -328,11 +335,28 @@ export function WordQuiz({ words, accent }: { words: QuizWord[]; accent: string 
                 {feedback === "idle" && hintUsed && quizType === "standard" && <p className="text-sm text-muted-foreground">첫 글자: <span className="font-bold text-foreground">{current.word[0]}</span></p>}
               </div>
 
-              <button onClick={submit} disabled={feedback !== "idle" || !value.trim()} className={cn("flex w-full items-center justify-center gap-2 rounded-2xl py-4 text-lg font-bold text-white shadow-md transition-colors disabled:opacity-60", feedback === "correct" && "bg-green-500", feedback === "wrong" && "bg-red-500")} style={feedback === "idle" ? { backgroundColor: accent } : undefined}>
+              {/* 사용자가 해설을 충분히 읽고 직접 클릭하여 넘어가는 수동 진행 버튼 */}
+              <button 
+                onClick={() => {
+                  if (feedback === "idle") {
+                    submit()
+                  } else {
+                    advance({ word: current, correct: feedback === "correct" })
+                  }
+                }} 
+                disabled={feedback === "idle" && !value.trim()} 
+                className={cn(
+                  "flex w-full items-center justify-center gap-2 rounded-2xl py-4 text-lg font-bold text-white shadow-md transition-colors disabled:opacity-60", 
+                  feedback === "correct" && "bg-green-500 hover:bg-green-600", 
+                  feedback === "wrong" && "bg-red-500 hover:bg-red-600"
+                )} 
+                style={feedback === "idle" ? { backgroundColor: accent } : undefined}
+              >
                 {feedback === "idle" && <>정답 확인 <ArrowRight className="size-5" /></>}
-                {feedback === "correct" && "잘했어요!"}
-                {feedback === "wrong" && "다음 문제로"}
+                {feedback === "correct" && <>잘했어요! (다음 문제로 ➔)</>}
+                {feedback === "wrong" && <>해설 확인 후 다음 문제로 ➔</>}
               </button>
+
               <button onClick={handleUseHint} disabled={hintUsed || feedback !== "idle"} className="mt-3 mb-4 flex w-full items-center justify-center gap-1.5 rounded-2xl border border-border py-3 text-sm font-semibold text-muted-foreground transition-colors hover:bg-muted disabled:opacity-40"><Lightbulb className="size-4" /> 힌트 보기</button>
             </div>
           </div>
@@ -358,7 +382,8 @@ export function WordQuiz({ words, accent }: { words: QuizWord[]; accent: string 
             bestStreak={bestStreak} 
             wrongWords={wrongWords} 
             accent={accent} 
-            usedHint={usedHintInQuiz} // ▼ 힌트 사용 여부를 결과 컴포넌트로 전달
+            usedHint={usedHintInQuiz}
+            quizType={quizType}
             onRetryWrong={() => begin(wrongWords)} 
             onRetryAll={() => begin(words)} 
           />
