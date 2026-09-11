@@ -190,3 +190,61 @@ export async function getLatestActiveDate(profile: string): Promise<string | nul
 
   return result.length > 0 ? result[0].date : null
 }
+// ▼ 기존 코드 맨 아래에 이 함수를 추가해 주세요! ▼
+
+export async function generateContextQuiz(words: { word: string, meaning: string }[]) {
+  try {
+    const apiKey = process.env.GEMINI_API_KEY?.trim();
+    if (!apiKey) return { success: false, error: "API 키가 등록되지 않았습니다." };
+
+    const endpoint = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey}`;
+    
+    const promptText = `
+    너는 한국의 초등학생을 위한 친절하고 다정한 영어 선생님이야.
+    다음 제공된 영어 단어들을 사용해서, 아이들이 문맥을 유추할 수 있는 쉽고 자연스러운 영어 예문을 딱 1개씩 만들어줘.
+    
+    [규칙]
+    1. 대상 단어가 들어갈 자리는 세 개의 밑줄("___")로 비워둘 것.
+    2. 문장은 초등학교 수준의 쉬운 단어로 구성할 것.
+    3. clue(해설) 항목에는 문장 속 어떤 단어가 힌트가 되어서 이 정답이 나오게 되었는지, 초등학생에게 말하듯 친절하게 설명해 줄 것.
+    4. 결과는 반드시 아래 JSON 배열 형식으로만 대답할 것 (다른 설명 절대 금지).
+    
+    [JSON 형식 예시]
+    [
+      { 
+        "word": "apple", 
+        "sentence": "I want to eat a red ___.", 
+        "translation": "나는 빨간 사과를 먹고 싶어.",
+        "clue": "문장에 'eat(먹다)'과 'red(빨간)'라는 힌트가 있지? 그러니까 먹을 수 있는 빨간색 과일을 찾아봐!"
+      }
+    ]
+
+    [요청 단어 목록]
+    ${JSON.stringify(words)}
+    `.trim();
+
+    const response = await fetch(endpoint, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      cache: "no-store",
+      body: JSON.stringify({
+        contents: [{ parts: [{ text: promptText }] }],
+        generationConfig: { temperature: 0.7, responseMimeType: "application/json" }
+      })
+    });
+
+    if (!response.ok) return { success: false, error: "구글 AI 응답 실패" };
+    const data = await response.json();
+    
+    const text = data.candidates?.[0]?.content?.parts?.[0]?.text || "[]";
+    const cleanText = text.replace(/```json/g, "").replace(/```/g, "").trim();
+
+    try {
+      return { success: true, quizData: JSON.parse(cleanText) };
+    } catch {
+      return { success: false, error: "파싱 실패" };
+    }
+  } catch (e: any) {
+    return { success: false, error: `서버 에러: ${e.message}` };
+  }
+}
