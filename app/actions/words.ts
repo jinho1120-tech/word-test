@@ -192,11 +192,14 @@ export async function getLatestActiveDate(profile: string): Promise<string | nul
 }
 // ▼ 기존 코드 맨 아래에 이 함수를 추가해 주세요! ▼
 
+// app/actions/words.ts 파일의 맨 아래에 있는 함수를 이걸로 덮어써주세요!
+
 export async function generateContextQuiz(words: { word: string, meaning: string }[]) {
   try {
     const apiKey = process.env.GEMINI_API_KEY?.trim();
     if (!apiKey) return { success: false, error: "API 키가 등록되지 않았습니다." };
 
+    // 안전하고 가장 빠른 1.5-flash 모델 사용
     const endpoint = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey}`;
     
     const promptText = `
@@ -229,22 +232,30 @@ export async function generateContextQuiz(words: { word: string, meaning: string
       cache: "no-store",
       body: JSON.stringify({
         contents: [{ parts: [{ text: promptText }] }],
-        generationConfig: { temperature: 0.7, responseMimeType: "application/json" }
+        // 에러를 유발할 수 있는 강제 JSON 옵션을 제거하여 안정성 확보
+        generationConfig: { temperature: 0.7 }
       })
     });
 
-    if (!response.ok) return { success: false, error: "구글 AI 응답 실패" };
-    const data = await response.json();
+    // 구글 서버에서 에러를 뱉었을 때 실제 에러 내용을 확인하기 위한 코드
+    if (!response.ok) {
+      const errorText = await response.text();
+      console.error("구글 API 상세 에러:", errorText);
+      return { success: false, error: `구글 AI 에러: ${response.status} (자세한 건 콘솔 확인)` };
+    }
     
+    const data = await response.json();
     const text = data.candidates?.[0]?.content?.parts?.[0]?.text || "[]";
+    
+    // AI가 마크다운(```json ... ```)을 붙여서 보낼 경우를 대비해 깔끔하게 벗겨냄
     const cleanText = text.replace(/```json/g, "").replace(/```/g, "").trim();
 
     try {
       return { success: true, quizData: JSON.parse(cleanText) };
     } catch {
-      return { success: false, error: "파싱 실패" };
+      return { success: false, error: "AI가 준 답변을 해석할 수 없습니다." };
     }
   } catch (e: any) {
-    return { success: false, error: `서버 에러: ${e.message}` };
+    return { success: false, error: `서버 통신 에러: ${e.message}` };
   }
 }
