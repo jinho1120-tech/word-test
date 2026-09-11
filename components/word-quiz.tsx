@@ -44,6 +44,8 @@ export function WordQuiz({ words, accent }: { words: QuizWord[]; accent: string 
   const [streak, setStreak] = useState(0)
   const [bestStreak, setBestStreak] = useState(0)
   const [hintUsed, setHintUsed] = useState(false)
+  // ▼ 퀴즈 전체 진행 동안 힌트를 한 번이라도 썼는지 추적하는 상태 추가
+  const [usedHintInQuiz, setUsedHintInQuiz] = useState(false)
   
   const [quizType, setQuizType] = useState<QuizType>("standard")
   const inputRef = useRef<HTMLInputElement>(null)
@@ -57,7 +59,6 @@ export function WordQuiz({ words, accent }: { words: QuizWord[]; accent: string 
   const correctCount = answered.filter((a) => a.correct).length
   const currentName = accent === "#6366f1" ? "지온" : "예온"
 
-  // 접속한 아이 이름에 맞춰 다정하게 바뀌는 로딩 메시지
   const loadingMessages = [
     `🤖 ${currentName}이를 위한 맞춤 문장 생성 중...`,
     "✨ AI 선생님이 신나는 문제를 고르고 있어요!",
@@ -70,7 +71,6 @@ export function WordQuiz({ words, accent }: { words: QuizWord[]; accent: string 
     return Math.round((correctCount / total) * 100)
   }, [correctCount, total])
 
-  // 로딩 텍스트 회전 타이머
   useEffect(() => {
     if (!isGenerating) return
     const interval = setInterval(() => {
@@ -116,7 +116,6 @@ export function WordQuiz({ words, accent }: { words: QuizWord[]; accent: string 
       setIsGenerating(true)
       setLoadingMsgIdx(0)
       
-      // 단어 10개 기반 문제 생성
       const d = shuffle(list).slice(0, 10) 
       const reqData = d.map(w => ({ word: w.word, meaning: w.meaning }))
       
@@ -148,7 +147,16 @@ export function WordQuiz({ words, accent }: { words: QuizWord[]; accent: string 
       setDeck(shuffle(list))
     }
 
-    setIndex(0); setValue(""); setFeedback("idle"); setAnswered([]); setStreak(0); setBestStreak(0); setHintUsed(false); setPhase("quiz")
+    setIndex(0)
+    setValue("")
+    setFeedback("idle")
+    setAnswered([])
+    setStreak(0)
+    setBestStreak(0)
+    setHintUsed(false)
+    setUsedHintInQuiz(false) // 퀴즈 시작 시 힌트 사용 기록 초기화
+    setPhase("quiz")
+    
     requestAnimationFrame(() => inputRef.current?.focus())
     if (quizType === "listening" && list.length > 0) {
       setTimeout(() => playPronunciation(quizType === "context" ? deck[0]?.word : list[0].word), 300)
@@ -194,6 +202,12 @@ export function WordQuiz({ words, accent }: { words: QuizWord[]; accent: string 
     }
   }
 
+  // 힌트 버튼 클릭 처리
+  function handleUseHint() {
+    setHintUsed(true)
+    setUsedHintInQuiz(true) // 전체 퀴즈 힌트 사용 기록 설정
+  }
+
   const wrongWords = answered.filter((a) => !a.correct).map((a) => a.word)
 
   if (words.length === 0) {
@@ -206,7 +220,6 @@ export function WordQuiz({ words, accent }: { words: QuizWord[]; accent: string 
 
   return (
     <>
-      {/* AI 문제 생성 전용 모달 */}
       {isGenerating && (
         <div className="fixed inset-0 z-[100] flex flex-col items-center justify-center bg-background/90 backdrop-blur-md p-6 animate-in fade-in duration-300">
           <div className="relative mb-6 flex size-28 items-center justify-center rounded-3xl bg-card shadow-2xl border border-border">
@@ -320,7 +333,7 @@ export function WordQuiz({ words, accent }: { words: QuizWord[]; accent: string 
                 {feedback === "correct" && "잘했어요!"}
                 {feedback === "wrong" && "다음 문제로"}
               </button>
-              <button onClick={() => setHintUsed(true)} disabled={hintUsed || feedback !== "idle"} className="mt-3 mb-4 flex w-full items-center justify-center gap-1.5 rounded-2xl border border-border py-3 text-sm font-semibold text-muted-foreground transition-colors hover:bg-muted disabled:opacity-40"><Lightbulb className="size-4" /> 힌트 보기</button>
+              <button onClick={handleUseHint} disabled={hintUsed || feedback !== "idle"} className="mt-3 mb-4 flex w-full items-center justify-center gap-1.5 rounded-2xl border border-border py-3 text-sm font-semibold text-muted-foreground transition-colors hover:bg-muted disabled:opacity-40"><Lightbulb className="size-4" /> 힌트 보기</button>
             </div>
           </div>
         </div>
@@ -345,6 +358,7 @@ export function WordQuiz({ words, accent }: { words: QuizWord[]; accent: string 
             bestStreak={bestStreak} 
             wrongWords={wrongWords} 
             accent={accent} 
+            usedHint={usedHintInQuiz} // ▼ 힌트 사용 여부를 결과 컴포넌트로 전달
             onRetryWrong={() => begin(wrongWords)} 
             onRetryAll={() => begin(words)} 
           />
