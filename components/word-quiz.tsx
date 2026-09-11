@@ -25,13 +25,6 @@ type Feedback = "idle" | "correct" | "wrong"
 type Answered = { word: QuizWord; correct: boolean }
 type ContextQuizItem = { word: string; sentence: string; translation: string; clue: string; options: string[] }
 
-const LOADING_MESSAGES = [
-  "🤖 지온이를 위한 맞춤 문장 생성 중...",
-  "✨ AI 선생님이 신나는 문제를 고르고 있어요!",
-  "📝 힌트와 예문을 예쁘게 포장하는 중...",
-  "🚀 준비 완료! 거의 다 되었어요!"
-]
-
 function shuffle<T>(arr: T[]): T[] {
   const copy = [...arr]
   for (let i = copy.length - 1; i > 0; i--) {
@@ -64,6 +57,14 @@ export function WordQuiz({ words, accent }: { words: QuizWord[]; accent: string 
   const correctCount = answered.filter((a) => a.correct).length
   const currentName = accent === "#6366f1" ? "지온" : "예온"
 
+  // 접속한 아이 이름에 맞춰 다정하게 바뀌는 로딩 메시지
+  const loadingMessages = [
+    `🤖 ${currentName}이를 위한 맞춤 문장 생성 중...`,
+    "✨ AI 선생님이 신나는 문제를 고르고 있어요!",
+    "📝 힌트와 예문을 예쁘게 포장하는 중...",
+    "🚀 준비 완료! 거의 다 되었어요!"
+  ]
+
   const score = useMemo(() => {
     if (total === 0) return 0
     return Math.round((correctCount / total) * 100)
@@ -73,10 +74,10 @@ export function WordQuiz({ words, accent }: { words: QuizWord[]; accent: string 
   useEffect(() => {
     if (!isGenerating) return
     const interval = setInterval(() => {
-      setLoadingMsgIdx((prev) => (prev + 1) % LOADING_MESSAGES.length)
+      setLoadingMsgIdx((prev) => (prev + 1) % loadingMessages.length)
     }, 800)
     return () => clearInterval(interval)
-  }, [isGenerating])
+  }, [isGenerating, loadingMessages.length])
 
   useEffect(() => {
     if (phase === "result" && score === 100 && total >= 10) {
@@ -114,7 +115,9 @@ export function WordQuiz({ words, accent }: { words: QuizWord[]; accent: string 
     if (quizType === "context") {
       setIsGenerating(true)
       setLoadingMsgIdx(0)
-      const d = shuffle(list).slice(0, 5) 
+      
+      // 단어 10개 기반 문제 생성
+      const d = shuffle(list).slice(0, 10) 
       const reqData = d.map(w => ({ word: w.word, meaning: w.meaning }))
       
       const res = await generateContextQuiz(reqData)
@@ -203,7 +206,7 @@ export function WordQuiz({ words, accent }: { words: QuizWord[]; accent: string 
 
   return (
     <>
-      {/* ▼ AI 문제 생성 전용 풀스크린 대기 애니메이션 모달 ▼ */}
+      {/* AI 문제 생성 전용 모달 */}
       {isGenerating && (
         <div className="fixed inset-0 z-[100] flex flex-col items-center justify-center bg-background/90 backdrop-blur-md p-6 animate-in fade-in duration-300">
           <div className="relative mb-6 flex size-28 items-center justify-center rounded-3xl bg-card shadow-2xl border border-border">
@@ -214,7 +217,7 @@ export function WordQuiz({ words, accent }: { words: QuizWord[]; accent: string 
           <h3 className="mb-2 text-xl font-black text-foreground tracking-tight">AI 시험지 제작 중</h3>
           
           <p className="min-h-6 text-sm font-bold text-muted-foreground animate-in slide-in-from-bottom-2 fade-in duration-300">
-            {LOADING_MESSAGES[loadingMsgIdx]}
+            {loadingMessages[loadingMsgIdx]}
           </p>
 
           <div className="mt-8 flex gap-1.5">
