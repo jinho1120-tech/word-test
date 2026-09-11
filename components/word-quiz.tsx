@@ -273,10 +273,26 @@ export function WordQuiz({ words, accent }: { words: QuizWord[]; accent: string 
 
       <div className={cn("overflow-hidden rounded-3xl border border-border bg-card shadow-sm", phase === "quiz" ? "hidden" : "block")}>
         {phase === "start" && (
-          <QuizStart words={words} accent={accent} quizType={quizType} setQuizType={setQuizType} isGenerating={isGenerating} onBegin={() => begin(words)} />
+          <QuizStart 
+            words={words} 
+            accent={accent} 
+            quizType={quizType} 
+            setQuizType={setQuizType} 
+            isGenerating={isGenerating} 
+            onBegin={() => begin(words)} 
+          />
         )}
         {phase === "result" && (
-          <QuizResult score={score} correctCount={correctCount} total={total} bestStreak={bestStreak} wrongWords={wrongWords} accent={accent} onRetryWrong={() => begin(wrongWords)} onRetryAll={() => begin(words)} />
+          <QuizResult 
+            score={score} 
+            correctCount={correctCount} 
+            total={total} 
+            bestStreak={bestStreak} 
+            wrongWords={wrongWords} 
+            accent={accent} 
+            onRetryWrong={() => begin(wrongWords)} 
+            onRetryAll={() => begin(words)} 
+          />
         )}
       </div>
     </>
