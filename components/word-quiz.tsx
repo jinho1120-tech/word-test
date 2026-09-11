@@ -196,20 +196,25 @@ export function WordQuiz({ words, accent }: { words: QuizWord[]; accent: string 
       setStreak(newStreak)
       setBestStreak((b) => Math.max(b, newStreak))
       setFeedback("correct")
-      // 일반/듣기 퀴즈일 때만 DB 오답노트에 반영
+      // ★ 맞았을 때도 공부를 위해 정답 화면에서 해석/해설을 자동으로 보여줍니다. (쿠폰 조건 차감 X)
+      setHintUsed(true)
+      
       if (quizType !== "context") {
         recordQuizResult(current.id, true).catch(console.error)
       }
     } else {
       setStreak(0)
       setFeedback("wrong")
-      // AI 문장 퀴즈일 때는 몬스터 단어장(DB) 오답에 포함하지 않음
+      // ★ 틀렸을 때도 해석/해설을 보여줍니다.
+      setHintUsed(true)
+      
       if (quizType !== "context") {
         recordQuizResult(current.id, false).catch(console.error)
       }
     }
   }
 
+  // ★ 아이가 힌트 버튼을 직접 클릭했을 때만 호출되어 쿠폰 미자격을 기록합니다.
   function handleUseHint() {
     setHintUsed(true)
     setUsedHintInQuiz(true)
@@ -304,13 +309,13 @@ export function WordQuiz({ words, accent }: { words: QuizWord[]; accent: string 
               <div className="mb-8 flex min-h-24 flex-col items-center justify-center gap-3 rounded-2xl border border-border bg-muted/50 p-4">
                 {quizType === "context" ? (
                   <div className="text-center">
-                    {hintUsed || feedback === "wrong" ? (
-                      <div className="flex flex-col gap-2">
+                    {hintUsed || feedback !== "idle" ? (
+                      <div className="flex flex-col gap-2 animate-in fade-in duration-200">
                         <p className="text-sm font-bold text-foreground">
                           🇰🇷 해석: {contextData[index].translation}
                         </p>
                         <p className="text-xs font-medium text-blue-600 dark:text-blue-400">
-                          💡 AI 선생님 힌트: {contextData[index].clue}
+                          💡 AI 선생님 해설: {contextData[index].clue}
                         </p>
                       </div>
                     ) : (
@@ -335,7 +340,6 @@ export function WordQuiz({ words, accent }: { words: QuizWord[]; accent: string 
                 {feedback === "idle" && hintUsed && quizType === "standard" && <p className="text-sm text-muted-foreground">첫 글자: <span className="font-bold text-foreground">{current.word[0]}</span></p>}
               </div>
 
-              {/* 사용자가 해설을 충분히 읽고 직접 클릭하여 넘어가는 수동 진행 버튼 */}
               <button 
                 onClick={() => {
                   if (feedback === "idle") {
