@@ -63,6 +63,8 @@ export function WordQuiz({ words, accent }: { words: QuizWord[]; accent: string 
 
   const [isRecording, setIsRecording] = useState(false)
   const [pronResult, setPronResult] = useState<PronunciationResult | null>(null)
+  // ▼ 단어별 점수를 저장하는 상태 추가
+  const [wordScores, setWordScores] = useState<{ text: string; score: number }[]>([])
 
   const current = deck[index]
   const total = deck.length
@@ -124,7 +126,8 @@ export function WordQuiz({ words, accent }: { words: QuizWord[]; accent: string 
   async function handlePronunciationAssessment(targetText: string) {
     setIsRecording(true)
     setPronResult(null)
-    setFeedback("idle") // 재녹음 시 상태 초기화
+    setWordScores([]) // 재도전 시 이전 단어 색상 초기화
+    setFeedback("idle")
 
     try {
       const sdk = await import("microsoft-cognitiveservices-speech-sdk")
@@ -167,7 +170,14 @@ export function WordQuiz({ words, accent }: { words: QuizWord[]; accent: string 
             }
             setPronResult(finalResult)
             
-            // 재도전을 위해 여기서 streak을 바로 올리지 않고 피드백 상태만 바꿉니다.
+            // ▼ [핵심 추가 부분] 단어별 세부 점수 추출 및 저장
+            const wordsDetail = pron.detailResult?.Words || []
+            const mappedWords = wordsDetail.map((w: any) => ({
+              text: w.Word,
+              score: w.PronunciationAssessment.AccuracyScore
+            }))
+            setWordScores(mappedWords)
+            
             if (finalResult.score >= 80) {
               setFeedback("correct")
             } else {
@@ -237,6 +247,7 @@ export function WordQuiz({ words, accent }: { words: QuizWord[]; accent: string 
     setHintUsed(false)
     setUsedHintInQuiz(false)
     setPronResult(null)
+    setWordScores([])
     setPhase("quiz")
     
     if (quizType !== "speaking") {
@@ -251,7 +262,7 @@ export function WordQuiz({ words, accent }: { words: QuizWord[]; accent: string 
     const nextAnswered = [...answered, record]
     const nextIndex = index + 1
     if (nextIndex < total) {
-      setAnswered(nextAnswered); setIndex(nextIndex); setValue(""); setFeedback("idle"); setHintUsed(false); setPronResult(null)
+      setAnswered(nextAnswered); setIndex(nextIndex); setValue(""); setFeedback("idle"); setHintUsed(false); setPronResult(null); setWordScores([])
       if (quizType !== "speaking") requestAnimationFrame(() => inputRef.current?.focus())
       if (quizType === "listening") setTimeout(() => playPronunciation(deck[nextIndex].word), 300)
     } else {
@@ -323,13 +334,10 @@ export function WordQuiz({ words, accent }: { words: QuizWord[]; accent: string 
             <BrainCircuit className="size-14 animate-pulse text-indigo-500" style={{ color: accent }} />
             <Sparkles className="absolute -top-2 -right-2 size-8 text-amber-400 animate-bounce" />
           </div>
-          
           <h3 className="mb-2 text-xl font-black text-foreground tracking-tight">AI 시험지 제작 중</h3>
-          
           <p className="min-h-6 text-sm font-bold text-muted-foreground animate-in slide-in-from-bottom-2 fade-in duration-300">
             {loadingMessages[loadingMsgIdx]}
           </p>
-
           <div className="mt-8 flex gap-1.5">
             <div className="size-2.5 rounded-full bg-indigo-500 animate-bounce" style={{ animationDelay: "0ms", backgroundColor: accent }} />
             <div className="size-2.5 rounded-full bg-indigo-500 animate-bounce" style={{ animationDelay: "150ms", backgroundColor: accent }} />
@@ -370,12 +378,40 @@ export function WordQuiz({ words, accent }: { words: QuizWord[]; accent: string 
                 <div className="mb-6 flex flex-col items-center justify-center w-full">
                   <div className="mb-3 flex justify-center"><span className="rounded-full bg-muted/80 px-2.5 py-1 text-[11px] font-bold tracking-wide text-muted-foreground">AI 문장 말하기 훈련</span></div>
                   
+                  {/* ▼ 단어별 색상 칠하기 적용된 렌더링 로직 ▼ */}
                   <h2 className="mb-4 text-balance text-center text-3xl font-black tracking-tight text-foreground leading-snug">
-                    {getFullSentence().split(new RegExp(`(${current.word})`, 'gi')).map((part, i) => 
-                      part.toLowerCase() === current.word.toLowerCase() ? (
-                        <span key={i} className="text-indigo-600 dark:text-indigo-400 underline decoration-4 underline-offset-4">{part}</span>
-                      ) : (
-                        <span key={i}>{part}</span>
+                    {wordScores.length > 0 ? (() => {
+                      const fullSent = getFullSentence()
+                      const availableScores = [...wordScores]
+                      return fullSent.split(' ').map((token, i) => {
+                        const cleanToken = token.replace(/[^a-zA-Z0-9']/g, '').toLowerCase()
+                        let colorClass = "text-foreground"
+                        
+                        const scoreIdx = availableScores.findIndex(ws => ws.text.toLowerCase() === cleanToken)
+                        if (scoreIdx !== -1) {
+                          const scoreItem = availableScores[scoreIdx]
+                          if (scoreItem.score >= 80) colorClass = "text-green-500 dark:text-green-400"
+                          else if (scoreItem.score >= 60) colorClass = "text-amber-500 dark:text-amber-400"
+                          else colorClass = "text-red-500 dark:text-red-400"
+                          availableScores.splice(scoreIdx, 1) // 중복 단어 처리
+                        }
+
+                        const isTarget = cleanToken === current.word.toLowerCase()
+                        
+                        return (
+                          <span key={i} className={cn("transition-colors duration-500", colorClass, isTarget && "underline decoration-4 underline-offset-4")}>
+                            {token}{' '}
+                          </span>
+                        )
+                      })
+                    })() : (
+                      // 처음에는 기본 색상으로 표시
+                      getFullSentence().split(new RegExp(`(${current.word})`, 'gi')).map((part, i) => 
+                        part.toLowerCase() === current.word.toLowerCase() ? (
+                          <span key={i} className="text-indigo-600 dark:text-indigo-400 underline decoration-4 underline-offset-4">{part}</span>
+                        ) : (
+                          <span key={i}>{part}</span>
+                        )
                       )
                     )}
                   </h2>
@@ -384,7 +420,6 @@ export function WordQuiz({ words, accent }: { words: QuizWord[]; accent: string 
                   </p>
 
                   <div className="flex flex-col items-center gap-3 w-full">
-                    {/* 마음에 들 때까지 계속 도전할 수 있는 반복 녹음 버튼 */}
                     <div className="flex gap-3">
                       <button type="button" onClick={() => playPronunciation(getFullSentence())} className="flex size-14 items-center justify-center rounded-full bg-muted text-foreground shadow-sm transition-transform hover:scale-105">
                         <Volume2 className="size-6" />
@@ -399,7 +434,7 @@ export function WordQuiz({ words, accent }: { words: QuizWord[]; accent: string 
                         {isRecording ? "듣고 있어요..." : (pronResult ? "다시 한번 채점하기" : "내 발음 채점하기")}
                       </button>
                     </div>
-                    {pronResult && <p className="text-xs font-semibold text-muted-foreground animate-in fade-in">💡 마음에 들 때까지 여러 번 연습해 보세요!</p>}
+                    {pronResult && <p className="text-[11px] font-semibold text-muted-foreground animate-in fade-in">💡 빨간색 단어를 신경 써서 다시 연습해 보세요!</p>}
                   </div>
                   
                   {pronResult && (
@@ -510,11 +545,9 @@ export function WordQuiz({ words, accent }: { words: QuizWord[]; accent: string 
                 {feedback === "idle" && hintUsed && quizType === "standard" && <p className="text-sm text-muted-foreground">첫 글자: <span className="font-bold text-foreground">{current.word[0]}</span></p>}
               </div>
 
-              {/* 하단 진행 제어 버튼 */}
               {quizType === "speaking" ? (
                 <button 
                   onClick={() => {
-                    // 아이가 '넘어가기'를 최종 결정했을 때 연속 정답(streak) 계산
                     if (feedback === "correct") {
                       const newStreak = streak + 1
                       setStreak(newStreak)
