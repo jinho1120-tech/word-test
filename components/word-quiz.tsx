@@ -209,6 +209,87 @@ export function WordQuiz({ words, accent }: { words: QuizWord[]; accent: string 
   }
 
   async function begin(list: QuizWord[]) {
+    // ▼ [여기 추가] 브라우저 오디오 보안 정책 우회 (음성 엔진 미리 깨우기)
+    try {
+      if (typeof window !== "undefined" && "speechSynthesis" in window) {
+        window.speechSynthesis.cancel()
+        const unlock = new SpeechSynthesisUtterance("") // 빈 소리
+        unlock.volume = 0
+        window.speechSynthesis.speak(unlock)
+      }
+    } catch (e) {}
+    // ▲ 여기까지 추가
+
+    let initialDeck = list
+    let initialContext: ContextQuizItem[] = []
+
+    if (quizType === "context" || quizType === "speaking") {
+      setIsGenerating(true)
+      setLoadingMsgIdx(0)
+      
+      const countToTake = quizType === "speaking" ? 5 : 10
+      const d = shuffle(list).slice(0, countToTake) 
+      const reqData = d.map(w => ({ word: w.word, meaning: w.meaning }))
+      
+      const res = await generateContextQuiz(reqData)
+      setIsGenerating(false)
+      
+      if (!res.success || !res.quizData) {
+        if ((res as any).isRateLimit) {
+          alert("😴 AI 선생님이 너무 많이 일해서 잠시 쉬고 있어요!\n\n1~2분 뒤에 다시 시도해 주세요.")
+        } else {
+          alert("AI가 문제를 출제하다가 실수했어요! 다시 시도해 주세요.\n(에러: " + res.error + ")")
+        }
+        return
+      }
+      
+      const newDeck: QuizWord[] = []
+      const newContextData: ContextQuizItem[] = []
+      
+      for (const item of res.quizData) {
+        const matchedWord = d.find(w => w.word.toLowerCase() === item.word.toLowerCase())
+        if (matchedWord) {
+          newDeck.push(matchedWord)
+          let distractors = words.filter(w => w.word !== matchedWord.word).map(w => w.word)
+          if (distractors.length < 3) distractors = [...distractors, "apple", "happy", "school", "friend", "water"]
+          const options = shuffle([matchedWord.word, ...shuffle(distractors).slice(0, 3)])
+          newContextData.push({ ...item, options })
+        }
+      }
+      if (newDeck.length === 0) return alert("문제를 만들지 못했습니다. 다시 시도해 주세요.")
+      
+      initialDeck = newDeck
+      initialContext = newContextData
+      setDeck(newDeck)
+      setContextData(newContextData)
+    } else {
+      initialDeck = shuffle(list)
+      setDeck(initialDeck)
+    }
+
+    setIndex(0)
+    setValue("")
+    setFeedback("idle")
+    setAnswered([])
+    setStreak(0)
+    setBestStreak(0)
+    setHintUsed(false)
+    setUsedHintInQuiz(false)
+    setPronResult(null)
+    setWordScores([])
+    setPhase("quiz")
+    
+    if (quizType !== "speaking") {
+      requestAnimationFrame(() => inputRef.current?.focus())
+    }
+    
+    if (quizType === "listening" && initialDeck.length > 0) {
+      setTimeout(() => playPronunciation(initialDeck[0].word), 300)
+    } else if (quizType === "speaking" && initialContext.length > 0 && initialDeck.length > 0) {
+      setTimeout(() => playPronunciation(initialContext[0].sentence.replace(/___/g, initialDeck[0].word)), 300)
+    }
+  }
+
     let initialDeck = list
     let initialContext: ContextQuizItem[] = []
 
