@@ -91,7 +91,7 @@ export function WordQuiz({ words, accent }: { words: QuizWord[]; accent: string 
   }, [isGenerating, loadingMessages.length])
 
   useEffect(() => {
-    if (phase === "result" && score === 100 && total >= 10) {
+    if (phase === "result" && score === 100 && total >= 5) {
       const duration = 3000;
       const animationEnd = Date.now() + duration;
       const defaults = { startVelocity: 30, spread: 360, ticks: 60, zIndex: 9999 };
@@ -148,8 +148,8 @@ export function WordQuiz({ words, accent }: { words: QuizWord[]; accent: string 
 
       const pronConfig = new sdk.PronunciationAssessmentConfig(
         targetText,
-        sdk.PronunciationAssessmentGradingSystem.HundredMark,
         sdk.PronunciationAssessmentGranularity.Phoneme,
+        sdk.PronunciationAssessmentGradingSystem.HundredMark,
         true
       )
       
@@ -211,7 +211,9 @@ export function WordQuiz({ words, accent }: { words: QuizWord[]; accent: string 
       setIsGenerating(true)
       setLoadingMsgIdx(0)
       
-      const d = shuffle(list).slice(0, 10) 
+      // 말하기 훈련은 5문장, 문장 퀴즈는 10문장으로 설정
+      const countToTake = quizType === "speaking" ? 5 : 10
+      const d = shuffle(list).slice(0, countToTake) 
       const reqData = d.map(w => ({ word: w.word, meaning: w.meaning }))
       
       const res = await generateContextQuiz(reqData)
@@ -262,7 +264,7 @@ export function WordQuiz({ words, accent }: { words: QuizWord[]; accent: string 
       requestAnimationFrame(() => inputRef.current?.focus())
     }
     
-    // ▼ [자동 재생] 퀴즈가 처음 시작될 때 1번 문제를 알아서 읽어줍니다.
+    // 시작 시 첫 번째 문제 자동 음성 재생
     if (quizType === "listening" && initialDeck.length > 0) {
       setTimeout(() => playPronunciation(initialDeck[0].word), 300)
     } else if (quizType === "speaking" && initialContext.length > 0 && initialDeck.length > 0) {
@@ -277,7 +279,7 @@ export function WordQuiz({ words, accent }: { words: QuizWord[]; accent: string 
       setAnswered(nextAnswered); setIndex(nextIndex); setValue(""); setFeedback("idle"); setHintUsed(false); setPronResult(null); setWordScores([])
       if (quizType !== "speaking") requestAnimationFrame(() => inputRef.current?.focus())
       
-      // ▼ [자동 재생] 다음 문제로 넘어갔을 때 새 문제를 알아서 읽어줍니다.
+      // 다음 문제 이동 시 자동 음성 재생
       if (quizType === "listening") {
         setTimeout(() => playPronunciation(deck[nextIndex].word), 300)
       } else if (quizType === "speaking" && contextData[nextIndex] && deck[nextIndex]) {
@@ -450,7 +452,6 @@ export function WordQuiz({ words, accent }: { words: QuizWord[]; accent: string 
                         {isRecording ? "듣고 있어요..." : (pronResult ? "다시 한번 채점하기" : "내 발음 채점하기")}
                       </button>
                     </div>
-                    {/* ▼ 새로 뜬 문장일 때 스피커 버튼 용도를 알려주는 안내 문구 ▼ */}
                     {!pronResult && <p className="text-[11px] font-semibold text-muted-foreground animate-in fade-in">💡 스피커 버튼을 누르면 다시 들을 수 있어요</p>}
                     {pronResult && <p className="text-[11px] font-semibold text-muted-foreground animate-in fade-in">💡 빨간색 단어를 신경 써서 다시 연습해 보세요!</p>}
                   </div>
