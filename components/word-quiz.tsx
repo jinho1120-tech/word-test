@@ -63,7 +63,6 @@ export function WordQuiz({ words, accent }: { words: QuizWord[]; accent: string 
 
   const [isRecording, setIsRecording] = useState(false)
   const [pronResult, setPronResult] = useState<PronunciationResult | null>(null)
-  // ▼ 단어별 점수를 저장하는 상태 추가
   const [wordScores, setWordScores] = useState<{ text: string; score: number }[]>([])
 
   const current = deck[index]
@@ -126,7 +125,7 @@ export function WordQuiz({ words, accent }: { words: QuizWord[]; accent: string 
   async function handlePronunciationAssessment(targetText: string) {
     setIsRecording(true)
     setPronResult(null)
-    setWordScores([]) // 재도전 시 이전 단어 색상 초기화
+    setWordScores([]) 
     setFeedback("idle")
 
     try {
@@ -142,6 +141,10 @@ export function WordQuiz({ words, accent }: { words: QuizWord[]; accent: string 
 
       const speechConfig = sdk.SpeechConfig.fromSubscription(key, region)
       speechConfig.speechRecognitionLanguage = "en-US"
+      
+      // ▼ [핵심 추가] 침묵 감지 대기 시간을 1.2초(1200ms)로 단축
+      speechConfig.setProperty(sdk.PropertyId.SpeechServiceConnection_EndSilenceTimeoutMs, "1200");
+
       const audioConfig = sdk.AudioConfig.fromDefaultMicrophoneInput()
 
       const pronConfig = new sdk.PronunciationAssessmentConfig(
@@ -170,7 +173,6 @@ export function WordQuiz({ words, accent }: { words: QuizWord[]; accent: string 
             }
             setPronResult(finalResult)
             
-            // ▼ [핵심 추가 부분] 단어별 세부 점수 추출 및 저장
             const wordsDetail = pron.detailResult?.Words || []
             const mappedWords = wordsDetail.map((w: any) => ({
               text: w.Word,
@@ -378,7 +380,6 @@ export function WordQuiz({ words, accent }: { words: QuizWord[]; accent: string 
                 <div className="mb-6 flex flex-col items-center justify-center w-full">
                   <div className="mb-3 flex justify-center"><span className="rounded-full bg-muted/80 px-2.5 py-1 text-[11px] font-bold tracking-wide text-muted-foreground">AI 문장 말하기 훈련</span></div>
                   
-                  {/* ▼ 단어별 색상 칠하기 적용된 렌더링 로직 ▼ */}
                   <h2 className="mb-4 text-balance text-center text-3xl font-black tracking-tight text-foreground leading-snug">
                     {wordScores.length > 0 ? (() => {
                       const fullSent = getFullSentence()
@@ -393,7 +394,7 @@ export function WordQuiz({ words, accent }: { words: QuizWord[]; accent: string 
                           if (scoreItem.score >= 80) colorClass = "text-green-500 dark:text-green-400"
                           else if (scoreItem.score >= 60) colorClass = "text-amber-500 dark:text-amber-400"
                           else colorClass = "text-red-500 dark:text-red-400"
-                          availableScores.splice(scoreIdx, 1) // 중복 단어 처리
+                          availableScores.splice(scoreIdx, 1) 
                         }
 
                         const isTarget = cleanToken === current.word.toLowerCase()
@@ -405,7 +406,6 @@ export function WordQuiz({ words, accent }: { words: QuizWord[]; accent: string 
                         )
                       })
                     })() : (
-                      // 처음에는 기본 색상으로 표시
                       getFullSentence().split(new RegExp(`(${current.word})`, 'gi')).map((part, i) => 
                         part.toLowerCase() === current.word.toLowerCase() ? (
                           <span key={i} className="text-indigo-600 dark:text-indigo-400 underline decoration-4 underline-offset-4">{part}</span>
@@ -437,6 +437,7 @@ export function WordQuiz({ words, accent }: { words: QuizWord[]; accent: string 
                     {pronResult && <p className="text-[11px] font-semibold text-muted-foreground animate-in fade-in">💡 빨간색 단어를 신경 써서 다시 연습해 보세요!</p>}
                   </div>
                   
+                  {/* ▼ 디자인 통일된 4가지 점수 박스 ▼ */}
                   {pronResult && (
                     <div className="mt-6 flex flex-col w-full items-center animate-in zoom-in duration-300">
                       <div className="grid grid-cols-4 gap-2 w-full max-w-sm mb-4">
@@ -452,9 +453,9 @@ export function WordQuiz({ words, accent }: { words: QuizWord[]; accent: string 
                           <span className="text-[10px] text-muted-foreground font-bold mb-0.5">완전성</span>
                           <span className="text-xl font-black text-amber-500">{Math.round(pronResult.completeness)}</span>
                         </div>
-                        <div className="flex flex-col items-center justify-center p-2 bg-card rounded-xl border-2 shadow-sm" style={{ borderColor: accent }}>
-                          <span className="text-[10px] font-black mb-0.5" style={{ color: accent }}>억양(Prosody)</span>
-                          <span className="text-2xl font-black" style={{ color: accent }}>{Math.round(pronResult.prosody)}</span>
+                        <div className="flex flex-col items-center justify-center p-2 bg-muted/80 rounded-xl border border-border/50">
+                          <span className="text-[10px] text-muted-foreground font-bold mb-0.5">억양</span>
+                          <span className="text-xl font-black text-purple-500">{Math.round(pronResult.prosody)}</span>
                         </div>
                       </div>
                       
