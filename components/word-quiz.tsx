@@ -82,6 +82,10 @@ export function WordQuiz({ words, accent }: { words: QuizWord[]; accent: string 
     return Math.round((correctCount / total) * 100)
   }, [correctCount, total])
 
+  const wrongWords = useMemo(() => {
+    return answered.filter((a) => !a.correct).map((a) => a.word)
+  }, [answered])
+
   useEffect(() => {
     if (!isGenerating) return
     const interval = setInterval(() => {
@@ -146,10 +150,11 @@ export function WordQuiz({ words, accent }: { words: QuizWord[]; accent: string 
 
       const audioConfig = sdk.AudioConfig.fromDefaultMicrophoneInput()
 
+      // ▼ [원상 복구] 파라미터 순서를 정상으로 되돌렸습니다! (GradingSystem 먼저, 그다음 Granularity)
       const pronConfig = new sdk.PronunciationAssessmentConfig(
         targetText,
-        sdk.PronunciationAssessmentGranularity.Phoneme,
         sdk.PronunciationAssessmentGradingSystem.HundredMark,
+        sdk.PronunciationAssessmentGranularity.Phoneme,
         true
       )
       
@@ -219,7 +224,6 @@ export function WordQuiz({ words, accent }: { words: QuizWord[]; accent: string 
       setIsGenerating(false)
       
       if (!res.success || !res.quizData) {
-        // ▼ 429 감지 시 친근한 팝업 제공
         if ((res as any).isRateLimit) {
           alert("😴 AI 선생님이 너무 많이 일해서 잠시 쉬고 있어요!\n\n1~2분 뒤에 다시 시도해 주세요.")
         } else {
