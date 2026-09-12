@@ -1,7 +1,7 @@
 "use client"
 
 import React, { useMemo, useRef, useState, useEffect } from "react"
-import { Lightbulb, Check, X, ArrowRight, Volume2, Sparkles, BrainCircuit } from "lucide-react"
+import { Lightbulb, Check, X, ArrowRight, Volume2, Sparkles, BrainCircuit, Mic } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { recordQuizResult, generateContextQuiz } from "@/app/actions/words"
 import confetti from "canvas-confetti"
@@ -19,11 +19,19 @@ export type QuizWord = {
   subject: string 
 }
 
-export type QuizType = "standard" | "listening" | "context"
+export type QuizType = "standard" | "listening" | "context" | "speaking"
 type Phase = "start" | "quiz" | "result"
 type Feedback = "idle" | "correct" | "wrong"
 type Answered = { word: QuizWord; correct: boolean }
 type ContextQuizItem = { word: string; sentence: string; translation: string; clue: string; options: string[] }
+
+type PronunciationResult = {
+  score: number;
+  accuracy: number;
+  fluency: number;
+  completeness: number;
+  prosody: number;
+}
 
 function shuffle<T>(arr: T[]): T[] {
   const copy = [...arr]
@@ -52,6 +60,9 @@ export function WordQuiz({ words, accent }: { words: QuizWord[]; accent: string 
   const [isGenerating, setIsGenerating] = useState(false)
   const [loadingMsgIdx, setLoadingMsgIdx] = useState(0)
   const [contextData, setContextData] = useState<ContextQuizItem[]>([])
+
+  const [isRecording, setIsRecording] = useState(false)
+  const [pronResult, setPronResult] = useState<PronunciationResult | null>(null)
 
   const current = deck[index]
   const total = deck.length
@@ -110,8 +121,79 @@ export function WordQuiz({ words, accent }: { words: QuizWord[]; accent: string 
     }
   }
 
+  async function handlePronunciationAssessment(targetText: string) {
+    setIsRecording(true)
+    setPronResult(null)
+    setFeedback("idle") // 재녹음 시 상태 초기화
+
+    try {
+      const sdk = await import("microsoft-cognitiveservices-speech-sdk")
+      const key = process.env.NEXT_PUBLIC_AZURE_SPEECH_KEY
+      const region = process.env.NEXT_PUBLIC_AZURE_SPEECH_REGION
+
+      if (!key || !region) {
+        alert("아빠에게 알려주세요: Azure 발음 평가 키가 등록되지 않았습니다.")
+        setIsRecording(false)
+        return
+      }
+
+      const speechConfig = sdk.SpeechConfig.fromSubscription(key, region)
+      speechConfig.speechRecognitionLanguage = "en-US"
+      const audioConfig = sdk.AudioConfig.fromDefaultMicrophoneInput()
+
+      const pronConfig = new sdk.PronunciationAssessmentConfig(
+        targetText,
+        sdk.PronunciationAssessmentGradingSystem.HundredMark,
+        sdk.PronunciationAssessmentGranularity.Phoneme,
+        true
+      )
+      
+      pronConfig.enableProsodyAssessment = true;
+
+      const recognizer = new sdk.SpeechRecognizer(speechConfig, audioConfig)
+      pronConfig.applyTo(recognizer)
+
+      recognizer.recognizeOnceAsync(
+        (result) => {
+          if (result.reason === sdk.ResultReason.RecognizedSpeech) {
+            const pron = sdk.PronunciationAssessmentResult.fromResult(result)
+            
+            const finalResult = {
+              score: pron.pronunciationScore,
+              accuracy: pron.accuracyScore,
+              fluency: pron.fluencyScore,
+              completeness: pron.completenessScore,
+              prosody: pron.prosodyScore || pron.pronunciationScore
+            }
+            setPronResult(finalResult)
+            
+            // 재도전을 위해 여기서 streak을 바로 올리지 않고 피드백 상태만 바꿉니다.
+            if (finalResult.score >= 80) {
+              setFeedback("correct")
+            } else {
+              setFeedback("wrong")
+            }
+          } else {
+            alert("목소리가 잘 안 들렸어요. 마이크 가까이서 다시 말해주세요!")
+          }
+          recognizer.close()
+          setIsRecording(false)
+        },
+        (err) => {
+          console.error("Azure 에러:", err)
+          alert("마이크 접근이 거부되었거나 서버에 연결할 수 없습니다.")
+          recognizer.close()
+          setIsRecording(false)
+        }
+      )
+    } catch (error) {
+      console.error("발음 평가 초기화 실패:", error)
+      setIsRecording(false)
+    }
+  }
+
   async function begin(list: QuizWord[]) {
-    if (quizType === "context") {
+    if (quizType === "context" || quizType === "speaking") {
       setIsGenerating(true)
       setLoadingMsgIdx(0)
       
@@ -154,11 +236,14 @@ export function WordQuiz({ words, accent }: { words: QuizWord[]; accent: string 
     setBestStreak(0)
     setHintUsed(false)
     setUsedHintInQuiz(false)
+    setPronResult(null)
     setPhase("quiz")
     
-    requestAnimationFrame(() => inputRef.current?.focus())
+    if (quizType !== "speaking") {
+      requestAnimationFrame(() => inputRef.current?.focus())
+    }
     if (quizType === "listening" && list.length > 0) {
-      setTimeout(() => playPronunciation(quizType === "context" ? deck[0]?.word : list[0].word), 300)
+      setTimeout(() => playPronunciation(quizType === "context" || quizType === "speaking" ? deck[0]?.word : list[0].word), 300)
     }
   }
 
@@ -166,8 +251,8 @@ export function WordQuiz({ words, accent }: { words: QuizWord[]; accent: string 
     const nextAnswered = [...answered, record]
     const nextIndex = index + 1
     if (nextIndex < total) {
-      setAnswered(nextAnswered); setIndex(nextIndex); setValue(""); setFeedback("idle"); setHintUsed(false)
-      requestAnimationFrame(() => inputRef.current?.focus())
+      setAnswered(nextAnswered); setIndex(nextIndex); setValue(""); setFeedback("idle"); setHintUsed(false); setPronResult(null)
+      if (quizType !== "speaking") requestAnimationFrame(() => inputRef.current?.focus())
       if (quizType === "listening") setTimeout(() => playPronunciation(deck[nextIndex].word), 300)
     } else {
       setAnswered(nextAnswered); setPhase("result")
@@ -196,31 +281,31 @@ export function WordQuiz({ words, accent }: { words: QuizWord[]; accent: string 
       setStreak(newStreak)
       setBestStreak((b) => Math.max(b, newStreak))
       setFeedback("correct")
-      // ★ 맞았을 때도 공부를 위해 정답 화면에서 해석/해설을 자동으로 보여줍니다. (쿠폰 조건 차감 X)
-      setHintUsed(true)
+      setHintUsed(true) 
       
-      if (quizType !== "context") {
+      if (quizType !== "context" && quizType !== "speaking") {
         recordQuizResult(current.id, true).catch(console.error)
       }
     } else {
       setStreak(0)
       setFeedback("wrong")
-      // ★ 틀렸을 때도 해석/해설을 보여줍니다.
-      setHintUsed(true)
+      setHintUsed(true) 
       
-      if (quizType !== "context") {
+      if (quizType !== "context" && quizType !== "speaking") {
         recordQuizResult(current.id, false).catch(console.error)
       }
     }
   }
 
-  // ★ 아이가 힌트 버튼을 직접 클릭했을 때만 호출되어 쿠폰 미자격을 기록합니다.
   function handleUseHint() {
     setHintUsed(true)
     setUsedHintInQuiz(true)
   }
 
-  const wrongWords = answered.filter((a) => !a.correct).map((a) => a.word)
+  const getFullSentence = () => {
+    if (!contextData[index]) return ""
+    return contextData[index].sentence.replace(/___/g, current.word)
+  }
 
   if (words.length === 0) {
     return (
@@ -281,87 +366,189 @@ export function WordQuiz({ words, accent }: { words: QuizWord[]; accent: string 
                 )}
               </div>
 
-              {quizType === "context" && contextData[index] ? (
+              {quizType === "speaking" && contextData[index] ? (
+                <div className="mb-6 flex flex-col items-center justify-center w-full">
+                  <div className="mb-3 flex justify-center"><span className="rounded-full bg-muted/80 px-2.5 py-1 text-[11px] font-bold tracking-wide text-muted-foreground">AI 문장 말하기 훈련</span></div>
+                  
+                  <h2 className="mb-4 text-balance text-center text-3xl font-black tracking-tight text-foreground leading-snug">
+                    {getFullSentence().split(new RegExp(`(${current.word})`, 'gi')).map((part, i) => 
+                      part.toLowerCase() === current.word.toLowerCase() ? (
+                        <span key={i} className="text-indigo-600 dark:text-indigo-400 underline decoration-4 underline-offset-4">{part}</span>
+                      ) : (
+                        <span key={i}>{part}</span>
+                      )
+                    )}
+                  </h2>
+                  <p className="text-sm font-semibold text-muted-foreground mb-6 text-center">
+                    🇰🇷 {contextData[index].translation}
+                  </p>
+
+                  <div className="flex flex-col items-center gap-3 w-full">
+                    {/* 마음에 들 때까지 계속 도전할 수 있는 반복 녹음 버튼 */}
+                    <div className="flex gap-3">
+                      <button type="button" onClick={() => playPronunciation(getFullSentence())} className="flex size-14 items-center justify-center rounded-full bg-muted text-foreground shadow-sm transition-transform hover:scale-105">
+                        <Volume2 className="size-6" />
+                      </button>
+                      <button 
+                        type="button" 
+                        onClick={() => handlePronunciationAssessment(getFullSentence())}
+                        disabled={isRecording}
+                        className={cn("flex items-center gap-2 rounded-full px-6 py-2 font-black text-white shadow-lg transition-all active:scale-95", isRecording ? "bg-red-500 animate-pulse scale-105" : (pronResult ? "bg-gradient-to-r from-amber-500 to-orange-500 hover:scale-105" : "bg-gradient-to-r from-indigo-500 to-blue-600 hover:scale-105"))}
+                      >
+                        <Mic className={cn("size-5", isRecording && "animate-bounce")} />
+                        {isRecording ? "듣고 있어요..." : (pronResult ? "다시 한번 채점하기" : "내 발음 채점하기")}
+                      </button>
+                    </div>
+                    {pronResult && <p className="text-xs font-semibold text-muted-foreground animate-in fade-in">💡 마음에 들 때까지 여러 번 연습해 보세요!</p>}
+                  </div>
+                  
+                  {pronResult && (
+                    <div className="mt-6 flex flex-col w-full items-center animate-in zoom-in duration-300">
+                      <div className="grid grid-cols-4 gap-2 w-full max-w-sm mb-4">
+                        <div className="flex flex-col items-center justify-center p-2 bg-muted/80 rounded-xl border border-border/50">
+                          <span className="text-[10px] text-muted-foreground font-bold mb-0.5">정확도</span>
+                          <span className="text-xl font-black text-blue-500">{Math.round(pronResult.accuracy)}</span>
+                        </div>
+                        <div className="flex flex-col items-center justify-center p-2 bg-muted/80 rounded-xl border border-border/50">
+                          <span className="text-[10px] text-muted-foreground font-bold mb-0.5">유창성</span>
+                          <span className="text-xl font-black text-indigo-500">{Math.round(pronResult.fluency)}</span>
+                        </div>
+                        <div className="flex flex-col items-center justify-center p-2 bg-muted/80 rounded-xl border border-border/50">
+                          <span className="text-[10px] text-muted-foreground font-bold mb-0.5">완전성</span>
+                          <span className="text-xl font-black text-amber-500">{Math.round(pronResult.completeness)}</span>
+                        </div>
+                        <div className="flex flex-col items-center justify-center p-2 bg-card rounded-xl border-2 shadow-sm" style={{ borderColor: accent }}>
+                          <span className="text-[10px] font-black mb-0.5" style={{ color: accent }}>억양(Prosody)</span>
+                          <span className="text-2xl font-black" style={{ color: accent }}>{Math.round(pronResult.prosody)}</span>
+                        </div>
+                      </div>
+                      
+                      <p className="mt-1 text-[15px] font-black text-foreground">
+                        {pronResult.score >= 90 ? "🏆 Perfect! 원어민처럼 완벽해요!" :
+                         pronResult.score >= 80 ? "✨ Excellent! 아주 훌륭해요!" :
+                         pronResult.score >= 60 ? "👍 Good! 조금만 더 연습해볼까요?" :
+                         "💪 Try Again! 다시 한번 또박또박 읽어보세요!"}
+                      </p>
+                    </div>
+                  )}
+                </div>
+              ) : quizType === "context" && contextData[index] ? (
                 <div className="mb-4 flex flex-col items-center justify-center w-full">
                   <div className="mb-3 flex justify-center"><span className="rounded-full bg-muted/80 px-2.5 py-1 text-[11px] font-bold tracking-wide text-muted-foreground">{current.subject}</span></div>
                   <h2 className="mb-6 text-balance text-center text-2xl sm:text-3xl font-black tracking-tight text-foreground leading-snug">
                     {contextData[index].sentence.split('___').map((part: string, i: number, arr: any[]) => (
-                      <React.Fragment key={i}>{part}{i < arr.length - 1 && <span className="mx-1 inline-block w-12 sm:w-16 border-b-4 border-foreground" />}</React.Fragment>
+                      <React.Fragment key={i}>
+                        {part}
+                        {i < arr.length - 1 && (
+                          feedback === "idle" ? (
+                            <span className="mx-1 inline-block w-12 sm:w-16 border-b-4 border-foreground align-middle" />
+                          ) : (
+                            <span className={cn("mx-1 px-1 font-black underline decoration-4 underline-offset-4", feedback === "correct" ? "text-green-500 decoration-green-500/30" : "text-red-500 decoration-red-500/30")}>
+                              {current.word}
+                            </span>
+                          )
+                        )}
+                      </React.Fragment>
                     ))}
                   </h2>
                   <div className="w-full rounded-xl bg-muted/40 p-3 mb-2 flex flex-wrap justify-center gap-2 border border-border">
                     {contextData[index].options.map((opt: string, i: number) => <span key={i} className="px-3 py-1.5 bg-card rounded-lg text-sm font-bold text-foreground shadow-sm">{opt}</span>)}
                   </div>
                 </div>
-              ) : quizType === "standard" ? (
-                <h2 className="mb-4 text-balance text-center text-4xl font-black tracking-tight text-foreground">
-                  <div className="mb-3 flex justify-center"><span className="rounded-full bg-muted/80 px-2.5 py-1 text-[11px] font-bold tracking-wide text-muted-foreground">{current.subject}</span></div>
-                  {current.meaning}
-                </h2>
               ) : (
-                <div className="mb-4 flex flex-col items-center justify-center">
-                  <div className="mb-3 flex justify-center"><span className="rounded-full bg-muted/80 px-2.5 py-1 text-[11px] font-bold tracking-wide text-muted-foreground">{current.subject}</span></div>
-                  <button type="button" onClick={() => playPronunciation(current.word)} className="mb-3 flex size-20 items-center justify-center rounded-full text-white shadow-lg transition-transform hover:scale-105 active:scale-95" style={{ backgroundColor: accent }}><Volume2 className="size-10" /></button>
-                  <p className="text-sm font-bold text-muted-foreground">버튼을 눌러 다시 들을 수 있어요</p>
+                quizType === "standard" ? (
+                  <h2 className="mb-4 text-balance text-center text-4xl font-black tracking-tight text-foreground">
+                    <div className="mb-3 flex justify-center"><span className="rounded-full bg-muted/80 px-2.5 py-1 text-[11px] font-bold tracking-wide text-muted-foreground">{current.subject}</span></div>
+                    {current.meaning}
+                  </h2>
+                ) : (
+                  <div className="mb-4 flex flex-col items-center justify-center">
+                    <div className="mb-3 flex justify-center"><span className="rounded-full bg-muted/80 px-2.5 py-1 text-[11px] font-bold tracking-wide text-muted-foreground">{current.subject}</span></div>
+                    <button type="button" onClick={() => playPronunciation(current.word)} className="mb-3 flex size-20 items-center justify-center rounded-full text-white shadow-lg transition-transform hover:scale-105 active:scale-95" style={{ backgroundColor: accent }}><Volume2 className="size-10" /></button>
+                    <p className="text-sm font-bold text-muted-foreground">버튼을 눌러 다시 들을 수 있어요</p>
+                  </div>
+                )
+              )}
+
+              {quizType !== "speaking" && (
+                <div className="mb-8 flex min-h-24 flex-col items-center justify-center gap-3 rounded-2xl border border-border bg-muted/50 p-4">
+                  {quizType === "context" ? (
+                    <div className="text-center w-full">
+                      {hintUsed || feedback !== "idle" ? (
+                        <div className="flex flex-col items-center gap-3 animate-in fade-in duration-200">
+                          <div className="flex flex-col gap-1.5">
+                            <p className="text-sm font-bold text-foreground">🇰🇷 해석: {contextData[index].translation}</p>
+                            <p className="text-xs font-medium text-blue-600 dark:text-blue-400">💡 AI 선생님 해설: {contextData[index].clue}</p>
+                          </div>
+                          
+                          {feedback !== "idle" && (
+                            <button type="button" onClick={() => playPronunciation(getFullSentence())} className="mt-2 flex items-center justify-center gap-2 rounded-full px-5 py-2.5 text-sm font-black text-white shadow-md transition-transform hover:scale-105 active:scale-95" style={{ backgroundColor: accent }}>
+                              <Volume2 className="size-5" /> 문장 듣고 따라하기
+                            </button>
+                          )}
+                        </div>
+                      ) : (
+                        <p className="text-sm font-medium text-muted-foreground">해석과 힌트를 보려면 아래 힌트 버튼을 눌러 주세요.</p>
+                      )}
+                    </div>
+                  ) : (
+                    <p className="text-pretty text-center font-serif italic leading-relaxed text-muted-foreground">
+                      {hintUsed ? quizType === "listening" ? `뜻: ${current.meaning}` : current.example ? current.example.replace(new RegExp(current.word, "gi"), (m) => `${m[0]}${"·".repeat(Math.max(0, m.length - 1))}`) : `첫 글자: ${current.word[0]} (${current.word.length}글자)` : "힌트를 보려면 아래 힌트 버튼을 눌러 주세요."}
+                    </p>
+                  )}
+                  {hintUsed && quizType === "standard" && <button type="button" onMouseDown={(e) => { e.preventDefault(); playPronunciation(current.word); }} className="flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-bold transition-opacity hover:opacity-80 shadow-sm" style={{ backgroundColor: accent, color: "white" }}><Volume2 className="size-4" /> 단어 듣기</button>}
                 </div>
               )}
 
-              <div className="mb-8 flex min-h-24 flex-col items-center justify-center gap-3 rounded-2xl border border-border bg-muted/50 p-4">
-                {quizType === "context" ? (
-                  <div className="text-center">
-                    {hintUsed || feedback !== "idle" ? (
-                      <div className="flex flex-col gap-2 animate-in fade-in duration-200">
-                        <p className="text-sm font-bold text-foreground">
-                          🇰🇷 해석: {contextData[index].translation}
-                        </p>
-                        <p className="text-xs font-medium text-blue-600 dark:text-blue-400">
-                          💡 AI 선생님 해설: {contextData[index].clue}
-                        </p>
-                      </div>
-                    ) : (
-                      <p className="text-sm font-medium text-muted-foreground">
-                        해석과 힌트를 보려면 아래 힌트 버튼을 눌러 주세요.
-                      </p>
-                    )}
-                  </div>
-                ) : (
-                  <p className="text-pretty text-center font-serif italic leading-relaxed text-muted-foreground">
-                    {hintUsed ? quizType === "listening" ? `뜻: ${current.meaning}` : current.example ? current.example.replace(new RegExp(current.word, "gi"), (m) => `${m[0]}${"·".repeat(Math.max(0, m.length - 1))}`) : `첫 글자: ${current.word[0]} (${current.word.length}글자)` : "힌트를 보려면 아래 힌트 버튼을 눌러 주세요."}
-                  </p>
-                )}
-                {hintUsed && quizType === "standard" && <button type="button" onMouseDown={(e) => { e.preventDefault(); playPronunciation(current.word); }} className="flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-bold transition-opacity hover:opacity-80 shadow-sm" style={{ backgroundColor: accent, color: "white" }}><Volume2 className="size-4" /> 단어 듣기</button>}
-              </div>
-
-              <input ref={inputRef} type="text" value={value} onChange={(e) => setValue(e.target.value)} onKeyDown={(e) => { if (e.key === "Enter" && !e.nativeEvent.isComposing) { e.preventDefault(); if (feedback === "idle") submit(); else advance({ word: current, correct: feedback === "correct" }); } }} autoComplete="off" autoCorrect="off" autoCapitalize="none" spellCheck={false} disabled={feedback !== "idle"} placeholder="영단어를 입력하세요" className={cn("mb-3 w-full border-b-4 bg-transparent p-3 text-center text-3xl font-bold outline-none transition-colors placeholder:text-base placeholder:font-normal placeholder:text-muted-foreground", feedback === "idle" && "border-border text-foreground", feedback === "correct" && "border-green-500 text-green-600", feedback === "wrong" && "animate-shake border-red-500 text-red-500")} style={feedback === "idle" ? { caretColor: accent } : undefined} />
+              {quizType !== "speaking" && (
+                <input ref={inputRef} type="text" value={value} onChange={(e) => setValue(e.target.value)} onKeyDown={(e) => { if (e.key === "Enter" && !e.nativeEvent.isComposing) { e.preventDefault(); if (feedback === "idle") submit(); else advance({ word: current, correct: feedback === "correct" }); } }} autoComplete="off" autoCorrect="off" autoCapitalize="none" spellCheck={false} disabled={feedback !== "idle"} placeholder="영단어를 입력하세요" className={cn("mb-3 w-full border-b-4 bg-transparent p-3 text-center text-3xl font-bold outline-none transition-colors placeholder:text-base placeholder:font-normal placeholder:text-muted-foreground", feedback === "idle" && "border-border text-foreground", feedback === "correct" && "border-green-500 text-green-600", feedback === "wrong" && "animate-shake border-red-500 text-red-500")} style={feedback === "idle" ? { caretColor: accent } : undefined} />
+              )}
               
               <div className="mb-6 flex min-h-6 items-center justify-center">
-                {feedback === "correct" && <p className="flex items-center gap-1.5 text-sm font-semibold text-green-600"><Check className="size-4" /> 정답입니다!</p>}
-                {feedback === "wrong" && <p className="flex items-center gap-1.5 text-sm font-semibold text-red-500"><X className="size-4" /> 정답: {current.word}</p>}
+                {feedback === "correct" && quizType !== "speaking" && <p className="flex items-center gap-1.5 text-sm font-semibold text-green-600"><Check className="size-4" /> 정답입니다!</p>}
+                {feedback === "wrong" && quizType !== "speaking" && <p className="flex items-center gap-1.5 text-sm font-semibold text-red-500"><X className="size-4" /> 정답: {current.word}</p>}
                 {feedback === "idle" && hintUsed && quizType === "standard" && <p className="text-sm text-muted-foreground">첫 글자: <span className="font-bold text-foreground">{current.word[0]}</span></p>}
               </div>
 
-              <button 
-                onClick={() => {
-                  if (feedback === "idle") {
-                    submit()
-                  } else {
+              {/* 하단 진행 제어 버튼 */}
+              {quizType === "speaking" ? (
+                <button 
+                  onClick={() => {
+                    // 아이가 '넘어가기'를 최종 결정했을 때 연속 정답(streak) 계산
+                    if (feedback === "correct") {
+                      const newStreak = streak + 1
+                      setStreak(newStreak)
+                      setBestStreak((b) => Math.max(b, newStreak))
+                    } else {
+                      setStreak(0)
+                    }
                     advance({ word: current, correct: feedback === "correct" })
-                  }
-                }} 
-                disabled={feedback === "idle" && !value.trim()} 
-                className={cn(
-                  "flex w-full items-center justify-center gap-2 rounded-2xl py-4 text-lg font-bold text-white shadow-md transition-colors disabled:opacity-60", 
-                  feedback === "correct" && "bg-green-500 hover:bg-green-600", 
-                  feedback === "wrong" && "bg-red-500 hover:bg-red-600"
-                )} 
-                style={feedback === "idle" ? { backgroundColor: accent } : undefined}
-              >
-                {feedback === "idle" && <>정답 확인 <ArrowRight className="size-5" /></>}
-                {feedback === "correct" && <>잘했어요! (다음 문제로 ➔)</>}
-                {feedback === "wrong" && <>해설 확인 후 다음 문제로 ➔</>}
-              </button>
+                  }}
+                  disabled={feedback === "idle"}
+                  className={cn("flex w-full items-center justify-center gap-2 rounded-2xl py-4 text-lg font-bold transition-colors disabled:opacity-30", feedback !== "idle" ? "bg-foreground text-background hover:opacity-90 shadow-md" : "bg-muted text-muted-foreground")}
+                >
+                  {feedback === "idle" && "마이크로 문장을 읽어주세요"}
+                  {feedback !== "idle" && "이만하면 됐어요! 다음 문장으로 ➔"}
+                </button>
+              ) : (
+                <button 
+                  onClick={() => {
+                    if (feedback === "idle") submit()
+                    else advance({ word: current, correct: feedback === "correct" })
+                  }} 
+                  disabled={feedback === "idle" && !value.trim()} 
+                  className={cn("flex w-full items-center justify-center gap-2 rounded-2xl py-4 text-lg font-bold text-white shadow-md transition-colors disabled:opacity-60", feedback === "correct" && "bg-green-500 hover:bg-green-600", feedback === "wrong" && "bg-red-500 hover:bg-red-600")} 
+                  style={feedback === "idle" ? { backgroundColor: accent } : undefined}
+                >
+                  {feedback === "idle" && <>정답 확인 <ArrowRight className="size-5" /></>}
+                  {feedback === "correct" && <>잘했어요! (다음 문제로 ➔)</>}
+                  {feedback === "wrong" && <>해설 확인 후 다음 문제로 ➔</>}
+                </button>
+              )}
 
-              <button onClick={handleUseHint} disabled={hintUsed || feedback !== "idle"} className="mt-3 mb-4 flex w-full items-center justify-center gap-1.5 rounded-2xl border border-border py-3 text-sm font-semibold text-muted-foreground transition-colors hover:bg-muted disabled:opacity-40"><Lightbulb className="size-4" /> 힌트 보기</button>
+              {quizType !== "speaking" && (
+                <button onClick={handleUseHint} disabled={hintUsed || feedback !== "idle"} className="mt-3 mb-4 flex w-full items-center justify-center gap-1.5 rounded-2xl border border-border py-3 text-sm font-semibold text-muted-foreground transition-colors hover:bg-muted disabled:opacity-40"><Lightbulb className="size-4" /> 힌트 보기</button>
+              )}
             </div>
           </div>
         </div>
@@ -369,28 +556,10 @@ export function WordQuiz({ words, accent }: { words: QuizWord[]; accent: string 
 
       <div className={cn("overflow-hidden rounded-3xl border border-border bg-card shadow-sm", phase === "quiz" ? "hidden" : "block")}>
         {phase === "start" && (
-          <QuizStart 
-            words={words} 
-            accent={accent} 
-            quizType={quizType} 
-            setQuizType={setQuizType} 
-            isGenerating={isGenerating} 
-            onBegin={() => begin(words)} 
-          />
+          <QuizStart words={words} accent={accent} quizType={quizType} setQuizType={setQuizType} isGenerating={isGenerating} onBegin={() => begin(words)} />
         )}
         {phase === "result" && (
-          <QuizResult 
-            score={score} 
-            correctCount={correctCount} 
-            total={total} 
-            bestStreak={bestStreak} 
-            wrongWords={wrongWords} 
-            accent={accent} 
-            usedHint={usedHintInQuiz}
-            quizType={quizType}
-            onRetryWrong={() => begin(wrongWords)} 
-            onRetryAll={() => begin(words)} 
-          />
+          <QuizResult score={score} correctCount={correctCount} total={total} bestStreak={bestStreak} wrongWords={wrongWords} accent={accent} usedHint={usedHintInQuiz} quizType={quizType} onRetryWrong={() => begin(wrongWords)} onRetryAll={() => begin(words)} />
         )}
       </div>
     </>
