@@ -211,7 +211,6 @@ export function WordQuiz({ words, accent }: { words: QuizWord[]; accent: string 
       setIsGenerating(true)
       setLoadingMsgIdx(0)
       
-      // 말하기 훈련은 5문장, 문장 퀴즈는 10문장으로 설정
       const countToTake = quizType === "speaking" ? 5 : 10
       const d = shuffle(list).slice(0, countToTake) 
       const reqData = d.map(w => ({ word: w.word, meaning: w.meaning }))
@@ -220,7 +219,12 @@ export function WordQuiz({ words, accent }: { words: QuizWord[]; accent: string 
       setIsGenerating(false)
       
       if (!res.success || !res.quizData) {
-        alert("AI가 문제를 출제하다가 실수했어요! 다시 시도해 주세요.\n(에러: " + res.error + ")")
+        // ▼ 429 감지 시 친근한 팝업 제공
+        if ((res as any).isRateLimit) {
+          alert("😴 AI 선생님이 너무 많이 일해서 잠시 쉬고 있어요!\n\n1~2분 뒤에 다시 시도해 주세요.")
+        } else {
+          alert("AI가 문제를 출제하다가 실수했어요! 다시 시도해 주세요.\n(에러: " + res.error + ")")
+        }
         return
       }
       
@@ -264,7 +268,6 @@ export function WordQuiz({ words, accent }: { words: QuizWord[]; accent: string 
       requestAnimationFrame(() => inputRef.current?.focus())
     }
     
-    // 시작 시 첫 번째 문제 자동 음성 재생
     if (quizType === "listening" && initialDeck.length > 0) {
       setTimeout(() => playPronunciation(initialDeck[0].word), 300)
     } else if (quizType === "speaking" && initialContext.length > 0 && initialDeck.length > 0) {
@@ -279,7 +282,6 @@ export function WordQuiz({ words, accent }: { words: QuizWord[]; accent: string 
       setAnswered(nextAnswered); setIndex(nextIndex); setValue(""); setFeedback("idle"); setHintUsed(false); setPronResult(null); setWordScores([])
       if (quizType !== "speaking") requestAnimationFrame(() => inputRef.current?.focus())
       
-      // 다음 문제 이동 시 자동 음성 재생
       if (quizType === "listening") {
         setTimeout(() => playPronunciation(deck[nextIndex].word), 300)
       } else if (quizType === "speaking" && contextData[nextIndex] && deck[nextIndex]) {
