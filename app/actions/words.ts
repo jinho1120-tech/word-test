@@ -119,7 +119,6 @@ export async function scanImageWithGemini(base64Image: string, mimeType: string)
 
     const endpoint = `https://generativelanguage.googleapis.com/v1beta/models/gemini-3.6-flash:generateContent?key=${apiKey}`;
     
-    // ▼ 제가 누락시켰던 상세 명령어(영어 뜻 추출 규칙)를 예전처럼 복구했습니다!
     const promptText = `
 이 이미지 속 표나 텍스트에서 '단어' 목록만 필터링하여 추출해줘.
 
@@ -164,21 +163,19 @@ export async function scanImageWithGemini(base64Image: string, mimeType: string)
     return { success: false, error: `서버 에러: ${e.message}` };
   }
 }
-// ▼ 달력에 표시하기 위해 단어가 존재하는 날짜들만 가져오는 기능 ▼
+
 export async function getActiveDates(profile: string): Promise<string[]> {
   assertProfile(profile)
   
-  // 해당 프로필의 모든 날짜 데이터를 가져옵니다.
   const results = await db
     .select({ date: wordEntries.assignmentDate })
     .from(wordEntries)
     .where(eq(wordEntries.profile, profile))
 
-  // 중복 날짜를 제거하고 순수한 날짜 배열만 반환합니다.
   const uniqueDates = Array.from(new Set(results.map((r) => r.date)))
   return uniqueDates
 }
-// ▼ [새로 추가됨] 가장 최근에 단어가 등록된 날짜를 찾는 기능 ▼
+
 export async function getLatestActiveDate(profile: string): Promise<string | null> {
   assertProfile(profile)
   const result = await db
@@ -190,16 +187,12 @@ export async function getLatestActiveDate(profile: string): Promise<string | nul
 
   return result.length > 0 ? result[0].date : null
 }
-// ▼ 기존 코드 맨 아래에 이 함수를 추가해 주세요! ▼
-
-// app/actions/words.ts 파일의 맨 아래에 있는 함수를 이걸로 덮어써주세요!
 
 export async function generateContextQuiz(words: { word: string, meaning: string }[]) {
   try {
     const apiKey = process.env.GEMINI_API_KEY?.trim();
     if (!apiKey) return { success: false, error: "API 키가 등록되지 않았습니다." };
 
-    // 안전하고 가장 빠른 1.5-flash 모델 사용
     const endpoint = `https://generativelanguage.googleapis.com/v1beta/models/gemini-3.6-flash:generateContent?key=${apiKey}`;
     
     const promptText = `
@@ -232,22 +225,24 @@ export async function generateContextQuiz(words: { word: string, meaning: string
       cache: "no-store",
       body: JSON.stringify({
         contents: [{ parts: [{ text: promptText }] }],
-        // 에러를 유발할 수 있는 강제 JSON 옵션을 제거하여 안정성 확보
         generationConfig: { temperature: 0.7 }
       })
     });
 
-    // 구글 서버에서 에러를 뱉었을 때 실제 에러 내용을 확인하기 위한 코드
     if (!response.ok) {
       const errorText = await response.text();
       console.error("구글 API 상세 에러:", errorText);
+      
+      // ▼ 429 에러 감지 로직 추가
+      if (response.status === 429) {
+        return { success: false, isRateLimit: true, error: "AI 사용량 초과" };
+      }
       return { success: false, error: `구글 AI 에러: ${response.status} (자세한 건 콘솔 확인)` };
     }
     
     const data = await response.json();
     const text = data.candidates?.[0]?.content?.parts?.[0]?.text || "[]";
     
-    // AI가 마크다운(```json ... ```)을 붙여서 보낼 경우를 대비해 깔끔하게 벗겨냄
     const cleanText = text.replace(/```json/g, "").replace(/```/g, "").trim();
 
     try {
