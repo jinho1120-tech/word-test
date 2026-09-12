@@ -142,7 +142,6 @@ export function WordQuiz({ words, accent }: { words: QuizWord[]; accent: string 
       const speechConfig = sdk.SpeechConfig.fromSubscription(key, region)
       speechConfig.speechRecognitionLanguage = "en-US"
       
-      // ▼ [핵심 추가] 침묵 감지 대기 시간을 1.2초(1200ms)로 단축
       speechConfig.setProperty(sdk.PropertyId.SpeechServiceConnection_EndSilenceTimeoutMs, "1200");
 
       const audioConfig = sdk.AudioConfig.fromDefaultMicrophoneInput()
@@ -205,6 +204,9 @@ export function WordQuiz({ words, accent }: { words: QuizWord[]; accent: string 
   }
 
   async function begin(list: QuizWord[]) {
+    let initialDeck = list
+    let initialContext: ContextQuizItem[] = []
+
     if (quizType === "context" || quizType === "speaking") {
       setIsGenerating(true)
       setLoadingMsgIdx(0)
@@ -234,10 +236,14 @@ export function WordQuiz({ words, accent }: { words: QuizWord[]; accent: string 
         }
       }
       if (newDeck.length === 0) return alert("문제를 만들지 못했습니다. 다시 시도해 주세요.")
+      
+      initialDeck = newDeck
+      initialContext = newContextData
       setDeck(newDeck)
       setContextData(newContextData)
     } else {
-      setDeck(shuffle(list))
+      initialDeck = shuffle(list)
+      setDeck(initialDeck)
     }
 
     setIndex(0)
@@ -255,8 +261,12 @@ export function WordQuiz({ words, accent }: { words: QuizWord[]; accent: string 
     if (quizType !== "speaking") {
       requestAnimationFrame(() => inputRef.current?.focus())
     }
-    if (quizType === "listening" && list.length > 0) {
-      setTimeout(() => playPronunciation(quizType === "context" || quizType === "speaking" ? deck[0]?.word : list[0].word), 300)
+    
+    // ▼ [자동 재생] 퀴즈가 처음 시작될 때 1번 문제를 알아서 읽어줍니다.
+    if (quizType === "listening" && initialDeck.length > 0) {
+      setTimeout(() => playPronunciation(initialDeck[0].word), 300)
+    } else if (quizType === "speaking" && initialContext.length > 0 && initialDeck.length > 0) {
+      setTimeout(() => playPronunciation(initialContext[0].sentence.replace(/___/g, initialDeck[0].word)), 300)
     }
   }
 
@@ -266,7 +276,13 @@ export function WordQuiz({ words, accent }: { words: QuizWord[]; accent: string 
     if (nextIndex < total) {
       setAnswered(nextAnswered); setIndex(nextIndex); setValue(""); setFeedback("idle"); setHintUsed(false); setPronResult(null); setWordScores([])
       if (quizType !== "speaking") requestAnimationFrame(() => inputRef.current?.focus())
-      if (quizType === "listening") setTimeout(() => playPronunciation(deck[nextIndex].word), 300)
+      
+      // ▼ [자동 재생] 다음 문제로 넘어갔을 때 새 문제를 알아서 읽어줍니다.
+      if (quizType === "listening") {
+        setTimeout(() => playPronunciation(deck[nextIndex].word), 300)
+      } else if (quizType === "speaking" && contextData[nextIndex] && deck[nextIndex]) {
+        setTimeout(() => playPronunciation(contextData[nextIndex].sentence.replace(/___/g, deck[nextIndex].word)), 300)
+      }
     } else {
       setAnswered(nextAnswered); setPhase("result")
     }
@@ -434,10 +450,11 @@ export function WordQuiz({ words, accent }: { words: QuizWord[]; accent: string 
                         {isRecording ? "듣고 있어요..." : (pronResult ? "다시 한번 채점하기" : "내 발음 채점하기")}
                       </button>
                     </div>
+                    {/* ▼ 새로 뜬 문장일 때 스피커 버튼 용도를 알려주는 안내 문구 ▼ */}
+                    {!pronResult && <p className="text-[11px] font-semibold text-muted-foreground animate-in fade-in">💡 스피커 버튼을 누르면 다시 들을 수 있어요</p>}
                     {pronResult && <p className="text-[11px] font-semibold text-muted-foreground animate-in fade-in">💡 빨간색 단어를 신경 써서 다시 연습해 보세요!</p>}
                   </div>
                   
-                  {/* ▼ 디자인 통일된 4가지 점수 박스 ▼ */}
                   {pronResult && (
                     <div className="mt-6 flex flex-col w-full items-center animate-in zoom-in duration-300">
                       <div className="grid grid-cols-4 gap-2 w-full max-w-sm mb-4">
