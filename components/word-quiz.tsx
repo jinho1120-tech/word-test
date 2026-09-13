@@ -545,7 +545,8 @@ export function WordQuiz({ words, accent }: { words: QuizWord[]; accent: string 
                         {part}
                         {i < arr.length - 1 && (
                           feedback === "idle" ? (
-                            <span className="mx-1 inline-block w-12 sm:w-16 border-b-4 border-foreground align-middle" />
+                            // ▼ align-middle 제거 및 mb-1 추가로 완벽한 '밑줄' 형태 복구
+                            <span className="mx-1 inline-block w-12 sm:w-16 border-b-4 border-foreground align-baseline mb-1" />
                           ) : (
                             <span className={cn("mx-1 px-1 font-black underline decoration-4 underline-offset-4", feedback === "correct" ? "text-green-500 decoration-green-500/30" : "text-red-500 decoration-red-500/30")}>
                               {current.word}
@@ -556,7 +557,6 @@ export function WordQuiz({ words, accent }: { words: QuizWord[]; accent: string 
                     ))}
                   </h2>
                   
-                  {/* ▼ 클릭 불가(span), 정답 확인 후에도 상시 노출하여 오답 확인 가능 */}
                   {contextData[index].options && (
                     <div className="w-full rounded-xl bg-muted/40 p-3 mb-2 flex flex-wrap justify-center gap-2 border border-border">
                       {contextData[index].options.map((opt: string, i: number) => (
@@ -585,7 +585,6 @@ export function WordQuiz({ words, accent }: { words: QuizWord[]; accent: string 
                 )
               )}
 
-              {/* ▼ h-auto를 적용하여 고정 높이를 없애고 내용물에 맞춰 깔끔하게 크기가 변하도록 수정 */}
               {quizType !== "speaking" && (
                 <div className="mb-4 flex flex-col items-center justify-center gap-3 rounded-2xl border border-border bg-muted/50 p-4 h-auto transition-all">
                   {quizType === "context" ? (
@@ -618,7 +617,6 @@ export function WordQuiz({ words, accent }: { words: QuizWord[]; accent: string 
                 </div>
               )}
 
-              {/* ▼ 입력칸 항상 띄워두기 (정답 확인 후에도 본인이 쓴 답안 확인 가능) */}
               {quizType !== "speaking" && (
                 <input ref={inputRef} type="text" value={value} onChange={(e) => setValue(e.target.value)} onKeyDown={(e) => { if (e.key === "Enter" && !e.nativeEvent.isComposing) { e.preventDefault(); if (feedback === "idle") submit(); else advance({ word: current, correct: feedback === "correct" }); } }} autoComplete="off" autoCorrect="off" autoCapitalize="none" spellCheck={false} disabled={feedback !== "idle"} placeholder="영단어를 입력하세요" className={cn("mb-2 w-full border-b-4 bg-transparent p-3 text-center text-3xl font-bold outline-none transition-colors placeholder:text-base placeholder:font-normal placeholder:text-muted-foreground", feedback === "idle" && "border-border text-foreground", feedback === "correct" && "border-green-500 text-green-600", feedback === "wrong" && "animate-shake border-red-500 text-red-500")} style={feedback === "idle" ? { caretColor: accent } : undefined} />
               )}
