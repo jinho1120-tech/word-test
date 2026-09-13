@@ -23,7 +23,6 @@ export type QuizType = "standard" | "listening" | "context" | "speaking"
 type Phase = "start" | "quiz" | "result"
 type Feedback = "idle" | "correct" | "wrong"
 type Answered = { word: QuizWord; correct: boolean }
-// ▼ 가이드 항목 추가됨
 type ContextQuizItem = { word: string; sentence: string; translation: string; clue: string; options: string[]; guide?: string }
 
 type PronunciationResult = {
@@ -499,8 +498,8 @@ export function WordQuiz({ words, accent }: { words: QuizWord[]; accent: string 
                          "💪 Try Again! 다시 한번 또박또박 읽어보세요!"}
                       </p>
 
-                      {/* ▼ 억양 점수 75점 미만일 때 등장하는 리듬 가이드 코칭 영역 */}
-                      {pronResult.prosody < 75 && contextData[index].guide && (
+                      {/* ▼ 억양 점수 90점 미만일 때 등장하는 리듬 가이드 코칭 영역 */}
+                      {pronResult.prosody < 90 && contextData[index].guide && (
                         <div className="mt-4 w-full animate-in slide-in-from-top-2 fade-in duration-500 rounded-xl bg-indigo-50/80 dark:bg-indigo-900/20 p-4 border border-indigo-100 dark:border-indigo-800/30 text-center shadow-inner">
                           <p className="text-[11px] font-bold text-indigo-500 dark:text-indigo-400 mb-1.5 flex items-center justify-center gap-1.5">
                             <Lightbulb className="size-3.5" /> 리듬을 타며 다시 읽어볼까요?
