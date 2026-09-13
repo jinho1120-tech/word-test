@@ -195,7 +195,7 @@ export async function generateContextQuiz(words: { word: string, meaning: string
 
     const endpoint = `https://generativelanguage.googleapis.com/v1beta/models/gemini-3.6-flash:generateContent?key=${apiKey}`;
     
-    // ▼ 프롬프트 최종본: 1음절도 소리 나는 대로 과감하게 분리하도록 허용!
+    // ▼ Claude의 LINGUISTIC ANNOTATION RULES 프롬프트 적용
     const promptText = `
     너는 한국의 초등학생을 위한 친절하고 다정한 영어 선생님이야.
     다음 제공된 영어 단어들을 사용해서, 아이들이 문맥을 유추할 수 있는 쉽고 자연스러운 영어 예문을 딱 1개씩 만들어줘.
@@ -204,10 +204,21 @@ export async function generateContextQuiz(words: { word: string, meaning: string
     1. 대상 단어가 들어갈 자리는 세 개의 밑줄("___")로 비워둘 것.
     2. 문장은 초등학교 수준의 쉬운 단어로 구성할 것.
     3. clue(해설) 항목에는 문장 속 어떤 단어가 힌트가 되어서 이 정답이 나오게 되었는지 친절하게 설명해 줄 것.
-    4. guide(리듬 가이드) 항목에는 문법보다 **'실제 귀에 들리는 소리'**를 가장 우선해서 악보처럼 작성해 줘.
-       - [Thought Group 끊어읽기] 전치사, 관사는 무조건 뒤에 오는 명사와 한 덩어리로 묶고, 의미상 쉴 수 있는 구나 절 끝에서만 슬래시(/)로 끊어. 
-       - [내용어 강조, 기능어 약화] 명사, 동사 등 내용어는 뼈대가 되므로 강세가 있는 곳을 **대문자**로 쓰고, 전치사, 관사 등 기능어는 약하게 휙 지나가므로 **소문자**로 써.
-       - [소리 나는 대로 쪼개기 - 매우 중요!] 1음절 단어(hands, washed 등)라도 사전적 문법에 얽매이지 말고, **실제 발음할 때 소리가 늘어지거나 뒤에 꼬리가 붙어서 2박자처럼 나뉘어 들리면 과감하게 하이픈(-)으로 쪼개어 강약을 표시해!** (예: hands -> HAN-ds, looked -> LOOK-ed). 당연히 2음절 이상의 단어도 실제 억양에 맞춰 하이픈과 대/소문자를 엄격히 구분해. (예: AF-ter, TOW-el, BO-dy)
+    4. guide(리듬 가이드) 항목은 정답 단어가 포함된 '완성된 문장'을 바탕으로 작성하되, 반드시 아래의 [LINGUISTIC ANNOTATION RULES]를 엄격하게 적용해.
+
+    [LINGUISTIC ANNOTATION RULES]
+    1. STRESS: Capitalize stressed syllables/words. Lowercase unstressed ones. For words with 2+ syllables, capitalize ONLY the primary-stressed syllable — do not capitalize the whole word. Use a hyphen to separate syllables if capitalizing part of a word (e.g., AP-ple).
+    - Stress (capitalize) content words: nouns, main/lexical verbs, adjectives, adverbs, demonstratives, question words, negatives (not/no/never).
+    - Do NOT stress (lowercase) function words: articles (a/an/the), prepositions, personal/possessive pronouns, conjunctions, infinitive "to", the verb "be", and AFFIRMATIVE auxiliary/modal verbs.
+    - EXCEPTION: negative auxiliary contractions (isn't, doesn't, can't, etc.) ARE stressed.
+    - For 1-syllable words, capitalize the entire word if stressed (e.g., HANDS), keep entirely lowercase if unstressed.
+    
+    2. PAUSE: Insert a single "/" wherever a natural reader/TTS engine would take a brief break.
+    - Insert "/" at commas, semicolons, colons, and dashes.
+    - Insert "/" at major clause boundaries in compound/complex sentences, ESPECIALLY in longer sentences (roughly 8+ words).
+    - Do NOT insert "/" inside a short phrase (e.g., between article and noun, preposition and object).
+    - Short, simple sentences often have ZERO "/" marks — do not force one in.
+
     5. 결과는 반드시 아래 JSON 배열 형식으로만 대답할 것 (다른 설명 절대 금지).
     
     [JSON 형식 예시]
