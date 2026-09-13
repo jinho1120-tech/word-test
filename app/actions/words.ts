@@ -117,7 +117,8 @@ export async function scanImageWithGemini(base64Image: string, mimeType: string)
     const apiKey = process.env.GEMINI_API_KEY?.trim();
     if (!apiKey) return { success: false, error: "API 키가 등록되지 않았습니다." };
 
-    const endpoint = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey}`;
+    // ▼ 원장님 세팅 버전(3.6-flash)으로 원상 복구!
+    const endpoint = `https://generativelanguage.googleapis.com/v1beta/models/gemini-3.6-flash:generateContent?key=${apiKey}`;
     
     const promptText = `
 이 이미지 속 표나 텍스트에서 '단어' 목록만 필터링하여 추출해줘.
@@ -193,7 +194,8 @@ export async function generateContextQuiz(words: { word: string, meaning: string
     const apiKey = process.env.GEMINI_API_KEY?.trim();
     if (!apiKey) return { success: false, error: "API 키가 등록되지 않았습니다." };
 
-    const endpoint = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey}`;
+    // ▼ 원장님 세팅 버전(3.6-flash)으로 원상 복구!
+    const endpoint = `https://generativelanguage.googleapis.com/v1beta/models/gemini-3.6-flash:generateContent?key=${apiKey}`;
     
     const promptText = `
     너는 한국의 초등학생을 위한 친절하고 다정한 영어 선생님이야.
