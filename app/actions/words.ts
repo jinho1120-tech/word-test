@@ -71,9 +71,29 @@ export async function deleteWord(id: number) {
   revalidatePath("/")
 }
 
-export async function clearWords(profile: string, date: string) {
+// ▼ 수정: subject(과목) 파라미터를 추가하여 조건부 삭제 구현
+export async function clearWords(profile: string, date: string, subject?: string) {
   assertProfile(profile)
-  await db.delete(wordEntries).where(and(eq(wordEntries.profile, profile), eq(wordEntries.assignmentDate, date)))
+  
+  if (subject && subject !== "전체") {
+    // "전체"가 아니라 특정 과목이 넘어왔다면 해당 과목만 삭제
+    await db.delete(wordEntries).where(
+      and(
+        eq(wordEntries.profile, profile),
+        eq(wordEntries.assignmentDate, date),
+        eq(wordEntries.subject, subject)
+      )
+    )
+  } else {
+    // 과목이 없거나 "전체" 탭이라면 그날의 모든 데이터를 삭제
+    await db.delete(wordEntries).where(
+      and(
+        eq(wordEntries.profile, profile),
+        eq(wordEntries.assignmentDate, date)
+      )
+    )
+  }
+  
   revalidatePath("/")
 }
 
@@ -164,7 +184,6 @@ export async function scanImageWithGemini(base64Image: string, mimeType: string)
   }
 }
 
-// ▼ 수정: 해당 날짜의 과목 목록까지 묶어서 반환하도록 변경
 export async function getActiveDates(profile: string): Promise<{ date: string, subjects: string[] }[]> {
   assertProfile(profile)
   
