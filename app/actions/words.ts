@@ -117,7 +117,7 @@ export async function scanImageWithGemini(base64Image: string, mimeType: string)
     const apiKey = process.env.GEMINI_API_KEY?.trim();
     if (!apiKey) return { success: false, error: "API 키가 등록되지 않았습니다." };
 
-    const endpoint = `https://generativelanguage.googleapis.com/v1beta/models/gemini-3.6-flash:generateContent?key=${apiKey}`;
+    const endpoint = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey}`;
     
     const promptText = `
 이 이미지 속 표나 텍스트에서 '단어' 목록만 필터링하여 추출해줘.
@@ -193,7 +193,7 @@ export async function generateContextQuiz(words: { word: string, meaning: string
     const apiKey = process.env.GEMINI_API_KEY?.trim();
     if (!apiKey) return { success: false, error: "API 키가 등록되지 않았습니다." };
 
-    const endpoint = `https://generativelanguage.googleapis.com/v1beta/models/gemini-3.6-flash:generateContent?key=${apiKey}`;
+    const endpoint = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey}`;
     
     const promptText = `
     너는 한국의 초등학생을 위한 친절하고 다정한 영어 선생님이야.
@@ -202,8 +202,9 @@ export async function generateContextQuiz(words: { word: string, meaning: string
     [규칙]
     1. 대상 단어가 들어갈 자리는 세 개의 밑줄("___")로 비워둘 것.
     2. 문장은 초등학교 수준의 쉬운 단어로 구성할 것.
-    3. clue(해설) 항목에는 문장 속 어떤 단어가 힌트가 되어서 이 정답이 나오게 되었는지, 초등학생에게 말하듯 친절하게 설명해 줄 것.
-    4. 결과는 반드시 아래 JSON 배열 형식으로만 대답할 것 (다른 설명 절대 금지).
+    3. clue(해설) 항목에는 문장 속 어떤 단어가 힌트가 되어서 이 정답이 나오게 되었는지 친절하게 설명해 줄 것.
+    4. guide(리듬 가이드) 항목에는 '정답 단어가 포함된 완성된 문장'을 기준으로, 세게 읽어야 할 강세는 **대문자**로, 자연스럽게 끊어 읽어야 할 곳은 **슬래시(/)**로 표시해 줄 것.
+    5. 결과는 반드시 아래 JSON 배열 형식으로만 대답할 것 (다른 설명 절대 금지).
     
     [JSON 형식 예시]
     [
@@ -211,7 +212,8 @@ export async function generateContextQuiz(words: { word: string, meaning: string
         "word": "apple", 
         "sentence": "I want to eat a red ___.", 
         "translation": "나는 빨간 사과를 먹고 싶어.",
-        "clue": "문장에 'eat(먹다)'과 'red(빨간)'라는 힌트가 있지? 그러니까 먹을 수 있는 빨간색 과일을 찾아봐!"
+        "clue": "문장에 'eat(먹다)'과 'red(빨간)'라는 힌트가 있지? 그러니까 먹을 수 있는 빨간색 과일을 찾아봐!",
+        "guide": "I WANT / to EAT / a RED AP-ple."
       }
     ]
 
@@ -233,7 +235,6 @@ export async function generateContextQuiz(words: { word: string, meaning: string
       const errorText = await response.text();
       console.error("구글 API 상세 에러:", errorText);
       
-      // ▼ 429 에러 감지 로직 추가
       if (response.status === 429) {
         return { success: false, isRateLimit: true, error: "AI 사용량 초과" };
       }
