@@ -188,7 +188,6 @@ export async function getLatestActiveDate(profile: string): Promise<string | nul
   return result.length > 0 ? result[0].date : null
 }
 
-// ▼ quizType 파라미터를 추가하여 if문으로 프롬프트 분기 처리
 export async function generateContextQuiz(words: { word: string, meaning: string }[], quizType: "context" | "speaking" = "context") {
   try {
     const apiKey = process.env.GEMINI_API_KEY?.trim();
@@ -196,17 +195,22 @@ export async function generateContextQuiz(words: { word: string, meaning: string
 
     const endpoint = `https://generativelanguage.googleapis.com/v1beta/models/gemini-3.6-flash:generateContent?key=${apiKey}`;
     
+    // ▼ 매번 다른 문장을 유도하기 위한 랜덤 테마 및 시드 생성
+    const themes = ["신나는 학교 생활", "가족과의 따뜻한 일상", "귀여운 동물들의 숲", "신나는 해외 여행", "베스트 프렌드와의 놀이", "맛있는 요리 대회", "즐거운 취미 생활", "신비로운 마법 학교", "우주 탐험", "미래 도시"];
+    const randomTheme = themes[Math.floor(Math.random() * themes.length)];
+    const randomSeed = Math.random().toString(36).substring(7);
+
     let promptText = "";
 
     if (quizType === "speaking") {
-      // 말하기 훈련 모드: 클로드 풀버전 규칙 + 6개 예시 + 하이픈 쪼개기 (clue 제외)
       promptText = `
       너는 한국의 초등학생을 위한 친절하고 다정한 영어 선생님이야.
       다음 제공된 영어 단어들을 사용해서, 아이들이 쉐도잉(Shadowing) 훈련을 할 수 있는 쉽고 자연스러운 영어 예문을 딱 1개씩 만들어줘.
       
       [규칙]
-      1. 문장은 초등학교 수준의 쉬운 단어로 구성할 것.
-      2. guide(리듬 가이드) 항목은 정답 단어가 포함된 '완성된 문장'을 바탕으로 아래의 [LINGUISTIC ANNOTATION RULES]를 엄격하게 적용해 작성해.
+      1. 문장은 초등학교 수준의 쉬운 단어로 구성하되, 절대 뻔한 교과서 예문(예: I like apples)을 반복하지 마.
+      2. 이번 예문의 배경 테마는 [${randomTheme}]야. 이 테마에 어울리거나 아주 기발하고 재미있는 상황을 상상해서 매번 완전히 새로운 문장을 만들어줘! (Seed: ${randomSeed})
+      3. guide(리듬 가이드) 항목은 정답 단어가 포함된 '완성된 문장'을 바탕으로 아래의 [LINGUISTIC ANNOTATION RULES]를 엄격하게 적용해 작성해.
 
       [LINGUISTIC ANNOTATION RULES]
       1. STRESS & SYLLABLE SPLITTING: Capitalize stressed syllables/words. Lowercase unstressed ones. For words with 2+ syllables, capitalize ONLY the primary-stressed syllable.
@@ -240,9 +244,9 @@ export async function generateContextQuiz(words: { word: string, meaning: string
       [
         { 
           "word": "apple", 
-          "sentence": "I want to eat a red apple.", 
-          "translation": "나는 빨간 사과를 먹고 싶어.",
-          "guide": "i WANT to EAT / a RED AP-ple."
+          "sentence": "The magic alien ate a glowing red apple.", 
+          "translation": "마법 외계인이 빛나는 빨간 사과를 먹었어요.",
+          "guide": "the MAGic A-lien / ATE a GLOWing RED AP-ple."
         }
       ]
 
@@ -250,23 +254,23 @@ export async function generateContextQuiz(words: { word: string, meaning: string
       ${JSON.stringify(words)}
       `.trim();
     } else {
-      // 문장 퀴즈 모드: 가이드 생성 생략하고 속도 최적화 (clue 포함)
       promptText = `
       너는 한국의 초등학생을 위한 친절하고 다정한 영어 선생님이야.
       다음 제공된 영어 단어들을 사용해서, 아이들이 문맥을 유추할 수 있는 쉽고 자연스러운 영어 예문을 딱 1개씩 만들어줘.
       
       [규칙]
       1. 대상 단어가 들어갈 자리는 세 개의 밑줄("___")로 비워둘 것.
-      2. 문장은 초등학교 수준의 쉬운 단어로 구성할 것.
-      3. clue(해설) 항목에는 문장 속 어떤 단어가 힌트가 되어서 이 정답이 나오게 되었는지 아이들 눈높이에서 친절하게 설명해 줄 것.
+      2. 문장은 초등학교 수준의 쉬운 단어로 구성하되, 절대 뻔한 교과서 예문(예: I like apples)을 반복하지 마.
+      3. 이번 예문의 배경 테마는 [${randomTheme}]야. 이 테마에 어울리거나 아주 기발하고 재미있는 상황을 상상해서 매번 완전히 새로운 문장을 만들어줘! (Seed: ${randomSeed})
+      4. clue(해설) 항목에는 문장 속 어떤 단어가 힌트가 되어서 이 정답이 나오게 되었는지 아이들 눈높이에서 친절하게 설명해 줄 것.
       
       결과는 반드시 아래 JSON 배열 형식으로만 대답할 것 (다른 설명 절대 금지).
       [
         { 
           "word": "apple", 
-          "sentence": "I want to eat a red ___.", 
-          "translation": "나는 빨간 사과를 먹고 싶어.",
-          "clue": "문장에 'eat(먹다)'과 'red(빨간)'라는 힌트가 있지? 그러니까 먹을 수 있는 빨간색 과일을 찾아봐!"
+          "sentence": "The magic alien ate a glowing red ___.", 
+          "translation": "마법 외계인이 빛나는 빨간 사과를 먹었어요.",
+          "clue": "문장에 'ate(먹었다)'과 외계인이 좋아하는 'red(빨간)' 과일이 힌트야! 정답은 무엇일까?"
         }
       ]
 
@@ -281,7 +285,9 @@ export async function generateContextQuiz(words: { word: string, meaning: string
       cache: "no-store",
       body: JSON.stringify({
         contents: [{ parts: [{ text: promptText }] }],
-        generationConfig: { temperature: 0.7 }
+        generationConfig: { 
+          temperature: 0.9, // ▼ 더 다채로운 창의력을 위해 온도를 0.7에서 0.9로 상향 조정
+        }
       })
     });
 
