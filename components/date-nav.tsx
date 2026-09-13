@@ -13,6 +13,21 @@ function formatKorean(date: string): string {
   return `${m}월 ${d}일 (${weekday})`
 }
 
+// ▼ 과목명별 고유 색상 매칭 함수 추가
+const subjectColors: Record<string, string> = {
+  "리딩": "bg-blue-500",
+  "스피킹": "bg-red-500",
+  "문법": "bg-green-500",
+  "단어": "bg-amber-500",
+}
+
+function getSubjectColor(subject: string) {
+  for (const key in subjectColors) {
+    if (subject.includes(key)) return subjectColors[key]
+  }
+  return "bg-purple-500" // 매칭 안 되는 나머지 과목 (기타)
+}
+
 export function DateNav({
   profile,
   date,
@@ -26,7 +41,8 @@ export function DateNav({
 }) {
   const router = useRouter()
   const [isOpen, setIsOpen] = useState(false)
-  const [activeDates, setActiveDates] = useState<string[]>([])
+  // ▼ 날짜 배열이 아닌, 날짜와 과목 배열을 모두 포함하는 객체 배열로 변경
+  const [activeDates, setActiveDates] = useState<{ date: string, subjects: string[] }[]>([])
   const popoverRef = useRef<HTMLDivElement>(null)
 
   const [calYear, calMonth] = date.split("-").map(Number)
@@ -113,9 +129,9 @@ export function DateNav({
               const dateStr = `${year}-${String(month + 1).padStart(2, "0")}-${String(d).padStart(2, "0")}`
               const isSelected = dateStr === date
               const isToday = dateStr === today
-              const hasData = activeDates.includes(dateStr)
+              const activeData = activeDates.find((ad) => ad.date === dateStr)
+              const hasData = !!activeData && activeData.subjects.length > 0
 
-              // 미래 날짜 제한(disabled) 로직을 제거했습니다.
               return (
                 <button
                   key={i}
@@ -129,16 +145,41 @@ export function DateNav({
                 >
                   {d}
                   {hasData && (
-                    <span 
-                      className={cn(
-                        "absolute bottom-1 h-1 w-1 rounded-full",
-                        isSelected ? "bg-white" : "bg-blue-500"
-                      )} 
-                    />
+                    <div className="absolute bottom-1 flex max-w-full flex-wrap justify-center gap-0.5 px-0.5">
+                      {activeData.subjects.map((sub, idx) => (
+                        <span 
+                          key={idx}
+                          title={sub}
+                          className={cn(
+                            "block h-1 w-1 rounded-full",
+                            isSelected ? "bg-white/80" : getSubjectColor(sub)
+                          )} 
+                        />
+                      ))}
+                    </div>
                   )}
                 </button>
               )
             })}
+          </div>
+
+          {/* ▼ 달력 아래 과목별 범례 (Legend) UI 추가 */}
+          <div className="mt-4 pt-3 border-t border-border">
+            <p className="text-[10px] font-bold text-muted-foreground text-center mb-2">🎨 과목별 학습 기록</p>
+            <div className="flex flex-wrap items-center justify-center gap-2.5 text-[10px] font-semibold text-foreground">
+              <div className="flex items-center gap-1">
+                <div className="w-1.5 h-1.5 rounded-full bg-blue-500" /> <span>리딩</span>
+              </div>
+              <div className="flex items-center gap-1">
+                <div className="w-1.5 h-1.5 rounded-full bg-red-500" /> <span>스피킹</span>
+              </div>
+              <div className="flex items-center gap-1">
+                <div className="w-1.5 h-1.5 rounded-full bg-green-500" /> <span>문법</span>
+              </div>
+              <div className="flex items-center gap-1">
+                <div className="w-1.5 h-1.5 rounded-full bg-amber-500" /> <span>단어</span>
+              </div>
+            </div>
           </div>
         </div>
       )}
