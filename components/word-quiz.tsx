@@ -545,8 +545,8 @@ export function WordQuiz({ words, accent }: { words: QuizWord[]; accent: string 
                         {part}
                         {i < arr.length - 1 && (
                           feedback === "idle" ? (
-                            // ▼ align-middle 제거 및 mb-1 추가로 완벽한 '밑줄' 형태 복구
-                            <span className="mx-1 inline-block w-12 sm:w-16 border-b-4 border-foreground align-baseline mb-1" />
+                            // ▼ mb-1을 제거하고 align-baseline 유지, relative top-[0.2em]로 완벽한 밑줄 만들기!
+                            <span className="mx-1 inline-block w-12 sm:w-16 border-b-4 border-foreground align-baseline relative top-[0.2em]" />
                           ) : (
                             <span className={cn("mx-1 px-1 font-black underline decoration-4 underline-offset-4", feedback === "correct" ? "text-green-500 decoration-green-500/30" : "text-red-500 decoration-red-500/30")}>
                               {current.word}
