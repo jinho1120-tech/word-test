@@ -13,7 +13,7 @@ function formatKorean(date: string): string {
   return `${m}월 ${d}일 (${weekday})`
 }
 
-// ▼ 과목명별 고유 색상 매칭 함수 추가
+// ▼ 과목명별 고유 색상 매칭
 const subjectColors: Record<string, string> = {
   "리딩": "bg-blue-500",
   "스피킹": "bg-red-500",
@@ -26,6 +26,20 @@ function getSubjectColor(subject: string) {
     if (subject.includes(key)) return subjectColors[key]
   }
   return "bg-purple-500" // 매칭 안 되는 나머지 과목 (기타)
+}
+
+// ▼ 우선순위 정렬을 위한 배열 및 함수 추가
+const SUBJECT_ORDER = ["리딩", "스피킹", "문법", "단어"]
+
+function sortSubjects(a: string, b: string) {
+  let indexA = SUBJECT_ORDER.findIndex(subject => a.includes(subject))
+  let indexB = SUBJECT_ORDER.findIndex(subject => b.includes(subject))
+  
+  // 목록에 없는 과목은 맨 뒤로(99) 보냅니다.
+  if (indexA === -1) indexA = 99
+  if (indexB === -1) indexB = 99
+  
+  return indexA - indexB
 }
 
 export function DateNav({
@@ -41,7 +55,6 @@ export function DateNav({
 }) {
   const router = useRouter()
   const [isOpen, setIsOpen] = useState(false)
-  // ▼ 날짜 배열이 아닌, 날짜와 과목 배열을 모두 포함하는 객체 배열로 변경
   const [activeDates, setActiveDates] = useState<{ date: string, subjects: string[] }[]>([])
   const popoverRef = useRef<HTMLDivElement>(null)
 
@@ -143,16 +156,18 @@ export function DateNav({
                   )}
                   style={isSelected ? { backgroundColor: accent } : {}}
                 >
-                  {d}
+                  <span className="relative z-10 mb-1">{d}</span>
                   {hasData && (
-                    <div className="absolute bottom-1 flex max-w-full flex-wrap justify-center gap-0.5 px-0.5">
-                      {activeData.subjects.map((sub, idx) => (
+                    <div className="absolute bottom-1.5 flex max-w-full flex-wrap justify-center gap-[2px] px-0.5 z-20">
+                      {/* ▼ 지정한 순서대로 정렬(sort)하여 렌더링하고, 선택된 날짜에는 테두리(ring) 추가 */}
+                      {[...activeData.subjects].sort(sortSubjects).map((sub, idx) => (
                         <span 
                           key={idx}
                           title={sub}
                           className={cn(
-                            "block h-1 w-1 rounded-full",
-                            isSelected ? "bg-white/80" : getSubjectColor(sub)
+                            "block h-1.5 w-1.5 rounded-full",
+                            getSubjectColor(sub),
+                            isSelected && "ring-[1.5px] ring-white/90 shadow-sm"
                           )} 
                         />
                       ))}
@@ -163,7 +178,7 @@ export function DateNav({
             })}
           </div>
 
-          {/* ▼ 달력 아래 과목별 범례 (Legend) UI 추가 */}
+          {/* ▼ 달력 아래 과목별 범례 (Legend) UI */}
           <div className="mt-4 pt-3 border-t border-border">
             <p className="text-[10px] font-bold text-muted-foreground text-center mb-2">🎨 과목별 학습 기록</p>
             <div className="flex flex-wrap items-center justify-center gap-2.5 text-[10px] font-semibold text-foreground">
