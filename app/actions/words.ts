@@ -195,7 +195,7 @@ export async function generateContextQuiz(words: { word: string, meaning: string
 
     const endpoint = `https://generativelanguage.googleapis.com/v1beta/models/gemini-3.6-flash:generateContent?key=${apiKey}`;
     
-    // ▼ 프롬프트 복구: 문장 맨 앞 단어 강조(대문자) 규칙 추가
+    // ▼ 프롬프트 최종 개선: 사전적 강세를 버리고 '문장 단위의 억양(Pitch Accent)'을 반영하도록 지시
     const promptText = `
     너는 한국의 초등학생을 위한 친절하고 다정한 영어 선생님이야.
     다음 제공된 영어 단어들을 사용해서, 아이들이 문맥을 유추할 수 있는 쉽고 자연스러운 영어 예문을 딱 1개씩 만들어줘.
@@ -204,11 +204,12 @@ export async function generateContextQuiz(words: { word: string, meaning: string
     1. 대상 단어가 들어갈 자리는 세 개의 밑줄("___")로 비워둘 것.
     2. 문장은 초등학교 수준의 쉬운 단어로 구성할 것.
     3. clue(해설) 항목에는 문장 속 어떤 단어가 힌트가 되어서 이 정답이 나오게 되었는지 친절하게 설명해 줄 것.
-    4. guide(리듬 가이드) 항목에는 '정답 단어가 포함된 완성된 문장'을 기준으로 실제 말할 때 들리는 소리의 호흡과 강세에 맞게 표시해 줄 것.
-       - [끊어읽기] 전치사나 관사는 뒤에 오는 명사와 한 호흡으로 묶고, 의미 단위로 쉴 수 있는 곳에서만 슬래시(/)로 끊어.
-       - [단어 내 음절 강세 - 매우 중요] 문법적인 음절 구분에 얽매이지 말고, **실제 소리를 낼 때 강세가 떨어지거나 꼬리가 붙는 소리는 과감하게 하이픈(-)으로 쪼개서 대/소문자로 강약을 명확히 표시해.** 
-         예를 들어 복수형(-s)이나 과거형(-ed)이 붙어 소리가 약해지는 경우 1음절 단어라도 쪼개서 표시해. (예: hands -> HAN-ds, looked -> LOOK-ed, apple -> AP-ple, after -> AF-ter). 강하게 발음되는 부분은 대문자, 약하게 스치듯 발음되는 부분은 소문자야.
-       - [문장 내 강세] 문장 안에서 세게 읽히는 내용어(명사, 동사 등)의 강세 부분은 대문자로, 약하게 휙 지나가는 기능어(전치사, 관사, be동사 등)는 소문자로 적어. **단, 문장 맨 처음 시작하는 단어나 의미상 특별히 강조되는 곳은 전치사나 접속사라도 강세가 들어가므로 대문자로 적어.** (예: AF-ter i WASH my HAN-ds)
+    4. guide(리듬 가이드) 항목에는 '정답 단어가 포함된 완성된 문장'을 기준으로 원어민과 TTS가 실제 발음하는 호흡과 억양(Intonation)을 완벽하게 묘사해 줄 것.
+       - [끊어읽기] 전치사나 관사는 뒤에 오는 명사와 한 호흡으로 묶고, 의미 단위로 쉴 수 있는 쉼표나 구문 끝에서만 슬래시(/)로 끊어.
+       - [단어 쪼개기] 복수형(-s), 과거형(-ed) 또는 리듬을 타기 위해 길어지는 단어는 과감하게 하이픈(-)으로 쪼개어 표시해. (예: hands -> HAN-ds, looked -> LOOK-ed).
+       - [문장 억양(Pitch Accent) - 가장 중요] **사전적 강세(Dictionary stress)에 집착하지 마!** 영어는 문장 안에서 흐름을 탈 때 억양이 변해. 특히 쉼표 앞, 문장 맨 앞, 또는 리듬을 타기 위해 단어의 '끝 음절'이 높아지고 길어지는 현상이 발생해. 
+         (예: 문장 첫머리 After가 af-TER 처럼 들리거나, body가 bo-DY 처럼 들리는 현상 반영). 반드시 **'문장 전체의 멜로디'를 상상해서, 실제 TTS 스피커에서 소리가 높아지고 길어지는 그 음절**을 대문자로 써. 
+       - 문장 안에서 세게 읽히는 의미어는 대문자로, 약하게 휙 지나가는 전치사, 관사 등은 소문자로 적어. 단, 문장 첫 시작 단어는 대문자가 들어갈 수 있어.
     5. 결과는 반드시 아래 JSON 배열 형식으로만 대답할 것 (다른 설명 절대 금지).
     
     [JSON 형식 예시]
@@ -218,7 +219,7 @@ export async function generateContextQuiz(words: { word: string, meaning: string
         "sentence": "I want to eat a red ___.", 
         "translation": "나는 빨간 사과를 먹고 싶어.",
         "clue": "문장에 'eat(먹다)'과 'red(빨간)'라는 힌트가 있지? 그러니까 먹을 수 있는 빨간색 과일을 찾아봐!",
-        "guide": "i WANT to EAT / a RED AP-ple."
+        "guide": "i WANT to EAT / a RED ap-PLE."
       }
     ]
 
