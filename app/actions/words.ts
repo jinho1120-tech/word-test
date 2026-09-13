@@ -164,16 +164,25 @@ export async function scanImageWithGemini(base64Image: string, mimeType: string)
   }
 }
 
-export async function getActiveDates(profile: string): Promise<string[]> {
+// ▼ 수정: 해당 날짜의 과목 목록까지 묶어서 반환하도록 변경
+export async function getActiveDates(profile: string): Promise<{ date: string, subjects: string[] }[]> {
   assertProfile(profile)
   
   const results = await db
-    .select({ date: wordEntries.assignmentDate })
+    .select({ date: wordEntries.assignmentDate, subject: wordEntries.subject })
     .from(wordEntries)
     .where(eq(wordEntries.profile, profile))
 
-  const uniqueDates = Array.from(new Set(results.map((r) => r.date)))
-  return uniqueDates
+  const dateMap = new Map<string, Set<string>>()
+  results.forEach((r) => {
+    if (!dateMap.has(r.date)) dateMap.set(r.date, new Set())
+    if (r.subject) dateMap.get(r.date)!.add(r.subject)
+  })
+
+  return Array.from(dateMap.entries()).map(([date, subjectSet]) => ({
+    date,
+    subjects: Array.from(subjectSet)
+  }))
 }
 
 export async function getLatestActiveDate(profile: string): Promise<string | null> {
@@ -195,7 +204,6 @@ export async function generateContextQuiz(words: { word: string, meaning: string
 
     const endpoint = `https://generativelanguage.googleapis.com/v1beta/models/gemini-3.6-flash:generateContent?key=${apiKey}`;
     
-    // ▼ 매번 다른 문장을 유도하기 위한 랜덤 테마 및 시드 생성
     const themes = ["신나는 학교 생활", "가족과의 따뜻한 일상", "귀여운 동물들의 숲", "신나는 해외 여행", "베스트 프렌드와의 놀이", "맛있는 요리 대회", "즐거운 취미 생활", "신비로운 마법 학교", "우주 탐험", "미래 도시"];
     const randomTheme = themes[Math.floor(Math.random() * themes.length)];
     const randomSeed = Math.random().toString(36).substring(7);
@@ -286,7 +294,7 @@ export async function generateContextQuiz(words: { word: string, meaning: string
       body: JSON.stringify({
         contents: [{ parts: [{ text: promptText }] }],
         generationConfig: { 
-          temperature: 0.9, // ▼ 더 다채로운 창의력을 위해 온도를 0.7에서 0.9로 상향 조정
+          temperature: 0.9, 
         }
       })
     });
