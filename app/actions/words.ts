@@ -195,7 +195,7 @@ export async function generateContextQuiz(words: { word: string, meaning: string
 
     const endpoint = `https://generativelanguage.googleapis.com/v1beta/models/gemini-3.6-flash:generateContent?key=${apiKey}`;
     
-    // ▼ 프롬프트 강화: 내용어(대문자)와 기능어(소문자)를 명확히 구분하도록 지시
+    // ▼ 프롬프트 한층 더 강화: Thought Group (의미 단위 연음) 규칙 추가
     const promptText = `
     너는 한국의 초등학생을 위한 친절하고 다정한 영어 선생님이야.
     다음 제공된 영어 단어들을 사용해서, 아이들이 문맥을 유추할 수 있는 쉽고 자연스러운 영어 예문을 딱 1개씩 만들어줘.
@@ -204,10 +204,10 @@ export async function generateContextQuiz(words: { word: string, meaning: string
     1. 대상 단어가 들어갈 자리는 세 개의 밑줄("___")로 비워둘 것.
     2. 문장은 초등학교 수준의 쉬운 단어로 구성할 것.
     3. clue(해설) 항목에는 문장 속 어떤 단어가 힌트가 되어서 이 정답이 나오게 되었는지 친절하게 설명해 줄 것.
-    4. guide(리듬 가이드) 항목에는 '정답 단어가 포함된 완성된 문장'을 기준으로 강세와 끊어 읽기를 표시해 줄 것.
-       - 자연스럽게 끊어 읽어야 할 곳은 **슬래시(/)**로 표시해.
-       - [매우 중요] 세게 읽어야 할 **내용어**(명사, 일반동사, 형용사, 부사 등)만 **대문자**로 표시해.
-       - [매우 중요] 약하게 읽어야 할 **기능어**(전치사, 관사, be동사, 대명사, 접속사 등 - 예: on, in, is, are, it, the, because)는 반드시 **소문자**로 적어. (예: TURN ON (X) -> TURN on (O) / it IS DARK (X) -> it is DARK (O))
+    4. guide(리듬 가이드) 항목에는 '정답 단어가 포함된 완성된 문장'을 기준으로 원어민의 실제 호흡(Thought Group)에 맞게 강세와 끊어 읽기를 표시해 줄 것.
+       - [매우 중요 끊어읽기] 기계적으로 단어 사이를 끊지 마! 전치사(at, in, on, to 등)나 관사(a, the)는 뒤에 오는 명사와 하나의 호흡으로 찰싹 붙여서 연음으로 발음되므로, 절대 그 뒤에서 끊지 마. 차라리 그 앞에서 끊어. (예: LOOK at / the SCREEN (X) -> LOOK at the / SCREEN (O) 또는 LOOK at the SCREEN (O))
+       - [매우 중요 강세] 세게 읽어야 할 **내용어**(명사, 일반동사, 형용사, 부사 등)만 **대문자**로 표시해.
+       - [매우 중요 약세] 약하게 읽어야 할 **기능어**(전치사, 관사, be동사, 대명사, 접속사 등 - 예: on, at, in, to, is, are, it, the, a, because)는 반드시 **소문자**로 적어. (예: TURN ON (X) -> TURN on (O))
     5. 결과는 반드시 아래 JSON 배열 형식으로만 대답할 것 (다른 설명 절대 금지).
     
     [JSON 형식 예시]
@@ -217,7 +217,7 @@ export async function generateContextQuiz(words: { word: string, meaning: string
         "sentence": "I want to eat a red ___.", 
         "translation": "나는 빨간 사과를 먹고 싶어.",
         "clue": "문장에 'eat(먹다)'과 'red(빨간)'라는 힌트가 있지? 그러니까 먹을 수 있는 빨간색 과일을 찾아봐!",
-        "guide": "I WANT / to EAT / a RED AP-ple."
+        "guide": "i WANT to EAT / a RED AP-ple."
       }
     ]
 
