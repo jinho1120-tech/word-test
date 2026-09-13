@@ -23,7 +23,7 @@ export type QuizType = "standard" | "listening" | "context" | "speaking"
 type Phase = "start" | "quiz" | "result"
 type Feedback = "idle" | "correct" | "wrong"
 type Answered = { word: QuizWord; correct: boolean }
-type ContextQuizItem = { word: string; sentence: string; translation: string; clue: string; options: string[]; guide?: string }
+type ContextQuizItem = { word: string; sentence: string; translation: string; clue?: string; options?: string[]; guide?: string }
 
 type PronunciationResult = {
   score: number;
@@ -62,7 +62,7 @@ export function WordQuiz({ words, accent }: { words: QuizWord[]; accent: string 
   const [contextData, setContextData] = useState<ContextQuizItem[]>([])
 
   const [isRecording, setIsRecording] = useState(false)
-  const [isMicReady, setIsMicReady] = useState(false) // ▼ 마이크가 진짜 준비되었는지 확인하는 상태 추가
+  const [isMicReady, setIsMicReady] = useState(false)
   const [pronResult, setPronResult] = useState<PronunciationResult | null>(null)
   const [wordScores, setWordScores] = useState<{ text: string; score: number }[]>([])
 
@@ -128,7 +128,7 @@ export function WordQuiz({ words, accent }: { words: QuizWord[]; accent: string 
 
   async function handlePronunciationAssessment(targetText: string) {
     setIsRecording(true)
-    setIsMicReady(false) // ▼ 통신 연결 대기 상태
+    setIsMicReady(false)
     setPronResult(null)
     setWordScores([]) 
     setFeedback("idle")
@@ -163,7 +163,6 @@ export function WordQuiz({ words, accent }: { words: QuizWord[]; accent: string 
       const recognizer = new sdk.SpeechRecognizer(speechConfig, audioConfig)
       pronConfig.applyTo(recognizer)
 
-      // ▼ 진짜 마이크가 켜지고 서버와 연결되었을 때 신호 감지
       recognizer.sessionStarted = (s, e) => {
         setIsMicReady(true)
       }
@@ -237,7 +236,8 @@ export function WordQuiz({ words, accent }: { words: QuizWord[]; accent: string 
       const d = shuffle(list).slice(0, countToTake) 
       const reqData = d.map(w => ({ word: w.word, meaning: w.meaning }))
       
-      const res = await generateContextQuiz(reqData)
+      // ▼ quizType을 두 번째 인자로 넘겨주어 서버에서 프롬프트를 분기하도록 함
+      const res = await generateContextQuiz(reqData, quizType)
       setIsGenerating(false)
       
       if (!res.success || !res.quizData) {
@@ -466,7 +466,6 @@ export function WordQuiz({ words, accent }: { words: QuizWord[]; accent: string 
                         <Volume2 className="size-6" />
                       </button>
                       
-                      {/* ▼ 버튼의 상태가 3단계(대기 -> 연결중 -> 말하기)로 명확하게 표시됨 */}
                       <button 
                         type="button" 
                         onClick={() => handlePronunciationAssessment(getFullSentence())}
@@ -554,7 +553,7 @@ export function WordQuiz({ words, accent }: { words: QuizWord[]; accent: string 
                     ))}
                   </h2>
                   <div className="w-full rounded-xl bg-muted/40 p-3 mb-2 flex flex-wrap justify-center gap-2 border border-border">
-                    {contextData[index].options.map((opt: string, i: number) => <span key={i} className="px-3 py-1.5 bg-card rounded-lg text-sm font-bold text-foreground shadow-sm">{opt}</span>)}
+                    {contextData[index].options?.map((opt: string, i: number) => <span key={i} className="px-3 py-1.5 bg-card rounded-lg text-sm font-bold text-foreground shadow-sm">{opt}</span>)}
                   </div>
                 </div>
               ) : (
@@ -580,7 +579,9 @@ export function WordQuiz({ words, accent }: { words: QuizWord[]; accent: string 
                         <div className="flex flex-col items-center gap-3 animate-in fade-in duration-200">
                           <div className="flex flex-col gap-1.5">
                             <p className="text-sm font-bold text-foreground">🇰🇷 해석: {contextData[index].translation}</p>
-                            <p className="text-xs font-medium text-blue-600 dark:text-blue-400">💡 AI 선생님 해설: {contextData[index].clue}</p>
+                            {contextData[index].clue && (
+                              <p className="text-xs font-medium text-blue-600 dark:text-blue-400">💡 AI 선생님 해설: {contextData[index].clue}</p>
+                            )}
                           </div>
                           
                           {feedback !== "idle" && (
