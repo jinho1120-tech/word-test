@@ -23,7 +23,8 @@ export type QuizType = "standard" | "listening" | "context" | "speaking"
 type Phase = "start" | "quiz" | "result"
 type Feedback = "idle" | "correct" | "wrong"
 type Answered = { word: QuizWord; correct: boolean }
-type ContextQuizItem = { word: string; sentence: string; translation: string; clue: string; options: string[] }
+// ▼ 가이드 항목 추가됨
+type ContextQuizItem = { word: string; sentence: string; translation: string; clue: string; options: string[]; guide?: string }
 
 type PronunciationResult = {
   score: number;
@@ -208,7 +209,6 @@ export function WordQuiz({ words, accent }: { words: QuizWord[]; accent: string 
   }
 
   async function begin(list: QuizWord[]) {
-    // 오디오 권한 우회 (엔진 깨우기)
     try {
       if (typeof window !== "undefined" && "speechSynthesis" in window) {
         window.speechSynthesis.cancel()
@@ -498,6 +498,21 @@ export function WordQuiz({ words, accent }: { words: QuizWord[]; accent: string 
                          pronResult.score >= 60 ? "👍 Good! 조금만 더 연습해볼까요?" :
                          "💪 Try Again! 다시 한번 또박또박 읽어보세요!"}
                       </p>
+
+                      {/* ▼ 억양 점수 75점 미만일 때 등장하는 리듬 가이드 코칭 영역 */}
+                      {pronResult.prosody < 75 && contextData[index].guide && (
+                        <div className="mt-4 w-full animate-in slide-in-from-top-2 fade-in duration-500 rounded-xl bg-indigo-50/80 dark:bg-indigo-900/20 p-4 border border-indigo-100 dark:border-indigo-800/30 text-center shadow-inner">
+                          <p className="text-[11px] font-bold text-indigo-500 dark:text-indigo-400 mb-1.5 flex items-center justify-center gap-1.5">
+                            <Lightbulb className="size-3.5" /> 리듬을 타며 다시 읽어볼까요?
+                          </p>
+                          <p className="text-base sm:text-lg font-black text-indigo-900 dark:text-indigo-100 tracking-wide">
+                            {contextData[index].guide}
+                          </p>
+                          <p className="mt-1 text-[10px] font-semibold text-indigo-400/80 dark:text-indigo-500">
+                            대문자는 세게, 슬래시(/)에서는 쉬어보세요
+                          </p>
+                        </div>
+                      )}
                     </div>
                   )}
                 </div>
