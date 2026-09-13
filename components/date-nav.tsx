@@ -13,7 +13,6 @@ function formatKorean(date: string): string {
   return `${m}월 ${d}일 (${weekday})`
 }
 
-// ▼ 과목명별 고유 색상 매칭
 const subjectColors: Record<string, string> = {
   "리딩": "bg-blue-500",
   "스피킹": "bg-red-500",
@@ -25,17 +24,15 @@ function getSubjectColor(subject: string) {
   for (const key in subjectColors) {
     if (subject.includes(key)) return subjectColors[key]
   }
-  return "bg-purple-500" // 매칭 안 되는 나머지 과목 (기타)
+  return "bg-purple-500" 
 }
 
-// ▼ 우선순위 정렬을 위한 배열 및 함수 추가
 const SUBJECT_ORDER = ["리딩", "스피킹", "문법", "단어"]
 
 function sortSubjects(a: string, b: string) {
   let indexA = SUBJECT_ORDER.findIndex(subject => a.includes(subject))
   let indexB = SUBJECT_ORDER.findIndex(subject => b.includes(subject))
   
-  // 목록에 없는 과목은 맨 뒤로(99) 보냅니다.
   if (indexA === -1) indexA = 99
   if (indexB === -1) indexB = 99
   
@@ -61,9 +58,22 @@ export function DateNav({
   const [calYear, calMonth] = date.split("-").map(Number)
   const [viewDate, setViewDate] = useState(new Date(calYear, calMonth - 1, 1))
 
-  useEffect(() => {
+  // ▼ 최신 데이터를 불러오는 함수를 따로 분리합니다.
+  const fetchActiveDates = () => {
     getActiveDates(profile).then(setActiveDates).catch(console.error)
+  }
+
+  // 1. 처음 화면이 켜질 때 불러오기
+  useEffect(() => {
+    fetchActiveDates()
   }, [profile])
+
+  // 2. ▼ 달력 팝업을 '열 때마다' 최신 데이터를 다시 불러오도록 추가! (즉각 반영)
+  useEffect(() => {
+    if (isOpen) {
+      fetchActiveDates()
+    }
+  }, [isOpen])
 
   useEffect(() => {
     function handleClickOutside(event: MouseEvent) {
@@ -159,7 +169,6 @@ export function DateNav({
                   <span className="relative z-10 mb-1">{d}</span>
                   {hasData && (
                     <div className="absolute bottom-1.5 flex max-w-full flex-wrap justify-center gap-[2px] px-0.5 z-20">
-                      {/* ▼ 지정한 순서대로 정렬(sort)하여 렌더링하고, 선택된 날짜에는 테두리(ring) 추가 */}
                       {[...activeData.subjects].sort(sortSubjects).map((sub, idx) => (
                         <span 
                           key={idx}
@@ -178,7 +187,6 @@ export function DateNav({
             })}
           </div>
 
-          {/* ▼ 달력 아래 과목별 범례 (Legend) UI */}
           <div className="mt-4 pt-3 border-t border-border">
             <p className="text-[10px] font-bold text-muted-foreground text-center mb-2">🎨 과목별 학습 기록</p>
             <div className="flex flex-wrap items-center justify-center gap-2.5 text-[10px] font-semibold text-foreground">
