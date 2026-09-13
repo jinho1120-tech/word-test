@@ -1,7 +1,7 @@
 "use client"
 
 import React, { useMemo, useRef, useState, useEffect } from "react"
-import { Lightbulb, Check, X, ArrowRight, Volume2, Sparkles, BrainCircuit, Mic } from "lucide-react"
+import { Lightbulb, Check, X, ArrowRight, Volume2, Sparkles, BrainCircuit, Mic, Loader2 } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { recordQuizResult, generateContextQuiz } from "@/app/actions/words"
 import confetti from "canvas-confetti"
@@ -62,12 +62,12 @@ export function WordQuiz({ words, accent }: { words: QuizWord[]; accent: string 
   const [contextData, setContextData] = useState<ContextQuizItem[]>([])
 
   const [isRecording, setIsRecording] = useState(false)
+  const [isMicReady, setIsMicReady] = useState(false) // ▼ 마이크가 진짜 준비되었는지 확인하는 상태 추가
   const [pronResult, setPronResult] = useState<PronunciationResult | null>(null)
   const [wordScores, setWordScores] = useState<{ text: string; score: number }[]>([])
 
   const current = deck[index]
   const total = deck.length
-  const correctCount = answered.filter((a) => a.correct).length
   const currentName = accent === "#6366f1" ? "지온" : "예온"
 
   const loadingMessages = [
@@ -79,8 +79,8 @@ export function WordQuiz({ words, accent }: { words: QuizWord[]; accent: string 
 
   const score = useMemo(() => {
     if (total === 0) return 0
-    return Math.round((correctCount / total) * 100)
-  }, [correctCount, total])
+    return Math.round((answered.filter((a) => a.correct).length / total) * 100)
+  }, [answered, total])
 
   const wrongWords = useMemo(() => {
     return answered.filter((a) => !a.correct).map((a) => a.word)
@@ -128,6 +128,7 @@ export function WordQuiz({ words, accent }: { words: QuizWord[]; accent: string 
 
   async function handlePronunciationAssessment(targetText: string) {
     setIsRecording(true)
+    setIsMicReady(false) // ▼ 통신 연결 대기 상태
     setPronResult(null)
     setWordScores([]) 
     setFeedback("idle")
@@ -162,6 +163,11 @@ export function WordQuiz({ words, accent }: { words: QuizWord[]; accent: string 
       const recognizer = new sdk.SpeechRecognizer(speechConfig, audioConfig)
       pronConfig.applyTo(recognizer)
 
+      // ▼ 진짜 마이크가 켜지고 서버와 연결되었을 때 신호 감지
+      recognizer.sessionStarted = (s, e) => {
+        setIsMicReady(true)
+      }
+
       recognizer.recognizeOnceAsync(
         (result) => {
           if (result.reason === sdk.ResultReason.RecognizedSpeech) {
@@ -189,21 +195,24 @@ export function WordQuiz({ words, accent }: { words: QuizWord[]; accent: string 
               setFeedback("wrong")
             }
           } else {
-            alert("목소리가 잘 안 들렸어요. 마이크 가까이서 다시 말해주세요!")
+            alert("목소리가 너무 작거나 짧게 들렸어요. 화면에 '이제 말씀하세요!'가 뜨면 시작해 주세요.")
           }
           recognizer.close()
           setIsRecording(false)
+          setIsMicReady(false)
         },
         (err) => {
           console.error("Azure 에러:", err)
           alert("마이크 접근이 거부되었거나 서버에 연결할 수 없습니다.")
           recognizer.close()
           setIsRecording(false)
+          setIsMicReady(false)
         }
       )
     } catch (error) {
       console.error("발음 평가 초기화 실패:", error)
       setIsRecording(false)
+      setIsMicReady(false)
     }
   }
 
@@ -456,14 +465,25 @@ export function WordQuiz({ words, accent }: { words: QuizWord[]; accent: string 
                       <button type="button" onClick={() => playPronunciation(getFullSentence())} className="flex size-14 items-center justify-center rounded-full bg-muted text-foreground shadow-sm transition-transform hover:scale-105">
                         <Volume2 className="size-6" />
                       </button>
+                      
+                      {/* ▼ 버튼의 상태가 3단계(대기 -> 연결중 -> 말하기)로 명확하게 표시됨 */}
                       <button 
                         type="button" 
                         onClick={() => handlePronunciationAssessment(getFullSentence())}
                         disabled={isRecording}
-                        className={cn("flex items-center gap-2 rounded-full px-6 py-2 font-black text-white shadow-lg transition-all active:scale-95", isRecording ? "bg-red-500 animate-pulse scale-105" : (pronResult ? "bg-gradient-to-r from-amber-500 to-orange-500 hover:scale-105" : "bg-gradient-to-r from-indigo-500 to-blue-600 hover:scale-105"))}
+                        className={cn("flex items-center gap-2 rounded-full px-6 py-2 font-black text-white shadow-lg transition-all active:scale-95 min-w-[200px] justify-center", 
+                          isRecording && !isMicReady ? "bg-amber-500 opacity-90" : 
+                          isRecording && isMicReady ? "bg-red-500 animate-pulse scale-105" : 
+                          (pronResult ? "bg-gradient-to-r from-amber-500 to-orange-500 hover:scale-105" : "bg-gradient-to-r from-indigo-500 to-blue-600 hover:scale-105")
+                        )}
                       >
-                        <Mic className={cn("size-5", isRecording && "animate-bounce")} />
-                        {isRecording ? "듣고 있어요..." : (pronResult ? "다시 한번 채점하기" : "내 발음 채점하기")}
+                        {isRecording && !isMicReady && <Loader2 className="size-5 animate-spin" />}
+                        {isRecording && isMicReady && <Mic className="size-5 animate-bounce" />}
+                        {!isRecording && <Mic className="size-5" />}
+                        
+                        {isRecording && !isMicReady ? "마이크 연결 중..." : 
+                         isRecording && isMicReady ? "🔴 이제 말씀하세요!" : 
+                         (pronResult ? "다시 한번 채점하기" : "내 발음 채점하기")}
                       </button>
                     </div>
                     {!pronResult && <p className="text-[11px] font-semibold text-muted-foreground animate-in fade-in">💡 스피커 버튼을 누르면 다시 들을 수 있어요</p>}
@@ -498,7 +518,6 @@ export function WordQuiz({ words, accent }: { words: QuizWord[]; accent: string 
                          "💪 Try Again! 다시 한번 또박또박 읽어보세요!"}
                       </p>
 
-                      {/* ▼ 억양 점수 90점 미만일 때 등장하는 리듬 가이드 코칭 영역 */}
                       {pronResult.prosody < 90 && contextData[index].guide && (
                         <div className="mt-4 w-full animate-in slide-in-from-top-2 fade-in duration-500 rounded-xl bg-indigo-50/80 dark:bg-indigo-900/20 p-4 border border-indigo-100 dark:border-indigo-800/30 text-center shadow-inner">
                           <p className="text-[11px] font-bold text-indigo-500 dark:text-indigo-400 mb-1.5 flex items-center justify-center gap-1.5">
