@@ -188,53 +188,92 @@ export async function getLatestActiveDate(profile: string): Promise<string | nul
   return result.length > 0 ? result[0].date : null
 }
 
-export async function generateContextQuiz(words: { word: string, meaning: string }[]) {
+// ▼ quizType 파라미터를 추가하여 if문으로 프롬프트 분기 처리
+export async function generateContextQuiz(words: { word: string, meaning: string }[], quizType: "context" | "speaking" = "context") {
   try {
     const apiKey = process.env.GEMINI_API_KEY?.trim();
     if (!apiKey) return { success: false, error: "API 키가 등록되지 않았습니다." };
 
     const endpoint = `https://generativelanguage.googleapis.com/v1beta/models/gemini-3.6-flash:generateContent?key=${apiKey}`;
     
-    // ▼ Claude의 LINGUISTIC ANNOTATION RULES 프롬프트 적용
-    const promptText = `
-    너는 한국의 초등학생을 위한 친절하고 다정한 영어 선생님이야.
-    다음 제공된 영어 단어들을 사용해서, 아이들이 문맥을 유추할 수 있는 쉽고 자연스러운 영어 예문을 딱 1개씩 만들어줘.
-    
-    [규칙]
-    1. 대상 단어가 들어갈 자리는 세 개의 밑줄("___")로 비워둘 것.
-    2. 문장은 초등학교 수준의 쉬운 단어로 구성할 것.
-    3. clue(해설) 항목에는 문장 속 어떤 단어가 힌트가 되어서 이 정답이 나오게 되었는지 친절하게 설명해 줄 것.
-    4. guide(리듬 가이드) 항목은 정답 단어가 포함된 '완성된 문장'을 바탕으로 작성하되, 반드시 아래의 [LINGUISTIC ANNOTATION RULES]를 엄격하게 적용해.
+    let promptText = "";
 
-    [LINGUISTIC ANNOTATION RULES]
-    1. STRESS: Capitalize stressed syllables/words. Lowercase unstressed ones. For words with 2+ syllables, capitalize ONLY the primary-stressed syllable — do not capitalize the whole word. Use a hyphen to separate syllables if capitalizing part of a word (e.g., AP-ple).
-    - Stress (capitalize) content words: nouns, main/lexical verbs, adjectives, adverbs, demonstratives, question words, negatives (not/no/never).
-    - Do NOT stress (lowercase) function words: articles (a/an/the), prepositions, personal/possessive pronouns, conjunctions, infinitive "to", the verb "be", and AFFIRMATIVE auxiliary/modal verbs.
-    - EXCEPTION: negative auxiliary contractions (isn't, doesn't, can't, etc.) ARE stressed.
-    - For 1-syllable words, capitalize the entire word if stressed (e.g., HANDS), keep entirely lowercase if unstressed.
-    
-    2. PAUSE: Insert a single "/" wherever a natural reader/TTS engine would take a brief break.
-    - Insert "/" at commas, semicolons, colons, and dashes.
-    - Insert "/" at major clause boundaries in compound/complex sentences, ESPECIALLY in longer sentences (roughly 8+ words).
-    - Do NOT insert "/" inside a short phrase (e.g., between article and noun, preposition and object).
-    - Short, simple sentences often have ZERO "/" marks — do not force one in.
+    if (quizType === "speaking") {
+      // 말하기 훈련 모드: 클로드 풀버전 규칙 + 6개 예시 + 하이픈 쪼개기 (clue 제외)
+      promptText = `
+      너는 한국의 초등학생을 위한 친절하고 다정한 영어 선생님이야.
+      다음 제공된 영어 단어들을 사용해서, 아이들이 쉐도잉(Shadowing) 훈련을 할 수 있는 쉽고 자연스러운 영어 예문을 딱 1개씩 만들어줘.
+      
+      [규칙]
+      1. 문장은 초등학교 수준의 쉬운 단어로 구성할 것.
+      2. guide(리듬 가이드) 항목은 정답 단어가 포함된 '완성된 문장'을 바탕으로 아래의 [LINGUISTIC ANNOTATION RULES]를 엄격하게 적용해 작성해.
 
-    5. 결과는 반드시 아래 JSON 배열 형식으로만 대답할 것 (다른 설명 절대 금지).
-    
-    [JSON 형식 예시]
-    [
-      { 
-        "word": "apple", 
-        "sentence": "I want to eat a red ___.", 
-        "translation": "나는 빨간 사과를 먹고 싶어.",
-        "clue": "문장에 'eat(먹다)'과 'red(빨간)'라는 힌트가 있지? 그러니까 먹을 수 있는 빨간색 과일을 찾아봐!",
-        "guide": "i WANT to EAT / a RED AP-ple."
-      }
-    ]
+      [LINGUISTIC ANNOTATION RULES]
+      1. STRESS & SYLLABLE SPLITTING: Capitalize stressed syllables/words. Lowercase unstressed ones. For words with 2+ syllables, capitalize ONLY the primary-stressed syllable.
+      - Stress (capitalize) content words: nouns, main/lexical verbs, adjectives, adverbs, demonstratives, question words, negatives.
+      - Do NOT stress (lowercase) function words: articles, prepositions, pronouns, conjunctions, infinitive "to", the verb "be", and AFFIRMATIVE auxiliary/modal verbs.
+      - EXCEPTION 1: negative auxiliary contractions (isn't, doesn't, can't, etc.) ARE stressed.
+      - EXCEPTION 2 (stranded at clause end): a preposition or infinitive "to" left with no object/verb following it takes its full form and is stressed (e.g., "WHO are you TALKing TO?").
+      - EXCEPTION 3 (verb standing alone): an auxiliary/modal verb with no main verb following it is stressed (e.g., "i CAN'T RUN as FAST as she CAN.").
+      - [CRITICAL HYPHENATION RULE]: If a word sounds like it stretches or has a trailing sound (even 1-syllable words with -s or -ed like "hands" or "looked"), heavily use hyphens to separate the strong and weak parts phonetically (e.g., hands -> HAN-ds, looked -> LOOK-ed, after -> AF-ter, body -> BO-dy, towel -> TOW-el).
 
-    [요청 단어 목록]
-    ${JSON.stringify(words)}
-    `.trim();
+      2. PAUSE:
+      - Insert "/" at commas, semicolons, colons, and dashes.
+      - Insert "/" at major clause boundaries, ESPECIALLY in longer sentences (roughly 8+ words).
+      - Do NOT insert "/" inside a short phrase.
+
+      [EXAMPLES]
+      Input: I want to go to the store.
+      Output: i WANT to go to the STORE.
+      Input: She doesn't like coffee, but she loves tea.
+      Output: she DOESn't like COFfee, / but she LOVES TEA.
+      Input: Can you help me with my homework?
+      Output: can you HELP me with my HOMEwork?
+      Input: The weather was so beautiful that we decided to go for a walk in the park.
+      Output: the WEATHer was SO BEAUtiful / that we deCIDed to GO for a WALK in the PARK.
+      Input: Who are you talking to?
+      Output: WHO are you TALKing TO?
+      Input: I can't run as fast as she can.
+      Output: i CAN'T RUN as FAST as she CAN.
+
+      결과는 반드시 아래 JSON 배열 형식으로만 대답할 것.
+      [
+        { 
+          "word": "apple", 
+          "sentence": "I want to eat a red apple.", 
+          "translation": "나는 빨간 사과를 먹고 싶어.",
+          "guide": "i WANT to EAT / a RED AP-ple."
+        }
+      ]
+
+      [요청 단어 목록]
+      ${JSON.stringify(words)}
+      `.trim();
+    } else {
+      // 문장 퀴즈 모드: 가이드 생성 생략하고 속도 최적화 (clue 포함)
+      promptText = `
+      너는 한국의 초등학생을 위한 친절하고 다정한 영어 선생님이야.
+      다음 제공된 영어 단어들을 사용해서, 아이들이 문맥을 유추할 수 있는 쉽고 자연스러운 영어 예문을 딱 1개씩 만들어줘.
+      
+      [규칙]
+      1. 대상 단어가 들어갈 자리는 세 개의 밑줄("___")로 비워둘 것.
+      2. 문장은 초등학교 수준의 쉬운 단어로 구성할 것.
+      3. clue(해설) 항목에는 문장 속 어떤 단어가 힌트가 되어서 이 정답이 나오게 되었는지 아이들 눈높이에서 친절하게 설명해 줄 것.
+      
+      결과는 반드시 아래 JSON 배열 형식으로만 대답할 것 (다른 설명 절대 금지).
+      [
+        { 
+          "word": "apple", 
+          "sentence": "I want to eat a red ___.", 
+          "translation": "나는 빨간 사과를 먹고 싶어.",
+          "clue": "문장에 'eat(먹다)'과 'red(빨간)'라는 힌트가 있지? 그러니까 먹을 수 있는 빨간색 과일을 찾아봐!"
+        }
+      ]
+
+      [요청 단어 목록]
+      ${JSON.stringify(words)}
+      `.trim();
+    }
 
     const response = await fetch(endpoint, {
       method: "POST",
