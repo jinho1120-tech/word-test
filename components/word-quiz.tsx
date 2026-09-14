@@ -116,17 +116,57 @@ export function WordQuiz({ words, accent }: { words: QuizWord[]; accent: string 
     }
   }, [phase, score, total]);
 
-  function playPronunciation(word: string) {
+  // ▼ Azure Neural TTS가 적용된 playPronunciation 함수
+  async function playPronunciation(targetText: string) {
     try {
       if (typeof window !== "undefined" && "speechSynthesis" in window) {
         window.speechSynthesis.cancel()
-        const utterance = new SpeechSynthesisUtterance(word)
-        utterance.lang = "en-US"
-        utterance.rate = 0.85
-        window.speechSynthesis.speak(utterance)
       }
+
+      const key = process.env.NEXT_PUBLIC_AZURE_SPEECH_KEY
+      const region = process.env.NEXT_PUBLIC_AZURE_SPEECH_REGION
+
+      if (!key || !region) {
+        fallbackTTS(targetText)
+        return
+      }
+
+      const sdk = await import("microsoft-cognitiveservices-speech-sdk")
+      const speechConfig = sdk.SpeechConfig.fromSubscription(key, region)
+      speechConfig.speechSynthesisVoiceName = "en-US-JennyNeural" 
+      
+      const synthesizer = new sdk.SpeechSynthesizer(speechConfig)
+
+      synthesizer.speakTextAsync(
+        targetText,
+        (result) => {
+          if (result.reason === sdk.ResultReason.SynthesizingAudioCompleted) {
+            // 재생 성공
+          } else {
+            console.warn("Azure TTS 재생 실패, 기본 TTS로 전환합니다.")
+            fallbackTTS(targetText)
+          }
+          synthesizer.close()
+        },
+        (err) => {
+          console.error("Azure TTS 에러:", err)
+          fallbackTTS(targetText)
+          synthesizer.close()
+        }
+      )
     } catch (e) {
       console.error("음성 재생 에러:", e)
+      fallbackTTS(targetText)
+    }
+  }
+
+  // ▼ 비상용(Fallback) 브라우저 기본 TTS
+  function fallbackTTS(text: string) {
+    if (typeof window !== "undefined" && "speechSynthesis" in window) {
+      const utterance = new SpeechSynthesisUtterance(text)
+      utterance.lang = "en-US"
+      utterance.rate = 0.85
+      window.speechSynthesis.speak(utterance)
     }
   }
 
@@ -656,7 +696,6 @@ export function WordQuiz({ words, accent }: { words: QuizWord[]; accent: string 
                 >
                   {feedback === "idle" && <>정답 확인 <ArrowRight className="size-5" /></>}
                   {feedback === "correct" && <>잘했어요! (다음 문제로 ➔)</>}
-                  {/* ▼ 수정됨: 실전 문장일 때만 "해설 확인", 그 외에는 "정답 확인" 문구로 변경 */}
                   {feedback === "wrong" && <>{quizType === "context" ? "해설 확인 후 다음 문제로 ➔" : "정답 확인 후 다음 문제로 ➔"}</>}
                 </button>
               )}
