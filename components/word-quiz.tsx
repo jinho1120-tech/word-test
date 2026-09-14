@@ -11,9 +11,8 @@ import { QuizResult } from "./quiz-result"
 
 const DAD_PHONE = "01032854101" 
 
-// ▼ [아빠 전용 설정] 목소리와 속도를 입맛대로 쉽게 바꿀 수 있습니다!
+// ▼ [아빠 전용 설정] 목소리 성우 변경 가능
 const TTS_VOICE = "en-US-AnaNeural" // 여자 아이(Ana), 성인 여성(Jenny), 부드러운 여성(Aria)
-const TTS_SPEED = "-15%" // 리딩 속도 (0%는 원어민 정상 속도, -15%는 약간 느리고 또렷하게)
 
 export type QuizWord = {
   id: number
@@ -47,7 +46,7 @@ function getGlobalAudio() {
   return globalAudio;
 }
 
-// ▼ 캐시 저장소 (Azure에서 받아온 데이터를 가상의 파일 URL 형태로 저장)
+// ▼ 속도별로 오디오를 따로 저장하기 위해 캐시 유지
 const ttsCache = new Map<string, string>();
 
 function shuffle<T>(arr: T[]): T[] {
@@ -82,6 +81,9 @@ export function WordQuiz({ words, accent }: { words: QuizWord[]; accent: string 
   const [isMicReady, setIsMicReady] = useState(false)
   const [pronResult, setPronResult] = useState<PronunciationResult | null>(null)
   const [wordScores, setWordScores] = useState<{ text: string; score: number }[]>([])
+
+  // ▼ 속도 조절 스위치 상태 (기본값: false = 보통 속도)
+  const [isSlowMode, setIsSlowMode] = useState(false)
 
   const current = deck[index]
   const total = deck.length
@@ -133,7 +135,7 @@ export function WordQuiz({ words, accent }: { words: QuizWord[]; accent: string 
     }
   }, [phase, score, total]);
 
-  // ▼ Azure TTS (여자 아이 목소리 + 속도 조절 SSML 적용)
+  // ▼ Azure TTS (속도 조절 및 캐시 분리 적용)
   async function playPronunciation(targetText: string) {
     try {
       if (typeof window !== "undefined" && "speechSynthesis" in window) {
@@ -141,9 +143,12 @@ export function WordQuiz({ words, accent }: { words: QuizWord[]; accent: string 
       }
 
       const audio = getGlobalAudio();
+      
+      // 속도에 따라 캐시 이름을 다르게 저장합니다 (예: "apple_normal", "apple_slow")
+      const cacheKey = `${targetText}_${isSlowMode ? 'slow' : 'normal'}`;
 
-      if (audio && ttsCache.has(targetText)) {
-        audio.src = ttsCache.get(targetText)!;
+      if (audio && ttsCache.has(cacheKey)) {
+        audio.src = ttsCache.get(cacheKey)!;
         audio.play().catch((e) => {
           console.error("캐시 오디오 재생 실패:", e);
           fallbackTTS(targetText);
@@ -165,14 +170,15 @@ export function WordQuiz({ words, accent }: { words: QuizWord[]; accent: string 
       
       const synthesizer = new sdk.SpeechSynthesizer(speechConfig, null)
 
-      // 텍스트에 포함된 특수문자가 XML을 깨트리지 않도록 안전하게 변환
       const safeText = targetText.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
       
-      // SSML을 구성하여 목소리와 속도를 커스텀으로 설정합니다.
+      // 느린 모드일 때 -20%(0.8배속) 적용
+      const speedRate = isSlowMode ? "-20%" : "0%";
+      
       const ssml = `
         <speak version="1.0" xmlns="http://www.w3.org/2001/10/synthesis" xml:lang="en-US">
           <voice name="${TTS_VOICE}">
-            <prosody rate="${TTS_SPEED}">${safeText}</prosody>
+            <prosody rate="${speedRate}">${safeText}</prosody>
           </voice>
         </speak>
       `.trim();
@@ -185,7 +191,7 @@ export function WordQuiz({ words, accent }: { words: QuizWord[]; accent: string 
             const blob = new Blob([audioData], { type: "audio/wav" });
             const url = URL.createObjectURL(blob);
             
-            ttsCache.set(targetText, url);
+            ttsCache.set(cacheKey, url);
 
             if (audio) {
               audio.src = url;
@@ -218,8 +224,7 @@ export function WordQuiz({ words, accent }: { words: QuizWord[]; accent: string 
     if (typeof window !== "undefined" && "speechSynthesis" in window) {
       const utterance = new SpeechSynthesisUtterance(text)
       utterance.lang = "en-US"
-      // 기본 브라우저 TTS도 속도를 약간 늦춰줍니다 (기본값 1.0)
-      utterance.rate = 0.85 
+      utterance.rate = isSlowMode ? 0.75 : 0.9 
       window.speechSynthesis.speak(utterance)
     }
   }
@@ -501,8 +506,24 @@ export function WordQuiz({ words, accent }: { words: QuizWord[]; accent: string 
               <div className="h-1.5 transition-all duration-300" style={{ width: `${((index + 1) / total) * 100}%`, backgroundColor: streak >= 5 ? "#f59e0b" : accent }} />
             </div>
 
-            <div className="flex justify-end p-4 pb-0 shrink-0">
-              <button onClick={() => { if (window.confirm("퀴즈를 중단할까요?")) setPhase("start") }} className="flex items-center gap-1 rounded-full bg-muted/50 px-3 py-1.5 text-xs font-bold text-muted-foreground transition-colors hover:bg-red-50 hover:text-red-500">나가기 <X className="size-3" /></button>
+            {/* ▼ 우측 상단 토글 스위치 및 나가기 버튼 영역 */}
+            <div className="flex justify-between items-center p-4 pb-0 shrink-0">
+              <button 
+                onClick={() => setIsSlowMode(!isSlowMode)} 
+                className={cn(
+                  "flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-bold transition-colors border",
+                  isSlowMode ? "bg-indigo-50 border-indigo-200 text-indigo-600" : "bg-muted/50 border-transparent text-muted-foreground hover:bg-muted"
+                )}
+              >
+                {isSlowMode ? "🐢 느리게" : "🐇 보통 속도"}
+              </button>
+              
+              <button 
+                onClick={() => { if (window.confirm("퀴즈를 중단할까요?")) setPhase("start") }} 
+                className="flex items-center gap-1 rounded-full bg-muted/50 px-3 py-1.5 text-xs font-bold text-muted-foreground transition-colors hover:bg-red-50 hover:text-red-500"
+              >
+                나가기 <X className="size-3" />
+              </button>
             </div>
 
             <div className="flex flex-col px-6 pb-8 pt-2 flex-1 overflow-y-auto">
