@@ -116,7 +116,6 @@ export function WordQuiz({ words, accent }: { words: QuizWord[]; accent: string 
     }
   }, [phase, score, total]);
 
-  // ▼ Azure Neural TTS가 적용된 playPronunciation 함수
   async function playPronunciation(targetText: string) {
     try {
       if (typeof window !== "undefined" && "speechSynthesis" in window) {
@@ -160,7 +159,6 @@ export function WordQuiz({ words, accent }: { words: QuizWord[]; accent: string 
     }
   }
 
-  // ▼ 비상용(Fallback) 브라우저 기본 TTS
   function fallbackTTS(text: string) {
     if (typeof window !== "undefined" && "speechSynthesis" in window) {
       const utterance = new SpeechSynthesisUtterance(text)
@@ -260,12 +258,21 @@ export function WordQuiz({ words, accent }: { words: QuizWord[]; accent: string 
   }
 
   async function begin(list: QuizWord[]) {
+    // ▼ iOS 오디오 강제 블로킹 해제 (Web Audio API Unlock)
     try {
-      if (typeof window !== "undefined" && "speechSynthesis" in window) {
-        window.speechSynthesis.cancel()
-        const unlock = new SpeechSynthesisUtterance("") 
-        unlock.volume = 0
-        window.speechSynthesis.speak(unlock)
+      if (typeof window !== "undefined") {
+        if ("speechSynthesis" in window) {
+          window.speechSynthesis.cancel()
+          const unlock = new SpeechSynthesisUtterance("") 
+          unlock.volume = 0
+          window.speechSynthesis.speak(unlock)
+        }
+        
+        const AudioCtx = window.AudioContext || (window as any).webkitAudioContext;
+        if (AudioCtx) {
+          const ctx = new AudioCtx();
+          ctx.resume();
+        }
       }
     } catch (e) {}
 
@@ -332,10 +339,11 @@ export function WordQuiz({ words, accent }: { words: QuizWord[]; accent: string 
       requestAnimationFrame(() => inputRef.current?.focus())
     }
     
+    // ▼ 첫 딜레이를 800ms로 변경하여 화면 전환 후 안전하게 재생되도록 수정
     if (quizType === "listening" && initialDeck.length > 0) {
-      setTimeout(() => playPronunciation(initialDeck[0].word), 300)
+      setTimeout(() => playPronunciation(initialDeck[0].word), 800)
     } else if (quizType === "speaking" && initialContext.length > 0 && initialDeck.length > 0) {
-      setTimeout(() => playPronunciation(initialContext[0].sentence.replace(/___/g, initialDeck[0].word)), 300)
+      setTimeout(() => playPronunciation(initialContext[0].sentence.replace(/___/g, initialDeck[0].word)), 800)
     }
   }
 
