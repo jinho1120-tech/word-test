@@ -71,12 +71,10 @@ export async function deleteWord(id: number) {
   revalidatePath("/")
 }
 
-// ▼ 수정: subject(과목) 파라미터를 추가하여 조건부 삭제 구현
 export async function clearWords(profile: string, date: string, subject?: string) {
   assertProfile(profile)
   
   if (subject && subject !== "전체") {
-    // "전체"가 아니라 특정 과목이 넘어왔다면 해당 과목만 삭제
     await db.delete(wordEntries).where(
       and(
         eq(wordEntries.profile, profile),
@@ -85,7 +83,6 @@ export async function clearWords(profile: string, date: string, subject?: string
       )
     )
   } else {
-    // 과목이 없거나 "전체" 탭이라면 그날의 모든 데이터를 삭제
     await db.delete(wordEntries).where(
       and(
         eq(wordEntries.profile, profile),
@@ -246,6 +243,7 @@ export async function generateContextQuiz(words: { word: string, meaning: string
       - EXCEPTION 1: negative auxiliary contractions (isn't, doesn't, can't, etc.) ARE stressed.
       - EXCEPTION 2 (stranded at clause end): a preposition or infinitive "to" left with no object/verb following it takes its full form and is stressed (e.g., "WHO are you TALKing TO?").
       - EXCEPTION 3 (verb standing alone): an auxiliary/modal verb with no main verb following it is stressed (e.g., "i CAN'T RUN as FAST as she CAN.").
+      - EXCEPTION 4: Always stress (capitalize) the FIRST word of the sentence, even if it is a pronoun like "I", "We", "He" (e.g., "WE FOUND...").
       - [CRITICAL HYPHENATION RULE]: If a word sounds like it stretches or has a trailing sound (even 1-syllable words with -s or -ed like "hands" or "looked"), heavily use hyphens to separate the strong and weak parts phonetically (e.g., hands -> HAN-ds, looked -> LOOK-ed, after -> AF-ter, body -> BO-dy, towel -> TOW-el).
 
       2. PAUSE:
@@ -255,17 +253,17 @@ export async function generateContextQuiz(words: { word: string, meaning: string
 
       [EXAMPLES]
       Input: I want to go to the store.
-      Output: i WANT to go to the STORE.
+      Output: I WANT to go to the STORE.
       Input: She doesn't like coffee, but she loves tea.
-      Output: she DOESn't like COFfee, / but she LOVES TEA.
+      Output: SHE DOESn't like COFfee, / but she LOVES TEA.
       Input: Can you help me with my homework?
-      Output: can you HELP me with my HOMEwork?
+      Output: CAN you HELP me with my HOMEwork?
       Input: The weather was so beautiful that we decided to go for a walk in the park.
-      Output: the WEATHer was SO BEAUtiful / that we deCIDed to GO for a WALK in the PARK.
+      Output: THE WEATHer was SO BEAUtiful / that we deCIDed to GO for a WALK in the PARK.
       Input: Who are you talking to?
       Output: WHO are you TALKing TO?
       Input: I can't run as fast as she can.
-      Output: i CAN'T RUN as FAST as she CAN.
+      Output: I CAN'T RUN as FAST as she CAN.
 
       결과는 반드시 아래 JSON 배열 형식으로만 대답할 것.
       [
@@ -273,7 +271,7 @@ export async function generateContextQuiz(words: { word: string, meaning: string
           "word": "apple", 
           "sentence": "The magic alien ate a glowing red apple.", 
           "translation": "마법 외계인이 빛나는 빨간 사과를 먹었어요.",
-          "guide": "the MAGic A-lien / ATE a GLOWing RED AP-ple."
+          "guide": "THE MAGic A-lien / ATE a GLOWing RED AP-ple."
         }
       ]
 
