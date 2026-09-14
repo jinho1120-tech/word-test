@@ -35,10 +35,11 @@ type PronunciationResult = {
   prosody: number;
 }
 
-// ▼ 단어 점수뿐만 아니라 쪼개진 발음기호(음소) 데이터까지 담을 수 있도록 타입 확장
+// ▼ 단어 점수 데이터에 '안 읽음(Omission)' 상태를 받을 수 있도록 errorType 속성 추가
 type WordScoreDetail = { 
   text: string; 
   score: number; 
+  errorType?: string; 
   phonemes: { phoneme: string; score: number }[];
 }
 
@@ -85,7 +86,6 @@ export function WordQuiz({ words, accent }: { words: QuizWord[]; accent: string 
   const [isMicReady, setIsMicReady] = useState(false)
   const [pronResult, setPronResult] = useState<PronunciationResult | null>(null)
   
-  // ▼ 확장된 단어 점수 저장 변수
   const [wordScores, setWordScores] = useState<WordScoreDetail[]>([])
 
   const [isSlowMode, setIsSlowMode] = useState(false)
@@ -252,7 +252,6 @@ export function WordQuiz({ words, accent }: { words: QuizWord[]; accent: string 
 
       const audioConfig = sdk.AudioConfig.fromDefaultMicrophoneInput()
 
-      // ▼ Phoneme(음소) 단위 채점을 위한 옵션이 적용되어 있습니다
       const pronConfig = new sdk.PronunciationAssessmentConfig(
         targetText,
         sdk.PronunciationAssessmentGradingSystem.HundredMark,
@@ -285,10 +284,11 @@ export function WordQuiz({ words, accent }: { words: QuizWord[]; accent: string 
             
             const wordsDetail = pron.detailResult?.Words || []
             
-            // ▼ 단어 데이터와 함께 쪼개진 음소(Phonemes) 데이터를 추출합니다!
+            // ▼ Azure에서 안 읽음(Omission) 판단 데이터도 같이 가져오도록 수정
             const mappedWords: WordScoreDetail[] = wordsDetail.map((w: any) => ({
               text: w.Word,
               score: w.PronunciationAssessment.AccuracyScore,
+              errorType: w.PronunciationAssessment.ErrorType, // "Omission", "None" 등
               phonemes: w.Phonemes?.map((p: any) => ({
                 phoneme: p.Phoneme,
                 score: p.PronunciationAssessment.AccuracyScore
@@ -560,18 +560,28 @@ export function WordQuiz({ words, accent }: { words: QuizWord[]; accent: string 
                         const cleanToken = token.replace(/[^a-zA-Z0-9']/g, '').toLowerCase()
                         let colorClass = "text-foreground"
                         let scoreItem: WordScoreDetail | null = null;
+                        let isOmitted = false; // 안 읽은 단어 여부 체크
                         
                         const scoreIdx = availableScores.findIndex(ws => ws.text.toLowerCase() === cleanToken)
                         if (scoreIdx !== -1) {
                           scoreItem = availableScores[scoreIdx]
-                          if (scoreItem.score >= 80) colorClass = "text-green-500 dark:text-green-400"
-                          else if (scoreItem.score >= 60) colorClass = "text-amber-500 dark:text-amber-400"
-                          else colorClass = "text-red-500 dark:text-red-400"
+                          
+                          // ▼ Azure에서 "Omission(건너뜀)"으로 판단한 경우 투명도+빨간색 처리
+                          if (scoreItem.errorType === "Omission") {
+                            colorClass = "text-red-400 dark:text-red-500 opacity-50"
+                            isOmitted = true;
+                          } else if (scoreItem.score >= 80) {
+                            colorClass = "text-green-500 dark:text-green-400"
+                          } else if (scoreItem.score >= 60) {
+                            colorClass = "text-amber-500 dark:text-amber-400"
+                          } else {
+                            colorClass = "text-red-500 dark:text-red-400"
+                          }
+                          
                           availableScores.splice(scoreIdx, 1) 
                         }
 
                         const isTarget = cleanToken === current.word.toLowerCase()
-                        // 정답 단어이거나, 점수가 80점 미만인 경우 밑에 발음기호를 표시
                         const showPhonemes = scoreItem && (isTarget || scoreItem.score < 80);
                         
                         return (
@@ -580,8 +590,15 @@ export function WordQuiz({ words, accent }: { words: QuizWord[]; accent: string 
                               {token}
                             </span>
                             
-                            {/* ▼ 여기에 쪼개진 발음기호 색칠 렌더링이 들어갑니다! */}
-                            {showPhonemes && scoreItem?.phonemes && scoreItem.phonemes.length > 0 && (
+                            {/* ▼ 안 읽은 단어는 발음기호 대신 "안 들림" 표시 */}
+                            {isOmitted && (
+                              <span className="mt-1 flex text-[11px] font-bold text-red-400 opacity-90 animate-in slide-in-from-top-1 fade-in duration-300">
+                                (안 들림 💦)
+                              </span>
+                            )}
+
+                            {/* ▼ 제대로 읽은 단어 중 점수가 낮은 단어는 발음기호 쪼개서 표시 */}
+                            {!isOmitted && showPhonemes && scoreItem?.phonemes && scoreItem.phonemes.length > 0 && (
                               <span className="mt-1 flex gap-[2px] text-[13px] font-medium font-mono tracking-tighter opacity-90 animate-in slide-in-from-top-1 fade-in duration-300">
                                 <span className="text-muted-foreground/40">[</span>
                                 {scoreItem.phonemes.map((p, pIdx) => {
