@@ -44,6 +44,9 @@ function getAudioContext() {
   return globalAudioCtx;
 }
 
+// ▼ Azure TTS 반복 재생 시 요금 부과를 막고 속도를 높이는 캐시 저장소
+const ttsCache = new Map<string, AudioBuffer>();
+
 function shuffle<T>(arr: T[]): T[] {
   const copy = [...arr]
   for (let i = copy.length - 1; i > 0; i--) {
@@ -127,11 +130,26 @@ export function WordQuiz({ words, accent }: { words: QuizWord[]; accent: string 
     }
   }, [phase, score, total]);
 
-  // ▼ Azure TTS 수동 버퍼링 재생 엔진 (iOS 자동 재생 우회)
+  // ▼ Azure TTS 재생 (캐시 적용 버전)
   async function playPronunciation(targetText: string) {
     try {
       if (typeof window !== "undefined" && "speechSynthesis" in window) {
         window.speechSynthesis.cancel()
+      }
+
+      const ctx = getAudioContext();
+      if (ctx && ctx.state === "suspended") {
+        ctx.resume().catch(() => {});
+      }
+
+      // 1. 캐시 확인: 이미 다운로드한 문장이라면 즉시 재생 (사용량 차감 X)
+      if (ctx && ttsCache.has(targetText)) {
+        const buffer = ttsCache.get(targetText)!;
+        const source = ctx.createBufferSource();
+        source.buffer = buffer;
+        source.connect(ctx.destination);
+        source.start(0);
+        return;
       }
 
       const key = process.env.NEXT_PUBLIC_AZURE_SPEECH_KEY
@@ -146,7 +164,6 @@ export function WordQuiz({ words, accent }: { words: QuizWord[]; accent: string 
       const speechConfig = sdk.SpeechConfig.fromSubscription(key, region)
       speechConfig.speechSynthesisVoiceName = "en-US-JennyNeural" 
       
-      // null을 전달하여 Azure의 자동 재생을 막고, 오디오 데이터만 조용히 가져옵니다.
       const synthesizer = new sdk.SpeechSynthesizer(speechConfig, null)
 
       synthesizer.speakTextAsync(
@@ -154,15 +171,14 @@ export function WordQuiz({ words, accent }: { words: QuizWord[]; accent: string 
         (result) => {
           if (result.reason === sdk.ResultReason.SynthesizingAudioCompleted) {
             const audioData = result.audioData;
-            const ctx = getAudioContext();
             
             if (ctx) {
-              // iOS 사파리를 위해 오디오 컨텍스트를 다시 강제 깨움
-              if (ctx.state === "suspended") ctx.resume().catch(()=>{});
-              
-              // 우리가 직접 만든 엔진으로 오디오 버퍼를 재생 (자동 재생 차단 우회)
               const audioDataCopy = audioData.slice(0);
               ctx.decodeAudioData(audioDataCopy, (buffer) => {
+                
+                // 2. 캐시 저장: 방금 받아온 오디오 버퍼를 저장해둡니다.
+                ttsCache.set(targetText, buffer);
+
                 const source = ctx.createBufferSource();
                 source.buffer = buffer;
                 source.connect(ctx.destination);
@@ -291,7 +307,6 @@ export function WordQuiz({ words, accent }: { words: QuizWord[]; accent: string 
   }
 
   async function begin(list: QuizWord[]) {
-    // ▼ 시작 버튼을 누르는 '즉시(동기적으로)' 오디오 엔진을 깨워 잠금을 풉니다.
     try {
       if (typeof window !== "undefined") {
         if ("speechSynthesis" in window) {
@@ -371,7 +386,6 @@ export function WordQuiz({ words, accent }: { words: QuizWord[]; accent: string 
       requestAnimationFrame(() => inputRef.current?.focus())
     }
     
-    // ▼ 이제 재생 권한이 획득되었으므로 문제 생성 후에도 완벽하게 자동 재생됩니다.
     if (quizType === "listening" && initialDeck.length > 0) {
       setTimeout(() => playPronunciation(initialDeck[0].word), 800)
     } else if (quizType === "speaking" && initialContext.length > 0 && initialDeck.length > 0) {
