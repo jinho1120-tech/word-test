@@ -227,6 +227,7 @@ export async function generateContextQuiz(words: { word: string, meaning: string
     let promptText = "";
 
     if (quizType === "speaking") {
+      // ▼ EXCEPTION 4 규칙 세분화 및 EXAMPLES 추가
       promptText = `
       너는 한국의 초등학생을 위한 친절하고 다정한 영어 선생님이야.
       다음 제공된 영어 단어들을 사용해서, 아이들이 쉐도잉(Shadowing) 훈련을 할 수 있는 쉽고 자연스러운 영어 예문을 딱 1개씩 만들어줘.
@@ -243,7 +244,7 @@ export async function generateContextQuiz(words: { word: string, meaning: string
       - EXCEPTION 1: negative auxiliary contractions (isn't, doesn't, can't, etc.) ARE stressed.
       - EXCEPTION 2 (stranded at clause end): a preposition or infinitive "to" left with no object/verb following it takes its full form and is stressed (e.g., "WHO are you TALKing TO?").
       - EXCEPTION 3 (verb standing alone): an auxiliary/modal verb with no main verb following it is stressed (e.g., "i CAN'T RUN as FAST as she CAN.").
-      - EXCEPTION 4: Always stress (capitalize) the FIRST word of the sentence, even if it is a pronoun like "I", "We", "He" (e.g., "WE FOUND...").
+      - EXCEPTION 4: Articles ("a", "an", "the") must ALWAYS be lowercase, even at the very beginning of the sentence (e.g., "a BOY...", "the DOG..."). However, subject pronouns ("I", "We", "He", "She", "They") at the beginning of a sentence CAN be capitalized if they naturally carry stress (e.g., "WE FOUND...").
       - [CRITICAL HYPHENATION RULE]: If a word sounds like it stretches or has a trailing sound (even 1-syllable words with -s or -ed like "hands" or "looked"), heavily use hyphens to separate the strong and weak parts phonetically (e.g., hands -> HAN-ds, looked -> LOOK-ed, after -> AF-ter, body -> BO-dy, towel -> TOW-el).
 
       2. PAUSE:
@@ -252,18 +253,18 @@ export async function generateContextQuiz(words: { word: string, meaning: string
       - Do NOT insert "/" inside a short phrase.
 
       [EXAMPLES]
+      Input: A cat is sleeping.
+      Output: a CAT is SLEEPing.
+      Input: The weather was so beautiful that we decided to go for a walk in the park.
+      Output: the WEATHer was SO BEAUtiful / that we deCIDed to GO for a WALK in the PARK.
+      Input: We found a glowing seashell.
+      Output: WE FOUND a GLOWing SEA-shell.
       Input: I want to go to the store.
       Output: I WANT to go to the STORE.
       Input: She doesn't like coffee, but she loves tea.
       Output: SHE DOESn't like COFfee, / but she LOVES TEA.
-      Input: Can you help me with my homework?
-      Output: CAN you HELP me with my HOMEwork?
-      Input: The weather was so beautiful that we decided to go for a walk in the park.
-      Output: THE WEATHer was SO BEAUtiful / that we deCIDed to GO for a WALK in the PARK.
       Input: Who are you talking to?
       Output: WHO are you TALKing TO?
-      Input: I can't run as fast as she can.
-      Output: I CAN'T RUN as FAST as she CAN.
 
       결과는 반드시 아래 JSON 배열 형식으로만 대답할 것.
       [
@@ -271,7 +272,7 @@ export async function generateContextQuiz(words: { word: string, meaning: string
           "word": "apple", 
           "sentence": "The magic alien ate a glowing red apple.", 
           "translation": "마법 외계인이 빛나는 빨간 사과를 먹었어요.",
-          "guide": "THE MAGic A-lien / ATE a GLOWing RED AP-ple."
+          "guide": "the MAGic A-lien / ATE a GLOWing RED AP-ple."
         }
       ]
 
