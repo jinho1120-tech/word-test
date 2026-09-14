@@ -11,8 +11,7 @@ import { QuizResult } from "./quiz-result"
 
 const DAD_PHONE = "01032854101" 
 
-// ▼ [아빠 전용 설정] 목소리 성우 변경 가능
-const TTS_VOICE = "en-US-AnaNeural" // 여자 아이(Ana), 성인 여성(Jenny), 부드러운 여성(Aria)
+const TTS_VOICE = "en-US-AnaNeural" 
 
 export type QuizWord = {
   id: number
@@ -36,7 +35,13 @@ type PronunciationResult = {
   prosody: number;
 }
 
-// ▼ iOS 오디오 강제 해제를 위한 전역 HTML5 오디오 객체
+// ▼ 단어 점수뿐만 아니라 쪼개진 발음기호(음소) 데이터까지 담을 수 있도록 타입 확장
+type WordScoreDetail = { 
+  text: string; 
+  score: number; 
+  phonemes: { phoneme: string; score: number }[];
+}
+
 let globalAudio: HTMLAudioElement | null = null;
 function getGlobalAudio() {
   if (typeof window === "undefined") return null;
@@ -46,7 +51,6 @@ function getGlobalAudio() {
   return globalAudio;
 }
 
-// ▼ 속도별로 오디오를 따로 저장하기 위해 캐시 유지
 const ttsCache = new Map<string, string>();
 
 function shuffle<T>(arr: T[]): T[] {
@@ -80,9 +84,10 @@ export function WordQuiz({ words, accent }: { words: QuizWord[]; accent: string 
   const [isRecording, setIsRecording] = useState(false)
   const [isMicReady, setIsMicReady] = useState(false)
   const [pronResult, setPronResult] = useState<PronunciationResult | null>(null)
-  const [wordScores, setWordScores] = useState<{ text: string; score: number }[]>([])
+  
+  // ▼ 확장된 단어 점수 저장 변수
+  const [wordScores, setWordScores] = useState<WordScoreDetail[]>([])
 
-  // ▼ 속도 조절 스위치 상태 (기본값: false = 보통 속도)
   const [isSlowMode, setIsSlowMode] = useState(false)
 
   const current = deck[index]
@@ -135,7 +140,6 @@ export function WordQuiz({ words, accent }: { words: QuizWord[]; accent: string 
     }
   }, [phase, score, total]);
 
-  // ▼ Azure TTS (속도 조절 및 캐시 분리 적용)
   async function playPronunciation(targetText: string) {
     try {
       if (typeof window !== "undefined" && "speechSynthesis" in window) {
@@ -143,8 +147,6 @@ export function WordQuiz({ words, accent }: { words: QuizWord[]; accent: string 
       }
 
       const audio = getGlobalAudio();
-      
-      // 속도에 따라 캐시 이름을 다르게 저장합니다 (예: "apple_normal", "apple_slow")
       const cacheKey = `${targetText}_${isSlowMode ? 'slow' : 'normal'}`;
 
       if (audio && ttsCache.has(cacheKey)) {
@@ -169,10 +171,7 @@ export function WordQuiz({ words, accent }: { words: QuizWord[]; accent: string 
       speechConfig.speechSynthesisOutputFormat = sdk.SpeechSynthesisOutputFormat.Riff24Khz16BitMonoPcm;
       
       const synthesizer = new sdk.SpeechSynthesizer(speechConfig, null)
-
       const safeText = targetText.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
-      
-      // 느린 모드일 때 -20%(0.8배속) 적용
       const speedRate = isSlowMode ? "-20%" : "0%";
       
       const ssml = `
@@ -249,11 +248,11 @@ export function WordQuiz({ words, accent }: { words: QuizWord[]; accent: string 
 
       const speechConfig = sdk.SpeechConfig.fromSubscription(key, region)
       speechConfig.speechRecognitionLanguage = "en-US"
-      
       speechConfig.setProperty(sdk.PropertyId.SpeechServiceConnection_EndSilenceTimeoutMs, "1200");
 
       const audioConfig = sdk.AudioConfig.fromDefaultMicrophoneInput()
 
+      // ▼ Phoneme(음소) 단위 채점을 위한 옵션이 적용되어 있습니다
       const pronConfig = new sdk.PronunciationAssessmentConfig(
         targetText,
         sdk.PronunciationAssessmentGradingSystem.HundredMark,
@@ -285,10 +284,17 @@ export function WordQuiz({ words, accent }: { words: QuizWord[]; accent: string 
             setPronResult(finalResult)
             
             const wordsDetail = pron.detailResult?.Words || []
-            const mappedWords = wordsDetail.map((w: any) => ({
+            
+            // ▼ 단어 데이터와 함께 쪼개진 음소(Phonemes) 데이터를 추출합니다!
+            const mappedWords: WordScoreDetail[] = wordsDetail.map((w: any) => ({
               text: w.Word,
-              score: w.PronunciationAssessment.AccuracyScore
+              score: w.PronunciationAssessment.AccuracyScore,
+              phonemes: w.Phonemes?.map((p: any) => ({
+                phoneme: p.Phoneme,
+                score: p.PronunciationAssessment.AccuracyScore
+              })) || []
             }))
+            
             setWordScores(mappedWords)
             
             if (finalResult.score >= 80) {
@@ -506,7 +512,6 @@ export function WordQuiz({ words, accent }: { words: QuizWord[]; accent: string 
               <div className="h-1.5 transition-all duration-300" style={{ width: `${((index + 1) / total) * 100}%`, backgroundColor: streak >= 5 ? "#f59e0b" : accent }} />
             </div>
 
-            {/* ▼ 우측 상단 토글 스위치 및 나가기 버튼 영역 */}
             <div className="flex justify-between items-center p-4 pb-0 shrink-0">
               <button 
                 onClick={() => setIsSlowMode(!isSlowMode)} 
@@ -547,17 +552,18 @@ export function WordQuiz({ words, accent }: { words: QuizWord[]; accent: string 
                 <div className="mb-6 flex flex-col items-center justify-center w-full">
                   <div className="mb-3 flex justify-center"><span className="rounded-full bg-muted/80 px-2.5 py-1 text-[11px] font-bold tracking-wide text-muted-foreground">AI 문장 말하기 훈련</span></div>
                   
-                  <h2 className="mb-4 text-balance text-center text-3xl font-black tracking-tight text-foreground leading-snug">
+                  <div className="mb-4 text-balance text-center text-3xl font-black tracking-tight text-foreground leading-snug flex flex-wrap justify-center gap-x-2 gap-y-4">
                     {wordScores.length > 0 ? (() => {
                       const fullSent = getFullSentence()
                       const availableScores = [...wordScores]
                       return fullSent.split(' ').map((token, i) => {
                         const cleanToken = token.replace(/[^a-zA-Z0-9']/g, '').toLowerCase()
                         let colorClass = "text-foreground"
+                        let scoreItem: WordScoreDetail | null = null;
                         
                         const scoreIdx = availableScores.findIndex(ws => ws.text.toLowerCase() === cleanToken)
                         if (scoreIdx !== -1) {
-                          const scoreItem = availableScores[scoreIdx]
+                          scoreItem = availableScores[scoreIdx]
                           if (scoreItem.score >= 80) colorClass = "text-green-500 dark:text-green-400"
                           else if (scoreItem.score >= 60) colorClass = "text-amber-500 dark:text-amber-400"
                           else colorClass = "text-red-500 dark:text-red-400"
@@ -565,10 +571,29 @@ export function WordQuiz({ words, accent }: { words: QuizWord[]; accent: string 
                         }
 
                         const isTarget = cleanToken === current.word.toLowerCase()
+                        // 정답 단어이거나, 점수가 80점 미만인 경우 밑에 발음기호를 표시
+                        const showPhonemes = scoreItem && (isTarget || scoreItem.score < 80);
                         
                         return (
-                          <span key={i} className={cn("transition-colors duration-500", colorClass, isTarget && "underline decoration-4 underline-offset-4")}>
-                            {token}{' '}
+                          <span key={i} className="inline-flex flex-col items-center align-top relative group cursor-default">
+                            <span className={cn("transition-colors duration-500 leading-tight", colorClass, isTarget && "underline decoration-4 underline-offset-4")}>
+                              {token}
+                            </span>
+                            
+                            {/* ▼ 여기에 쪼개진 발음기호 색칠 렌더링이 들어갑니다! */}
+                            {showPhonemes && scoreItem?.phonemes && scoreItem.phonemes.length > 0 && (
+                              <span className="mt-1 flex gap-[2px] text-[13px] font-medium font-mono tracking-tighter opacity-90 animate-in slide-in-from-top-1 fade-in duration-300">
+                                <span className="text-muted-foreground/40">[</span>
+                                {scoreItem.phonemes.map((p, pIdx) => {
+                                  let pColor = "text-red-500 font-black"
+                                  if (p.score >= 80) pColor = "text-green-500"
+                                  else if (p.score >= 60) pColor = "text-amber-500 font-black"
+                                  
+                                  return <span key={pIdx} className={pColor}>{p.phoneme}</span>
+                                })}
+                                <span className="text-muted-foreground/40">]</span>
+                              </span>
+                            )}
                           </span>
                         )
                       })
@@ -581,7 +606,7 @@ export function WordQuiz({ words, accent }: { words: QuizWord[]; accent: string 
                         )
                       )
                     )}
-                  </h2>
+                  </div>
                   <p className="text-sm font-semibold text-muted-foreground mb-6 text-center">
                     🇰🇷 {contextData[index].translation}
                   </p>
