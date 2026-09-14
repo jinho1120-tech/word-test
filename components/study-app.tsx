@@ -1,6 +1,5 @@
 "use client"
 
-// ▼ useMemo와 useEffect를 추가로 불러옵니다
 import { useState, useMemo, useEffect } from "react"
 import { GraduationCap, Pencil, Ghost } from "lucide-react"
 import { WordQuiz, type QuizWord } from "@/components/word-quiz"
@@ -29,14 +28,12 @@ export function StudyApp({
   const [mode, setMode] = useState<Mode>("quiz")
   const [filter, setFilter] = useState("전체")
 
-  // ▼ 핵심 로직: 오늘 등록된 단어들을 검사해서, 존재하는 과목의 버튼만 남깁니다! ('전체'는 무조건 유지)
   const availableSubjects = useMemo(() => {
     return ALL_SUBJECTS.filter(
       (subject) => subject === "전체" || words.some((word) => word.subject === subject)
     )
   }, [words])
 
-  // ▼ 혹시라도 단어 입력 모드에서 단어를 다 지워서 과목 버튼이 사라졌을 때, 화면이 멈추지 않고 '전체'로 부드럽게 돌아가도록 돕는 안전장치입니다.
   useEffect(() => {
     if (!availableSubjects.includes(filter)) {
       setFilter("전체")
@@ -75,22 +72,24 @@ export function StudyApp({
         </button>
       </div>
 
-      {/* ▼ 텅 빈 과목은 숨기고, 단어가 있는 과목 버튼만 띄워줍니다. */}
-      <div className="flex gap-2 overflow-x-auto pb-1 scrollbar-hide">
-        {availableSubjects.map((s) => (
-          <button
-            key={s}
-            onClick={() => setFilter(s)}
-            className={cn(
-              "px-3.5 py-1.5 text-xs font-bold rounded-xl shrink-0 transition-all",
-              filter === s ? "bg-foreground text-background shadow-md" : "bg-muted text-muted-foreground hover:bg-muted/80 border border-transparent"
-            )}
-            style={filter === s ? { backgroundColor: accent, color: "white" } : undefined}
-          >
-            {s}
-          </button>
-        ))}
-      </div>
+      {/* ▼ 수정됨: 단어 입력 모드(manage)가 아닐 때만 이 바깥쪽 탭을 보여줍니다! */}
+      {mode !== "manage" && (
+        <div className="flex gap-2 overflow-x-auto pb-1 scrollbar-hide">
+          {availableSubjects.map((s) => (
+            <button
+              key={s}
+              onClick={() => setFilter(s)}
+              className={cn(
+                "px-3.5 py-1.5 text-xs font-bold rounded-xl shrink-0 transition-all",
+                filter === s ? "bg-foreground text-background shadow-md" : "bg-muted text-muted-foreground hover:bg-muted/80 border border-transparent"
+              )}
+              style={filter === s ? { backgroundColor: accent, color: "white" } : undefined}
+            >
+              {s}
+            </button>
+          ))}
+        </div>
+      )}
 
       {mode === "quiz" && <WordQuiz key={`quiz-${filter}`} words={displayWords} accent={accent} />}
       
@@ -108,7 +107,9 @@ export function StudyApp({
         )
       )}
 
-      {mode === "manage" && <WordManager profile={profile} date={date} words={displayWords} accent={accent} />}
+      {/* ▼ 수정됨: WordManager에는 필터링 되지 않은 전체 words를 통째로 넘겨줍니다. 
+          (WordManager 내부에서 자체적으로 필터 탭을 보여주고 작동시킵니다) */}
+      {mode === "manage" && <WordManager profile={profile} date={date} words={words} accent={accent} />}
     </div>
   )
 }
