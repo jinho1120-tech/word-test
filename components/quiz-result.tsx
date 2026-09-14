@@ -1,7 +1,7 @@
 "use client"
 
 import { useState } from "react"
-import { Trophy, Gift, MessageCircle, RotateCcw } from "lucide-react"
+import { Trophy, Gift, MessageCircle, RotateCcw, Mic } from "lucide-react"
 import { cn } from "@/lib/utils"
 import type { QuizWord } from "./word-quiz"
 
@@ -52,16 +52,72 @@ export function QuizResult({
   const isContextMode = quizType === "context"
   const isEligibleForReward = score === 100 && total >= 10 && !usedHint
 
+  // ▼ 스피킹(말하기) 모드 전용 결과 화면 (원장님 요청 반영!)
+  if (quizType === "speaking") {
+    return (
+      <div className="flex flex-col px-6 py-10 animate-in fade-in zoom-in-95 duration-500">
+        <div className="mb-6 flex flex-col items-center text-center">
+          <div className="mb-3 flex size-16 items-center justify-center rounded-2xl text-white bg-gradient-to-br from-indigo-400 to-blue-500 shadow-lg">
+            <Mic className="size-8" />
+          </div>
+          <h2 className="text-2xl font-black text-foreground">
+            {score === 100 ? "원어민 같은 완벽한 발음!" : "말하기 훈련 완료!"}
+          </h2>
+          <p className="mt-2 text-sm font-semibold text-muted-foreground">
+            {score === 100 
+              ? "정말 대단해요! 완벽하게 읽어냈어요." 
+              : "자신감 있게 말하는 모습이 아주 멋져요!"}
+          </p>
+        </div>
+
+        <div className="mb-6 rounded-2xl bg-muted/50 p-6 text-center shadow-inner">
+          <p className="mb-1 text-sm font-bold text-muted-foreground">성공한 문장</p>
+          <div className="mb-4 flex items-baseline justify-center gap-1">
+            <span className="text-6xl font-black text-blue-500">{correctCount}</span>
+            <span className="text-3xl font-bold text-muted-foreground">/ {total}</span>
+          </div>
+          <div className="flex justify-center text-sm text-muted-foreground">
+            <span className="font-semibold">최고 연속 성공 <span className="font-bold text-foreground text-base ml-1">{bestStreak}</span>번</span>
+          </div>
+        </div>
+
+        <div className="flex flex-col gap-3 mt-2">
+          {wrongWords.length > 0 && (
+            <button 
+              onClick={onRetryWrong} 
+              className="flex w-full items-center justify-center gap-2 rounded-2xl py-4 text-lg font-bold text-white shadow-md transition-opacity hover:opacity-90" 
+              style={{ backgroundColor: accent }}
+            >
+              <RotateCcw className="size-5" /> 아쉬웠던 문장 다시 연습하기
+            </button>
+          )}
+          
+          <button 
+            onClick={onRetryAll} 
+            className={cn(
+              "flex w-full items-center justify-center gap-2 rounded-2xl py-4 text-lg font-bold transition-colors", 
+              wrongWords.length > 0 ? "border border-border text-foreground hover:bg-muted" : "text-white shadow-md hover:opacity-90"
+            )} 
+            style={wrongWords.length > 0 ? undefined : { backgroundColor: accent }}
+          >
+            <RotateCcw className="size-5" /> 처음부터 다시 연습하기
+          </button>
+        </div>
+      </div>
+    )
+  }
+
+  // ▼ 그 외 일반 모드 및 실전 문장 모드 화면 (기존 원본 코드 완벽 유지)
   return (
-    <div className="flex flex-col px-6 py-10">
+    <div className="flex flex-col px-6 py-10 animate-in fade-in duration-500">
       <div className="mb-6 flex flex-col items-center text-center">
-        <div className="mb-3 flex size-16 items-center justify-center rounded-2xl text-white" style={{ backgroundColor: accent }}>
+        <div className="mb-3 flex size-16 items-center justify-center rounded-2xl text-white shadow-md" style={{ backgroundColor: accent }}>
           <Trophy className="size-8" />
         </div>
         <h2 className="text-2xl font-black text-foreground">학습 완료!</h2>
       </div>
 
-      <div className="mb-6 rounded-2xl bg-muted/50 p-6 text-center">
+      <div className="mb-6 rounded-2xl bg-muted/50 p-6 text-center shadow-inner">
         <p className="mb-1 text-xs font-medium text-muted-foreground">최종 점수</p>
         <p className="text-5xl font-black" style={{ color: accent }}>{score}점</p>
         <div className="mt-4 flex justify-center gap-6 text-sm text-muted-foreground">
