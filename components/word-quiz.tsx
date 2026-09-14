@@ -33,6 +33,17 @@ type PronunciationResult = {
   prosody: number;
 }
 
+// ▼ iOS 보안 정책을 뚫기 위한 숨겨진 전역 오디오 엔진(Web Audio API)
+let globalAudioCtx: AudioContext | null = null;
+function getAudioContext() {
+  if (typeof window === "undefined") return null;
+  if (!globalAudioCtx) {
+    const Ctx = window.AudioContext || (window as any).webkitAudioContext;
+    if (Ctx) globalAudioCtx = new Ctx();
+  }
+  return globalAudioCtx;
+}
+
 function shuffle<T>(arr: T[]): T[] {
   const copy = [...arr]
   for (let i = copy.length - 1; i > 0; i--) {
@@ -116,6 +127,7 @@ export function WordQuiz({ words, accent }: { words: QuizWord[]; accent: string 
     }
   }, [phase, score, total]);
 
+  // ▼ Azure TTS 수동 버퍼링 재생 엔진 (iOS 자동 재생 우회)
   async function playPronunciation(targetText: string) {
     try {
       if (typeof window !== "undefined" && "speechSynthesis" in window) {
@@ -134,27 +146,48 @@ export function WordQuiz({ words, accent }: { words: QuizWord[]; accent: string 
       const speechConfig = sdk.SpeechConfig.fromSubscription(key, region)
       speechConfig.speechSynthesisVoiceName = "en-US-JennyNeural" 
       
-      const synthesizer = new sdk.SpeechSynthesizer(speechConfig)
+      // null을 전달하여 Azure의 자동 재생을 막고, 오디오 데이터만 조용히 가져옵니다.
+      const synthesizer = new sdk.SpeechSynthesizer(speechConfig, null)
 
       synthesizer.speakTextAsync(
         targetText,
         (result) => {
           if (result.reason === sdk.ResultReason.SynthesizingAudioCompleted) {
-            // 재생 성공
+            const audioData = result.audioData;
+            const ctx = getAudioContext();
+            
+            if (ctx) {
+              // iOS 사파리를 위해 오디오 컨텍스트를 다시 강제 깨움
+              if (ctx.state === "suspended") ctx.resume().catch(()=>{});
+              
+              // 우리가 직접 만든 엔진으로 오디오 버퍼를 재생 (자동 재생 차단 우회)
+              const audioDataCopy = audioData.slice(0);
+              ctx.decodeAudioData(audioDataCopy, (buffer) => {
+                const source = ctx.createBufferSource();
+                source.buffer = buffer;
+                source.connect(ctx.destination);
+                source.start(0);
+              }, (e) => {
+                console.error("오디오 디코딩 에러", e);
+                fallbackTTS(targetText);
+              });
+            } else {
+              fallbackTTS(targetText);
+            }
           } else {
-            console.warn("Azure TTS 재생 실패, 기본 TTS로 전환합니다.")
+            console.warn("Azure TTS 합성 실패, 기본 TTS로 전환합니다.")
             fallbackTTS(targetText)
           }
           synthesizer.close()
         },
         (err) => {
-          console.error("Azure TTS 에러:", err)
+          console.error("Azure TTS 통신 에러:", err)
           fallbackTTS(targetText)
           synthesizer.close()
         }
       )
     } catch (e) {
-      console.error("음성 재생 에러:", e)
+      console.error("음성 재생 프로세스 에러:", e)
       fallbackTTS(targetText)
     }
   }
@@ -258,7 +291,7 @@ export function WordQuiz({ words, accent }: { words: QuizWord[]; accent: string 
   }
 
   async function begin(list: QuizWord[]) {
-    // ▼ iOS 오디오 강제 블로킹 해제 (Web Audio API Unlock)
+    // ▼ 시작 버튼을 누르는 '즉시(동기적으로)' 오디오 엔진을 깨워 잠금을 풉니다.
     try {
       if (typeof window !== "undefined") {
         if ("speechSynthesis" in window) {
@@ -268,10 +301,9 @@ export function WordQuiz({ words, accent }: { words: QuizWord[]; accent: string 
           window.speechSynthesis.speak(unlock)
         }
         
-        const AudioCtx = window.AudioContext || (window as any).webkitAudioContext;
-        if (AudioCtx) {
-          const ctx = new AudioCtx();
-          ctx.resume();
+        const ctx = getAudioContext();
+        if (ctx && ctx.state === "suspended") {
+          ctx.resume().catch(() => {});
         }
       }
     } catch (e) {}
@@ -339,7 +371,7 @@ export function WordQuiz({ words, accent }: { words: QuizWord[]; accent: string 
       requestAnimationFrame(() => inputRef.current?.focus())
     }
     
-    // ▼ 첫 딜레이를 800ms로 변경하여 화면 전환 후 안전하게 재생되도록 수정
+    // ▼ 이제 재생 권한이 획득되었으므로 문제 생성 후에도 완벽하게 자동 재생됩니다.
     if (quizType === "listening" && initialDeck.length > 0) {
       setTimeout(() => playPronunciation(initialDeck[0].word), 800)
     } else if (quizType === "speaking" && initialContext.length > 0 && initialDeck.length > 0) {
