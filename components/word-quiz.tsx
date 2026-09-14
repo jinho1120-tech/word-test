@@ -33,19 +33,18 @@ type PronunciationResult = {
   prosody: number;
 }
 
-// ▼ iOS 보안 정책을 뚫기 위한 숨겨진 전역 오디오 엔진(Web Audio API)
-let globalAudioCtx: AudioContext | null = null;
-function getAudioContext() {
+// ▼ iOS 오디오 강제 해제를 위한 전역 HTML5 오디오 객체 (가장 안정적인 방식)
+let globalAudio: HTMLAudioElement | null = null;
+function getGlobalAudio() {
   if (typeof window === "undefined") return null;
-  if (!globalAudioCtx) {
-    const Ctx = window.AudioContext || (window as any).webkitAudioContext;
-    if (Ctx) globalAudioCtx = new Ctx();
+  if (!globalAudio) {
+    globalAudio = new Audio();
   }
-  return globalAudioCtx;
+  return globalAudio;
 }
 
-// ▼ Azure TTS 반복 재생 시 요금 부과를 막고 속도를 높이는 캐시 저장소
-const ttsCache = new Map<string, AudioBuffer>();
+// ▼ 캐시 저장소 (Azure에서 받아온 데이터를 가상의 파일 URL 형태로 저장)
+const ttsCache = new Map<string, string>();
 
 function shuffle<T>(arr: T[]): T[] {
   const copy = [...arr]
@@ -130,25 +129,22 @@ export function WordQuiz({ words, accent }: { words: QuizWord[]; accent: string 
     }
   }, [phase, score, total]);
 
-  // ▼ Azure TTS 재생 (캐시 적용 버전)
+  // ▼ 안정적인 HTML5 Audio 기반 Azure TTS 재생 (캐시 완벽 적용)
   async function playPronunciation(targetText: string) {
     try {
       if (typeof window !== "undefined" && "speechSynthesis" in window) {
         window.speechSynthesis.cancel()
       }
 
-      const ctx = getAudioContext();
-      if (ctx && ctx.state === "suspended") {
-        ctx.resume().catch(() => {});
-      }
+      const audio = getGlobalAudio();
 
       // 1. 캐시 확인: 이미 다운로드한 문장이라면 즉시 재생 (사용량 차감 X)
-      if (ctx && ttsCache.has(targetText)) {
-        const buffer = ttsCache.get(targetText)!;
-        const source = ctx.createBufferSource();
-        source.buffer = buffer;
-        source.connect(ctx.destination);
-        source.start(0);
+      if (audio && ttsCache.has(targetText)) {
+        audio.src = ttsCache.get(targetText)!;
+        audio.play().catch((e) => {
+          console.error("캐시 오디오 재생 실패:", e);
+          fallbackTTS(targetText);
+        });
         return;
       }
 
@@ -164,27 +160,27 @@ export function WordQuiz({ words, accent }: { words: QuizWord[]; accent: string 
       const speechConfig = sdk.SpeechConfig.fromSubscription(key, region)
       speechConfig.speechSynthesisVoiceName = "en-US-JennyNeural" 
       
+      // 확실한 오디오 파일(WAV) 포맷으로 지정합니다.
+      speechConfig.speechSynthesisOutputFormat = sdk.SpeechSynthesisOutputFormat.Riff24Khz16BitMonoPcm;
+      
       const synthesizer = new sdk.SpeechSynthesizer(speechConfig, null)
 
       synthesizer.speakTextAsync(
         targetText,
         (result) => {
           if (result.reason === sdk.ResultReason.SynthesizingAudioCompleted) {
+            // Azure에서 받은 데이터를 안정적인 가상의 오디오 파일(Blob URL)로 변환합니다.
             const audioData = result.audioData;
+            const blob = new Blob([audioData], { type: "audio/wav" });
+            const url = URL.createObjectURL(blob);
             
-            if (ctx) {
-              const audioDataCopy = audioData.slice(0);
-              ctx.decodeAudioData(audioDataCopy, (buffer) => {
-                
-                // 2. 캐시 저장: 방금 받아온 오디오 버퍼를 저장해둡니다.
-                ttsCache.set(targetText, buffer);
+            // 2. 캐시 저장
+            ttsCache.set(targetText, url);
 
-                const source = ctx.createBufferSource();
-                source.buffer = buffer;
-                source.connect(ctx.destination);
-                source.start(0);
-              }, (e) => {
-                console.error("오디오 디코딩 에러", e);
+            if (audio) {
+              audio.src = url;
+              audio.play().catch((e) => {
+                console.error("Azure 오디오 파일 재생 실패:", e);
                 fallbackTTS(targetText);
               });
             } else {
@@ -307,6 +303,7 @@ export function WordQuiz({ words, accent }: { words: QuizWord[]; accent: string 
   }
 
   async function begin(list: QuizWord[]) {
+    // ▼ iOS 오디오 권한 뚫기: 시작 버튼을 누르는 순간 보이지 않는 플레이어에 "0.1초 무음 파일"을 재생시킵니다.
     try {
       if (typeof window !== "undefined") {
         if ("speechSynthesis" in window) {
@@ -316,9 +313,11 @@ export function WordQuiz({ words, accent }: { words: QuizWord[]; accent: string 
           window.speechSynthesis.speak(unlock)
         }
         
-        const ctx = getAudioContext();
-        if (ctx && ctx.state === "suspended") {
-          ctx.resume().catch(() => {});
+        const audio = getGlobalAudio();
+        if (audio) {
+          // 아주 짧은 무음(Silent) WAV 파일을 재생하여 iOS의 오디오 잠금을 영구적으로 풉니다.
+          audio.src = "data:audio/wav;base64,UklGRigAAABXQVZFZm10IBIAAAABAAEARKwAAIhYAQACABAAAABkYXRhAgAAAAEA";
+          audio.play().catch(() => {});
         }
       }
     } catch (e) {}
@@ -386,6 +385,7 @@ export function WordQuiz({ words, accent }: { words: QuizWord[]; accent: string 
       requestAnimationFrame(() => inputRef.current?.focus())
     }
     
+    // ▼ 이미 무음 오디오로 권한을 얻어두었으므로, 800ms 딜레이 후에도 소리가 아주 잘 나옵니다!
     if (quizType === "listening" && initialDeck.length > 0) {
       setTimeout(() => playPronunciation(initialDeck[0].word), 800)
     } else if (quizType === "speaking" && initialContext.length > 0 && initialDeck.length > 0) {
