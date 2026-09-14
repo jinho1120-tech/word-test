@@ -11,6 +11,10 @@ import { QuizResult } from "./quiz-result"
 
 const DAD_PHONE = "01032854101" 
 
+// ▼ [아빠 전용 설정] 목소리와 속도를 입맛대로 쉽게 바꿀 수 있습니다!
+const TTS_VOICE = "en-US-AnaNeural" // 여자 아이(Ana), 성인 여성(Jenny), 부드러운 여성(Aria)
+const TTS_SPEED = "-15%" // 리딩 속도 (0%는 원어민 정상 속도, -15%는 약간 느리고 또렷하게)
+
 export type QuizWord = {
   id: number
   word: string
@@ -33,7 +37,7 @@ type PronunciationResult = {
   prosody: number;
 }
 
-// ▼ iOS 오디오 강제 해제를 위한 전역 HTML5 오디오 객체 (가장 안정적인 방식)
+// ▼ iOS 오디오 강제 해제를 위한 전역 HTML5 오디오 객체
 let globalAudio: HTMLAudioElement | null = null;
 function getGlobalAudio() {
   if (typeof window === "undefined") return null;
@@ -129,7 +133,7 @@ export function WordQuiz({ words, accent }: { words: QuizWord[]; accent: string 
     }
   }, [phase, score, total]);
 
-  // ▼ 안정적인 HTML5 Audio 기반 Azure TTS 재생 (캐시 완벽 적용)
+  // ▼ Azure TTS (여자 아이 목소리 + 속도 조절 SSML 적용)
   async function playPronunciation(targetText: string) {
     try {
       if (typeof window !== "undefined" && "speechSynthesis" in window) {
@@ -138,7 +142,6 @@ export function WordQuiz({ words, accent }: { words: QuizWord[]; accent: string 
 
       const audio = getGlobalAudio();
 
-      // 1. 캐시 확인: 이미 다운로드한 문장이라면 즉시 재생 (사용량 차감 X)
       if (audio && ttsCache.has(targetText)) {
         audio.src = ttsCache.get(targetText)!;
         audio.play().catch((e) => {
@@ -158,23 +161,30 @@ export function WordQuiz({ words, accent }: { words: QuizWord[]; accent: string 
 
       const sdk = await import("microsoft-cognitiveservices-speech-sdk")
       const speechConfig = sdk.SpeechConfig.fromSubscription(key, region)
-      speechConfig.speechSynthesisVoiceName = "en-US-JennyNeural" 
-      
-      // 확실한 오디오 파일(WAV) 포맷으로 지정합니다.
       speechConfig.speechSynthesisOutputFormat = sdk.SpeechSynthesisOutputFormat.Riff24Khz16BitMonoPcm;
       
       const synthesizer = new sdk.SpeechSynthesizer(speechConfig, null)
 
-      synthesizer.speakTextAsync(
-        targetText,
+      // 텍스트에 포함된 특수문자가 XML을 깨트리지 않도록 안전하게 변환
+      const safeText = targetText.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+      
+      // SSML을 구성하여 목소리와 속도를 커스텀으로 설정합니다.
+      const ssml = `
+        <speak version="1.0" xmlns="http://www.w3.org/2001/10/synthesis" xml:lang="en-US">
+          <voice name="${TTS_VOICE}">
+            <prosody rate="${TTS_SPEED}">${safeText}</prosody>
+          </voice>
+        </speak>
+      `.trim();
+
+      synthesizer.speakSsmlAsync(
+        ssml,
         (result) => {
           if (result.reason === sdk.ResultReason.SynthesizingAudioCompleted) {
-            // Azure에서 받은 데이터를 안정적인 가상의 오디오 파일(Blob URL)로 변환합니다.
             const audioData = result.audioData;
             const blob = new Blob([audioData], { type: "audio/wav" });
             const url = URL.createObjectURL(blob);
             
-            // 2. 캐시 저장
             ttsCache.set(targetText, url);
 
             if (audio) {
@@ -208,7 +218,8 @@ export function WordQuiz({ words, accent }: { words: QuizWord[]; accent: string 
     if (typeof window !== "undefined" && "speechSynthesis" in window) {
       const utterance = new SpeechSynthesisUtterance(text)
       utterance.lang = "en-US"
-      utterance.rate = 0.85
+      // 기본 브라우저 TTS도 속도를 약간 늦춰줍니다 (기본값 1.0)
+      utterance.rate = 0.85 
       window.speechSynthesis.speak(utterance)
     }
   }
@@ -303,7 +314,6 @@ export function WordQuiz({ words, accent }: { words: QuizWord[]; accent: string 
   }
 
   async function begin(list: QuizWord[]) {
-    // ▼ iOS 오디오 권한 뚫기: 시작 버튼을 누르는 순간 보이지 않는 플레이어에 "0.1초 무음 파일"을 재생시킵니다.
     try {
       if (typeof window !== "undefined") {
         if ("speechSynthesis" in window) {
@@ -315,7 +325,6 @@ export function WordQuiz({ words, accent }: { words: QuizWord[]; accent: string 
         
         const audio = getGlobalAudio();
         if (audio) {
-          // 아주 짧은 무음(Silent) WAV 파일을 재생하여 iOS의 오디오 잠금을 영구적으로 풉니다.
           audio.src = "data:audio/wav;base64,UklGRigAAABXQVZFZm10IBIAAAABAAEARKwAAIhYAQACABAAAABkYXRhAgAAAAEA";
           audio.play().catch(() => {});
         }
@@ -385,7 +394,6 @@ export function WordQuiz({ words, accent }: { words: QuizWord[]; accent: string 
       requestAnimationFrame(() => inputRef.current?.focus())
     }
     
-    // ▼ 이미 무음 오디오로 권한을 얻어두었으므로, 800ms 딜레이 후에도 소리가 아주 잘 나옵니다!
     if (quizType === "listening" && initialDeck.length > 0) {
       setTimeout(() => playPronunciation(initialDeck[0].word), 800)
     } else if (quizType === "speaking" && initialContext.length > 0 && initialDeck.length > 0) {
