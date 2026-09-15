@@ -264,18 +264,23 @@ export function WordQuiz({ words, accent }: { words: QuizWord[]; accent: string 
     }
   }
 
-  // ▼ [추가된 핵심 마법 함수] 1. 원어민 발음 재생 -> 2. 내 발음 재생 (비교 모드)
   async function playComparison(wordText: string, offsetSec: number, durationSec: number) {
-    // 먼저 원어민의 정확한 발음을 들려줍니다.
     playPronunciation(wordText);
-    
-    // 원어민 발음이 끝날 즈음(약 1.2초 후)에 아이의 녹음된 목소리를 틀어줍니다.
-    // 긴 단어일 경우를 대비해 단어 길이에 비례해 약간의 여유를 둡니다.
     const delay = Math.max(1200, durationSec * 1000 + 400);
-    
     setTimeout(() => {
       playUserWordAudio(offsetSec, durationSec);
     }, delay);
+  }
+
+  // ▼ 전체 문장 듣기 함수 추가
+  function playFullUserAudio() {
+    if (!userAudioUrl) return;
+    try {
+      const audio = new Audio(userAudioUrl);
+      audio.play().catch(console.error);
+    } catch (e) {
+      console.error("전체 녹음 재생 실패:", e);
+    }
   }
 
   async function handlePronunciationAssessment(targetText: string) {
@@ -673,7 +678,6 @@ export function WordQuiz({ words, accent }: { words: QuizWord[]; accent: string 
                             )}
                             onClick={() => {
                               if (isClickable) {
-                                // ▼ 단어만 재생하는 대신, "원어민 -> 내 발음" 연속 비교 재생!
                                 playComparison(cleanToken, scoreItem!.offsetSec!, scoreItem!.durationSec || 0.5)
                               }
                             }}
@@ -716,7 +720,6 @@ export function WordQuiz({ words, accent }: { words: QuizWord[]; accent: string 
                     )}
                   </div>
                   
-                  {/* ▼ 툴팁 내용도 '비교 모드'에 맞게 수정했습니다 */}
                   {pronResult && userAudioUrl && (
                     <p className="text-[12px] font-bold text-indigo-500 animate-in fade-in zoom-in mb-4 bg-indigo-50 px-3 py-1.5 rounded-full border border-indigo-100 shadow-sm">
                       👆 단어를 톡! 터치하면 원어민 발음과 내 발음을 비교해 볼 수 있어요 🎧
@@ -752,8 +755,19 @@ export function WordQuiz({ words, accent }: { words: QuizWord[]; accent: string 
                          (pronResult ? "다시 한번 채점하기" : "내 발음 채점하기")}
                       </button>
                     </div>
-                    {!pronResult && <p className="text-[11px] font-semibold text-muted-foreground animate-in fade-in">💡 스피커 버튼을 누르면 다시 들을 수 있어요</p>}
-                    {pronResult && <p className="text-[11px] font-semibold text-muted-foreground animate-in fade-in">💡 빨간색 단어를 신경 써서 다시 연습해 보세요!</p>}
+
+                    {/* ▼ [새로 추가된 부분] 문장 전체 내 녹음 듣기 버튼! */}
+                    {pronResult && userAudioUrl && (
+                      <button
+                        type="button"
+                        onClick={playFullUserAudio}
+                        className="mt-1 flex items-center gap-2 rounded-full px-5 py-2 bg-indigo-50 border border-indigo-200 text-indigo-600 font-bold text-sm shadow-sm transition-transform hover:scale-105 active:scale-95 animate-in slide-in-from-top-2 fade-in"
+                      >
+                        <Volume2 className="size-4" /> 🎧 내 전체 녹음 듣기
+                      </button>
+                    )}
+
+                    {!pronResult && <p className="text-[11px] font-semibold text-muted-foreground animate-in fade-in mt-1">💡 스피커 버튼을 누르면 다시 들을 수 있어요</p>}
                   </div>
                   
                   {pronResult && (
