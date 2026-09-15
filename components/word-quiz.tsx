@@ -627,7 +627,6 @@ export function WordQuiz({ words, accent }: { words: QuizWord[]; accent: string 
 
             <div className="flex flex-col px-6 pb-8 pt-2 flex-1 overflow-y-auto">
               
-              {/* ▼ [수정된 핵심!] 말하기 모드일 때는 상단에서 '점수'와 '연속'을 깔끔히 가려줍니다 */}
               {quizType === "speaking" ? (
                 <div className="mb-4 flex items-center justify-center text-xs font-medium text-muted-foreground">
                   <span className="rounded-full bg-indigo-50 dark:bg-indigo-950/50 px-3 py-1 font-bold text-indigo-600 dark:text-indigo-400 border border-indigo-100 dark:border-indigo-900">
@@ -642,7 +641,6 @@ export function WordQuiz({ words, accent }: { words: QuizWord[]; accent: string 
                 </div>
               )}
 
-              {/* 연속 정답 불꽃 띠도 일반 모드일 때만 표시 */}
               {quizType !== "speaking" && (
                 <div className="h-8 w-full flex justify-center mb-2">
                   {streak >= 3 && (
@@ -814,17 +812,6 @@ export function WordQuiz({ words, accent }: { words: QuizWord[]; accent: string 
                          pronResult.score >= 60 ? "👍 Good! 조금만 더 연습해볼까요?" :
                          "💪 Try Again! 다시 한번 또박또박 읽어보세요!"}
                       </p>
-
-                      {pronResult.prosody < 90 && contextData[index].guide && (
-                        <div className="w-full max-w-sm animate-in slide-in-from-top-2 fade-in duration-500 rounded-2xl bg-indigo-50/80 p-3 border border-indigo-100 dark:border-indigo-800/30 text-center shadow-inner">
-                          <p className="text-[10px] font-bold text-indigo-500 dark:text-indigo-400 mb-1 flex items-center justify-center gap-1">
-                            <Lightbulb className="size-3" /> 리듬을 타며 다시 읽어볼까요?
-                          </p>
-                          <p className="text-[14px] sm:text-base font-black text-indigo-900 dark:text-indigo-100 tracking-wide">
-                            {contextData[index].guide}
-                          </p>
-                        </div>
-                      )}
                     </div>
                   )}
                 </div>
