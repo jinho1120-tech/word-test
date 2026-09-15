@@ -626,27 +626,39 @@ export function WordQuiz({ words, accent }: { words: QuizWord[]; accent: string 
             </div>
 
             <div className="flex flex-col px-6 pb-8 pt-2 flex-1 overflow-y-auto">
-              <div className="mb-4 flex items-center justify-between text-xs font-medium text-muted-foreground">
-                <span>점수 <span className="font-bold text-foreground">{score}</span></span>
-                <span className="rounded-full bg-muted px-3 py-1 font-semibold text-foreground">{index + 1} / {total}</span>
-                <span className={cn(streak >= 5 && "text-orange-500 animate-pulse font-bold")}>연속 <span className="font-black text-sm" style={streak >= 5 ? {} : { color: accent }}>{streak}</span></span>
-              </div>
+              
+              {/* ▼ [수정된 핵심!] 말하기 모드일 때는 상단에서 '점수'와 '연속'을 깔끔히 가려줍니다 */}
+              {quizType === "speaking" ? (
+                <div className="mb-4 flex items-center justify-center text-xs font-medium text-muted-foreground">
+                  <span className="rounded-full bg-indigo-50 dark:bg-indigo-950/50 px-3 py-1 font-bold text-indigo-600 dark:text-indigo-400 border border-indigo-100 dark:border-indigo-900">
+                    🗣️ 문장 말하기 연습 ({index + 1} / {total})
+                  </span>
+                </div>
+              ) : (
+                <div className="mb-4 flex items-center justify-between text-xs font-medium text-muted-foreground">
+                  <span>점수 <span className="font-bold text-foreground">{score}</span></span>
+                  <span className="rounded-full bg-muted px-3 py-1 font-semibold text-foreground">{index + 1} / {total}</span>
+                  <span className={cn(streak >= 5 && "text-orange-500 animate-pulse font-bold")}>연속 <span className="font-black text-sm" style={streak >= 5 ? {} : { color: accent }}>{streak}</span></span>
+                </div>
+              )}
 
-              <div className="h-8 w-full flex justify-center mb-2">
-                {streak >= 3 && (
-                  <div key={streak} className="animate-in slide-in-from-bottom-2 fade-in zoom-in duration-300">
-                    <span className={cn("rounded-full px-4 py-1.5 text-sm font-black text-white shadow-lg", streak >= 10 ? "bg-gradient-to-r from-red-500 to-orange-600 scale-110 shadow-red-500/50" : "bg-gradient-to-r from-amber-400 to-orange-500 shadow-orange-500/40")}>
-                      {streak >= 10 ? `🔥🔥 ${currentName} 폭주 중!! 멈출 수 없어!` : `🔥 ${currentName} ${streak}연속 정답!`}
-                    </span>
-                  </div>
-                )}
-              </div>
+              {/* 연속 정답 불꽃 띠도 일반 모드일 때만 표시 */}
+              {quizType !== "speaking" && (
+                <div className="h-8 w-full flex justify-center mb-2">
+                  {streak >= 3 && (
+                    <div key={streak} className="animate-in slide-in-from-bottom-2 fade-in zoom-in duration-300">
+                      <span className={cn("rounded-full px-4 py-1.5 text-sm font-black text-white shadow-lg", streak >= 10 ? "bg-gradient-to-r from-red-500 to-orange-600 scale-110 shadow-red-500/50" : "bg-gradient-to-r from-amber-400 to-orange-500 shadow-orange-500/40")}>
+                        {streak >= 10 ? `🔥🔥 ${currentName} 폭주 중!! 멈출 수 없어!` : `🔥 ${currentName} ${streak}연속 정답!`}
+                      </span>
+                    </div>
+                  )}
+                </div>
+              )}
 
               {quizType === "speaking" && contextData[index] ? (
                 <div className="mb-4 flex flex-col items-center justify-center w-full">
                   <div className="mb-2 flex justify-center"><span className="rounded-full bg-muted/80 px-2 py-0.5 text-[10px] font-bold tracking-wide text-muted-foreground">AI 문장 말하기 훈련</span></div>
                   
-                  {/* ▼ 문장 여백 축소 (gap-y-4 -> gap-y-2) */}
                   <div className="mb-3 text-balance text-center text-2xl sm:text-3xl font-black tracking-tight text-foreground leading-snug flex flex-wrap justify-center gap-x-2 gap-y-2">
                     {wordScores.length > 0 ? (() => {
                       const fullSent = getFullSentence()
@@ -728,19 +740,16 @@ export function WordQuiz({ words, accent }: { words: QuizWord[]; accent: string 
                     )}
                   </div>
                   
-                  {/* ▼ 한국어 뜻을 영어 문장과 더 가깝게 밀착 */}
                   <p className="text-[13px] sm:text-sm font-semibold text-muted-foreground mb-4 text-center px-4">
                     🇰🇷 {contextData[index].translation}
                   </p>
 
-                  {/* ▼ 깔끔하게 하나로 통합된 알림 배지 */}
                   {pronResult && userAudioUrl && (
                     <div className="mb-4 flex items-center justify-center rounded-full bg-indigo-50/80 px-3 py-1 text-[11px] font-bold text-indigo-500 border border-indigo-100/50 animate-in fade-in zoom-in">
                       👆 단어를 톡! 터치하면 내 발음과 비교할 수 있어요
                     </div>
                   )}
 
-                  {/* ▼ 버튼 구조 압축 (가로 배치) */}
                   <div className="flex flex-col gap-2 w-full max-w-sm mb-2">
                     <div className="flex gap-2 w-full">
                       <button type="button" onClick={() => playPronunciation(getFullSentence())} className="flex size-12 shrink-0 items-center justify-center rounded-2xl bg-muted text-foreground shadow-sm transition-transform hover:scale-105 active:scale-95">
@@ -767,7 +776,6 @@ export function WordQuiz({ words, accent }: { words: QuizWord[]; accent: string 
                       </button>
                     </div>
 
-                    {/* 내 녹음 듣기 버튼도 가로 폭에 맞춰 통일감 있게 배치 */}
                     {pronResult && userAudioUrl && (
                       <button
                         type="button"
@@ -779,7 +787,6 @@ export function WordQuiz({ words, accent }: { words: QuizWord[]; accent: string 
                     )}
                   </div>
                   
-                  {/* ▼ 점수판 여백 축소 */}
                   {pronResult && (
                     <div className="mt-2 flex flex-col w-full items-center animate-in zoom-in duration-300">
                       <div className="grid grid-cols-4 gap-1.5 w-full max-w-sm mb-3">
