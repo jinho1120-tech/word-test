@@ -255,11 +255,10 @@ export function WordQuiz({ words, accent }: { words: QuizWord[]; accent: string 
       source.buffer = decodedBuffer;
       source.connect(ctx.destination);
       
-      // ▼ 앞부분은 첫 소리가 잘리지 않게 아주 살짝(0.05초) 당기고,
-      // 시작점을 0.05초 당겼으니 재생 길이(dur)에도 0.05초만 더해주면, 
-      // 결국 끝나는 시간은 원본 종료 시간(offsetSec + durationSec)과 정확히 100% 일치합니다! 다음 단어 완벽 차단!
-      const start = Math.max(0, offsetSec - 0.05);
-      const dur = durationSec + 0.05; 
+      // ▼ 앞부분은 여유 없이 칼같이 시작하고, 
+      // 뒷부분은 원래 단어 길이에서 -0.05초를 빼버려 다음 단어 연음을 강제로 차단합니다!
+      const start = offsetSec;
+      const dur = Math.max(0.1, durationSec - 0.05); 
       
       source.start(0, start, dur);
     } catch(e) {
