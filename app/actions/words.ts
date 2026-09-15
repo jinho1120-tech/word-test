@@ -256,20 +256,16 @@ export async function generateContextQuiz(words: { word: string, meaning: string
       - EXCEPTION 4: Articles ("a", "an", "the") must ALWAYS be lowercase, even at the very beginning of the sentence (e.g., "a BOY...", "the DOG..."). However, subject pronouns ("I", "We", "He", "She", "They") at the beginning of a sentence CAN be capitalized if they naturally carry stress (e.g., "WE FOUND...").
       - [CRITICAL HYPHENATION RULE]: If a word sounds like it stretches or has a trailing sound (even 1-syllable words with -s or -ed like "hands" or "looked"), heavily use hyphens to separate the strong and weak parts phonetically (e.g., hands -> HAN-ds, looked -> LOOK-ed, after -> AF-ter, body -> BO-dy, towel -> TOW-el).
 
-      2. PAUSE (빗금 위치 설정 - sentence와 guide 공통 적용):
-      - 의미 단위(부사구, 전치사구 등)마다 빗금(/)을 추가해줘.
-      - Insert "/" at commas, semicolons, colons, and dashes.
-      - Insert "/" at major clause boundaries, ESPECIALLY in longer sentences (roughly 8+ words).
-      - Do NOT insert "/" inside a short phrase.
+      2. PAUSE (의미 단위 끊어 읽기 규칙 - sentence와 guide 공통 적용):
+      - 초등학생이 호흡하기 좋은 2~3개의 자연스러운 의미 덩어리(Thought Group)로 잘라줘.
+      - "Mom says /", "He thinks /", "I know /" 처럼 전달동사 바로 뒤는 무조건 끊어줄 것!
+      - 주어구와 동사를 어색하게 가르지 말고, [전달절 / 주어구 / 동사+부사구] 또는 [주어+동사 / 전치사구] 구조를 엄격히 지킬 것.
+      
+      [올바른 청크 예시]
+      - Mom says / the fun game / will start right now. (O)
+      - Careful, / don't step / on my robot toy. (O)
+      - The magic alien / ate a glowing red apple. (O)
 
-      [EXAMPLES]
-      Input: A cat is sleeping.
-      Output sentence: A cat / is sleeping.
-      Output guide: a CAT / is SLEEPing.
-
-      Input: My funny shadow tried to run away from me.
-      Output sentence: My funny shadow / tried to run away / from me.
-      Output guide: my FUNny SHAD-ow / TRIED to RUN a-WAY / from ME.
 
       결과는 반드시 아래 JSON 배열 형식으로만 대답할 것.
       [
