@@ -11,7 +11,6 @@ import { QuizResult } from "./quiz-result"
 
 const DAD_PHONE = "01032854101" 
 
-// 💡 선택 가능한 Azure TTS 음성 목록
 const TTS_VOICES = [
   { id: "en-US-AnaNeural", label: "👧 Ana (아동)" },
   { id: "en-US-JennyNeural", label: "👩 Jenny (여성)" },
@@ -107,8 +106,6 @@ export function WordQuiz({ words, accent }: { words: QuizWord[]; accent: string 
   
   const [userAudioUrl, setUserAudioUrl] = useState<string | null>(null)
   const [isSlowMode, setIsSlowMode] = useState(false)
-  
-  // 💡 선택된 TTS 음성 상태 관리
   const [ttsVoice, setTtsVoice] = useState<string>("en-US-AnaNeural")
 
   const current = deck[index]
@@ -168,7 +165,6 @@ export function WordQuiz({ words, accent }: { words: QuizWord[]; accent: string 
       }
 
       const audio = getGlobalAudio();
-      // 💡 선택된 목소리와 속도 조합으로 캐시 키 생성
       const cacheKey = `${targetText}_${ttsVoice}_${isSlowMode ? 'slow' : 'normal'}`;
 
       if (audio && ttsCache.has(cacheKey)) {
@@ -274,9 +270,15 @@ export function WordQuiz({ words, accent }: { words: QuizWord[]; accent: string 
     }
   }
 
-  async function playComparison(wordText: string, offsetSec: number, durationSec: number) {
-    playPronunciation(wordText);
-    const delay = Math.max(1200, durationSec * 1000 + 400);
+  // 💡 Chunk 단위 재생을 위해 대기 시간(Delay) 계산식 고도화
+  async function playComparison(targetText: string, offsetSec: number, durationSec: number) {
+    playPronunciation(targetText);
+    
+    const wordCount = targetText.trim().split(/\s+/).length;
+    // 청크가 길어질 수 있으므로, 원어민 TTS가 완전히 끝난 뒤에 내 목소리가 나오도록 여유 시간(Delay) 확보
+    const estimatedTtsMs = wordCount * 600 + 800; 
+    const delay = Math.max(estimatedTtsMs, durationSec * 1000 + 500);
+    
     setTimeout(() => {
       playUserWordAudio(offsetSec, durationSec);
     }, delay);
@@ -631,7 +633,6 @@ export function WordQuiz({ words, accent }: { words: QuizWord[]; accent: string 
 
             <div className="flex justify-between items-center p-4 pb-0 shrink-0 gap-2">
               <div className="flex items-center gap-1.5">
-                {/* 💡 재생 속도 변경 버튼 */}
                 <button 
                   onClick={() => setIsSlowMode(!isSlowMode)} 
                   className={cn(
@@ -641,8 +642,6 @@ export function WordQuiz({ words, accent }: { words: QuizWord[]; accent: string 
                 >
                   {isSlowMode ? "🐢 느리게" : "🐇 보통"}
                 </button>
-
-                {/* 💡 TTS 원어민 목소리 선택 셀렉트 박스 */}
                 <select
                   value={ttsVoice}
                   onChange={(e) => setTtsVoice(e.target.value)}
@@ -694,74 +693,112 @@ export function WordQuiz({ words, accent }: { words: QuizWord[]; accent: string 
 
               {quizType === "speaking" && contextData[index] ? (
                 <div className="mb-4 flex flex-col items-center justify-center w-full">
-                  <div className="mb-4 text-balance text-center text-3xl sm:text-4xl font-black tracking-tight text-foreground leading-normal flex flex-wrap justify-center gap-x-3 gap-y-3 px-1">
+                  <div className="mb-4 text-balance text-center text-3xl sm:text-4xl font-black tracking-tight text-foreground leading-normal flex flex-wrap justify-center gap-x-1 gap-y-3 px-1">
                     {wordScores.length > 0 ? (() => {
                       const fullSent = getFullSentence()
                       const availableScores = [...wordScores]
-                      return fullSent.split(' ').map((token, i) => {
-                        const cleanToken = token.replace(/[^a-zA-Z0-9']/g, '').toLowerCase()
-                        let colorClass = "text-foreground"
-                        let scoreItem: WordScoreDetail | null = null;
-                        let isOmitted = false; 
-                        
-                        const scoreIdx = availableScores.findIndex(ws => ws.text.toLowerCase() === cleanToken)
-                        if (scoreIdx !== -1) {
-                          scoreItem = availableScores[scoreIdx]
-                          
-                          if (scoreItem.errorType === "Omission") {
-                            colorClass = "text-red-400 dark:text-red-500 opacity-50"
-                            isOmitted = true;
-                          } else if (scoreItem.score >= 80) {
-                            colorClass = "text-green-500 dark:text-green-400"
-                          } else if (scoreItem.score >= 60) {
-                            colorClass = "text-amber-500 dark:text-amber-400"
-                          } else {
-                            colorClass = "text-red-500 dark:text-red-400"
-                          }
-                          
-                          availableScores.splice(scoreIdx, 1) 
+                      
+                      // 💡 1. 빗금(/) 기준으로 청크 나누기. 없으면 3단어 단위로 자동 분리
+                      let rawChunks = fullSent.split('/').map(c => c.trim()).filter(Boolean);
+                      if (rawChunks.length === 1 && fullSent.split(' ').length > 3) {
+                        const words = fullSent.split(' ');
+                        rawChunks = [];
+                        for (let i = 0; i < words.length; i += 3) {
+                          rawChunks.push(words.slice(i, i + 3).join(' '));
                         }
+                      }
 
-                        const isTarget = cleanToken === current.word.toLowerCase()
-                        const showPhonemes = scoreItem && (isTarget || scoreItem.score < 80);
-                        const isClickable = scoreItem && userAudioUrl && scoreItem.offsetSec !== undefined && !isOmitted;
+                      return rawChunks.map((chunkStr, cIdx) => {
+                        const chunkWords = chunkStr.split(' ');
+
+                        // 청크별 시간 추적용 변수
+                        let chunkStartSec = 9999;
+                        let chunkEndSec = 0;
+                        let isChunkOmitted = true;
+
+                        const renderedWords = chunkWords.map((token, i) => {
+                          const cleanToken = token.replace(/[^a-zA-Z0-9']/g, '').toLowerCase()
+                          let colorClass = "text-foreground"
+                          let scoreItem: WordScoreDetail | null = null;
+                          let isOmitted = false; 
+                          
+                          const scoreIdx = availableScores.findIndex(ws => ws.text.toLowerCase() === cleanToken)
+                          if (scoreIdx !== -1) {
+                            scoreItem = availableScores[scoreIdx]
+                            
+                            if (scoreItem.errorType === "Omission") {
+                              colorClass = "text-red-400 dark:text-red-500 opacity-50"
+                              isOmitted = true;
+                            } else {
+                              isChunkOmitted = false;
+                              // 청크 전체 시작/종료 시간 갱신
+                              if (scoreItem.offsetSec !== undefined) {
+                                chunkStartSec = Math.min(chunkStartSec, scoreItem.offsetSec);
+                                chunkEndSec = Math.max(chunkEndSec, scoreItem.offsetSec + (scoreItem.durationSec || 0));
+                              }
+
+                              if (scoreItem.score >= 80) colorClass = "text-green-500 dark:text-green-400"
+                              else if (scoreItem.score >= 60) colorClass = "text-amber-500 dark:text-amber-400"
+                              else colorClass = "text-red-500 dark:text-red-400"
+                            }
+                            availableScores.splice(scoreIdx, 1) 
+                          }
+
+                          const isTarget = cleanToken === current.word.toLowerCase()
+                          const showPhonemes = scoreItem && (isTarget || scoreItem.score < 80);
+
+                          return (
+                            <span key={i} className="inline-flex flex-col items-center align-top relative px-1">
+                              <span className={cn("transition-colors duration-500 leading-tight", colorClass, isTarget && "underline decoration-4 underline-offset-4")}>
+                                {token}
+                              </span>
+                              {isOmitted && (
+                                <span className="mt-1 flex text-[11px] font-bold text-red-400 opacity-90">
+                                  (누락)
+                                </span>
+                              )}
+                              {!isOmitted && showPhonemes && scoreItem?.phonemes && scoreItem.phonemes.length > 0 && (
+                                <span className="mt-0.5 flex gap-[1px] text-[13px] font-medium font-mono tracking-tighter opacity-90">
+                                  <span className="text-muted-foreground/40">[</span>
+                                  {scoreItem.phonemes.map((p, pIdx) => {
+                                    let pColor = "text-red-500 font-black"
+                                    if (p.score >= 80) pColor = "text-green-500"
+                                    else if (p.score >= 60) pColor = "text-amber-500 font-black"
+                                    return <span key={pIdx} className={pColor}>{p.phoneme}</span>
+                                  })}
+                                  <span className="text-muted-foreground/40">]</span>
+                                </span>
+                              )}
+                            </span>
+                          )
+                        });
+
+                        // 💡 2. 청크 단위 비교 재생 이벤트 바인딩
+                        const isClickable = !isChunkOmitted && userAudioUrl && chunkStartSec !== 9999;
+                        const chunkDuration = chunkEndSec - chunkStartSec + 0.15; // 꼬리음 여유 0.15초 추가
 
                         return (
-                          <span 
-                            key={i} 
-                            className={cn(
-                              "inline-flex flex-col items-center align-top relative group",
-                              isClickable && "cursor-pointer hover:bg-muted/50 rounded-lg px-1 transition-colors pb-0.5"
-                            )}
-                            onClick={() => {
-                              if (isClickable) {
-                                playComparison(cleanToken, scoreItem!.offsetSec!, scoreItem!.durationSec || 0.5)
-                              }
-                            }}
-                          >
-                            <span className={cn("transition-colors duration-500 leading-tight", colorClass, isTarget && "underline decoration-4 underline-offset-4")}>
-                              {token}
+                          <React.Fragment key={cIdx}>
+                            <span
+                              className={cn(
+                                "inline-flex flex-wrap items-end justify-center align-top group rounded-2xl px-1 py-1.5 transition-all duration-200",
+                                isClickable && "cursor-pointer hover:bg-muted/80 hover:scale-[1.02] active:scale-95 shadow-sm hover:shadow-md"
+                              )}
+                              onClick={() => {
+                                if (isClickable) {
+                                  playComparison(chunkStr.replace(/[^a-zA-Z0-9' ]/g, ''), chunkStartSec, chunkDuration)
+                                }
+                              }}
+                            >
+                              {renderedWords}
+                              {isClickable && (
+                                <span className="flex items-center justify-center bg-indigo-100 text-indigo-500 rounded-full p-1 ml-1 mb-1.5 opacity-0 group-hover:opacity-100 transition-opacity">
+                                  <Volume2 className="size-3" />
+                                </span>
+                              )}
                             </span>
-                            
-                            {isOmitted && (
-                              <span className="mt-1 flex text-[11px] font-bold text-red-400 opacity-90 animate-in slide-in-from-top-1 fade-in duration-300">
-                                (안 들림💦)
-                              </span>
-                            )}
-
-                            {!isOmitted && showPhonemes && scoreItem?.phonemes && scoreItem.phonemes.length > 0 && (
-                              <span className="mt-0.5 flex gap-[1px] text-[13px] font-medium font-mono tracking-tighter opacity-90 animate-in slide-in-from-top-1 fade-in duration-300">
-                                <span className="text-muted-foreground/40">[</span>
-                                {scoreItem.phonemes.map((p, pIdx) => {
-                                  let pColor = "text-red-500 font-black"
-                                  if (p.score >= 80) pColor = "text-green-500"
-                                  else if (p.score >= 60) pColor = "text-amber-500 font-black"
-                                  return <span key={pIdx} className={pColor}>{p.phoneme}</span>
-                                })}
-                                <span className="text-muted-foreground/40">]</span>
-                              </span>
-                            )}
-                          </span>
+                            {cIdx < rawChunks.length - 1 && <span className="text-muted-foreground/30 mx-1 align-top text-4xl self-center">/</span>}
+                          </React.Fragment>
                         )
                       })
                     })() : (
@@ -781,7 +818,7 @@ export function WordQuiz({ words, accent }: { words: QuizWord[]; accent: string 
 
                   {pronResult && userAudioUrl && (
                     <div className="mb-4 flex items-center justify-center rounded-full bg-indigo-50/80 px-3 py-1 text-[11px] font-bold text-indigo-500 border border-indigo-100/50 animate-in fade-in zoom-in">
-                      👆 단어를 톡! 터치하면 내 발음과 비교할 수 있어요
+                      👆 덩어리(청크)를 톡! 터치하면 구 단위로 비교하며 들을 수 있어요
                     </div>
                   )}
 
