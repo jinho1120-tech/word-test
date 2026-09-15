@@ -250,11 +250,17 @@ export async function generateContextQuiz(words: { word: string, meaning: string
       1. STRESS & SYLLABLE SPLITTING: Capitalize stressed syllables/words. Lowercase unstressed ones. For words with 2+ syllables, capitalize ONLY the primary-stressed syllable.
       - Stress (capitalize) content words: nouns, main/lexical verbs, adjectives, adverbs, demonstratives, question words, negatives.
       - Do NOT stress (lowercase) function words: articles, prepositions, pronouns, conjunctions, infinitive "to", the verb "be", and AFFIRMATIVE auxiliary/modal verbs.
+        1) articles (a, an, the)
+        2) prepositions (in, on, at, for, of, etc.)
+        3) possessive determiners (my, your, his, her, our, their) <- 'our', 'my' 대문자 금지!
+        4) 'be' verbs (am, is, are, was, were) <- 'IS' 대문자 금지!
+        5) pronouns, conjunctions, infinitive "to"
       - EXCEPTION 1: negative auxiliary contractions (isn't, doesn't, can't, etc.) ARE stressed.
       - EXCEPTION 2 (stranded at clause end): a preposition or infinitive "to" left with no object/verb following it takes its full form and is stressed (e.g., "WHO are you TALKing TO?").
       - EXCEPTION 3 (verb standing alone): an auxiliary/modal verb with no main verb following it is stressed (e.g., "i CAN'T RUN as FAST as she CAN.").
       - EXCEPTION 4: Articles ("a", "an", "the") must ALWAYS be lowercase, even at the very beginning of the sentence (e.g., "a BOY...", "the DOG..."). However, subject pronouns ("I", "We", "He", "She", "They") at the beginning of a sentence CAN be capitalized if they naturally carry stress (e.g., "WE FOUND...").
-      - [CRITICAL HYPHENATION RULE]: If a word sounds like it stretches or has a trailing sound (even 1-syllable words with -s or -ed like "hands" or "looked"), heavily use hyphens to separate the strong and weak parts phonetically (e.g., hands -> HAN-ds, looked -> LOOK-ed, after -> AF-ter, body -> BO-dy, towel -> TOW-el).
+      - [CRITICAL HYPHENATION RULE]: If a word sounds like it stretches or has a trailing sound (even 1-syllable words with -s or -ed like "hands" or "looked"), heavily use hyphens to separate the strong and weak parts phonetically (e.g., hands -> HAN-ds, looked -> LOOK-ed, after -> AF-ter, body -> BO-dy, towel -> TOW-el). 
+        
 
       2. PAUSE (의미 단위 끊어 읽기 규칙 - sentence와 guide 공통 적용):
       - 초등학생이 호흡하기 좋은 2~3개의 자연스러운 의미 덩어리(Thought Group)로 잘라줘.
