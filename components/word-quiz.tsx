@@ -35,11 +35,13 @@ type PronunciationResult = {
   prosody: number;
 }
 
-// ▼ 단어 점수 데이터에 '안 읽음(Omission)' 상태를 받을 수 있도록 errorType 속성 추가
+// ▼ 단어 점수에 시간(Offset, Duration) 데이터 추가
 type WordScoreDetail = { 
   text: string; 
   score: number; 
   errorType?: string; 
+  offsetSec?: number; // 단어 시작 시간 (초)
+  durationSec?: number; // 단어 길이 (초)
   phonemes: { phoneme: string; score: number }[];
 }
 
@@ -50,6 +52,16 @@ function getGlobalAudio() {
     globalAudio = new Audio();
   }
   return globalAudio;
+}
+
+let globalAudioCtx: AudioContext | null = null;
+function getAudioContext() {
+  if (typeof window === "undefined") return null;
+  if (!globalAudioCtx) {
+    const Ctx = window.AudioContext || (window as any).webkitAudioContext;
+    if (Ctx) globalAudioCtx = new Ctx();
+  }
+  return globalAudioCtx;
 }
 
 const ttsCache = new Map<string, string>();
@@ -87,6 +99,9 @@ export function WordQuiz({ words, accent }: { words: QuizWord[]; accent: string 
   const [pronResult, setPronResult] = useState<PronunciationResult | null>(null)
   
   const [wordScores, setWordScores] = useState<WordScoreDetail[]>([])
+  
+  // ▼ 아이가 마이크로 말한 음성을 저장해둘 공간
+  const [userAudioUrl, setUserAudioUrl] = useState<string | null>(null)
 
   const [isSlowMode, setIsSlowMode] = useState(false)
 
@@ -228,12 +243,39 @@ export function WordQuiz({ words, accent }: { words: QuizWord[]; accent: string 
     }
   }
 
+  // ▼ 아이가 누른 단어 구간만 재생하는 가상 오디오 재생기
+  async function playUserWordAudio(offsetSec: number, durationSec: number) {
+    if (!userAudioUrl) return;
+    try {
+      const ctx = getAudioContext();
+      if (!ctx) return;
+      if (ctx.state === "suspended") await ctx.resume();
+
+      const res = await fetch(userAudioUrl);
+      const arrayBuffer = await res.arrayBuffer();
+      const decodedBuffer = await ctx.decodeAudioData(arrayBuffer);
+
+      const source = ctx.createBufferSource();
+      source.buffer = decodedBuffer;
+      source.connect(ctx.destination);
+      
+      // 앞뒤로 0.15초씩 덧붙여서 소리가 너무 기계적으로 뚝뚝 끊기지 않게 보완합니다.
+      const start = Math.max(0, offsetSec - 0.15);
+      const dur = durationSec + 0.3; 
+      
+      source.start(0, start, dur);
+    } catch(e) {
+      console.error("단어 부분 재생 실패:", e);
+    }
+  }
+
   async function handlePronunciationAssessment(targetText: string) {
     setIsRecording(true)
     setIsMicReady(false)
     setPronResult(null)
     setWordScores([]) 
     setFeedback("idle")
+    setUserAudioUrl(null) // 기존 녹음 초기화
 
     try {
       const sdk = await import("microsoft-cognitiveservices-speech-sdk")
@@ -264,12 +306,38 @@ export function WordQuiz({ words, accent }: { words: QuizWord[]; accent: string 
       const recognizer = new sdk.SpeechRecognizer(speechConfig, audioConfig)
       pronConfig.applyTo(recognizer)
 
-      recognizer.sessionStarted = (s, e) => {
+      let mediaRecorder: MediaRecorder | null = null;
+      let audioChunks: Blob[] = [];
+
+      recognizer.sessionStarted = async (s, e) => {
         setIsMicReady(true)
+        // ▼ Azure가 인식을 시작할 때, 백그라운드에서 동시에 녹음을 시작합니다!
+        try {
+          const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+          mediaRecorder = new MediaRecorder(stream);
+          mediaRecorder.ondataavailable = (e) => {
+            if (e.data.size > 0) audioChunks.push(e.data);
+          };
+          mediaRecorder.start();
+        } catch(e) {
+          console.error("내부 녹음 실패", e);
+        }
+      }
+
+      const stopRecording = () => {
+        if (mediaRecorder && mediaRecorder.state !== "inactive") {
+          mediaRecorder.onstop = () => {
+            const blob = new Blob(audioChunks);
+            setUserAudioUrl(URL.createObjectURL(blob));
+          };
+          mediaRecorder.stop();
+        }
       }
 
       recognizer.recognizeOnceAsync(
         (result) => {
+          stopRecording(); // 음성 인식 끝나면 녹음 종료
+
           if (result.reason === sdk.ResultReason.RecognizedSpeech) {
             const pron = sdk.PronunciationAssessmentResult.fromResult(result)
             
@@ -284,11 +352,13 @@ export function WordQuiz({ words, accent }: { words: QuizWord[]; accent: string 
             
             const wordsDetail = pron.detailResult?.Words || []
             
-            // ▼ Azure에서 안 읽음(Omission) 판단 데이터도 같이 가져오도록 수정
+            // Azure의 시간 단위(Ticks = 100나노초)를 우리가 쓰는 '초(Seconds)' 단위로 변환
             const mappedWords: WordScoreDetail[] = wordsDetail.map((w: any) => ({
               text: w.Word,
               score: w.PronunciationAssessment.AccuracyScore,
-              errorType: w.PronunciationAssessment.ErrorType, // "Omission", "None" 등
+              errorType: w.PronunciationAssessment.ErrorType,
+              offsetSec: w.Offset ? w.Offset / 10000000 : 0, 
+              durationSec: w.Duration ? w.Duration / 10000000 : 0,
               phonemes: w.Phonemes?.map((p: any) => ({
                 phoneme: p.Phoneme,
                 score: p.PronunciationAssessment.AccuracyScore
@@ -311,6 +381,7 @@ export function WordQuiz({ words, accent }: { words: QuizWord[]; accent: string 
         },
         (err) => {
           console.error("Azure 에러:", err)
+          stopRecording();
           alert("마이크 접근이 거부되었거나 서버에 연결할 수 없습니다.")
           recognizer.close()
           setIsRecording(false)
@@ -399,6 +470,7 @@ export function WordQuiz({ words, accent }: { words: QuizWord[]; accent: string 
     setUsedHintInQuiz(false)
     setPronResult(null)
     setWordScores([])
+    setUserAudioUrl(null)
     setPhase("quiz")
     
     if (quizType !== "speaking") {
@@ -416,7 +488,7 @@ export function WordQuiz({ words, accent }: { words: QuizWord[]; accent: string 
     const nextAnswered = [...answered, record]
     const nextIndex = index + 1
     if (nextIndex < total) {
-      setAnswered(nextAnswered); setIndex(nextIndex); setValue(""); setFeedback("idle"); setHintUsed(false); setPronResult(null); setWordScores([])
+      setAnswered(nextAnswered); setIndex(nextIndex); setValue(""); setFeedback("idle"); setHintUsed(false); setPronResult(null); setWordScores([]); setUserAudioUrl(null);
       if (quizType !== "speaking") requestAnimationFrame(() => inputRef.current?.focus())
       
       if (quizType === "listening") {
@@ -560,13 +632,12 @@ export function WordQuiz({ words, accent }: { words: QuizWord[]; accent: string 
                         const cleanToken = token.replace(/[^a-zA-Z0-9']/g, '').toLowerCase()
                         let colorClass = "text-foreground"
                         let scoreItem: WordScoreDetail | null = null;
-                        let isOmitted = false; // 안 읽은 단어 여부 체크
+                        let isOmitted = false; 
                         
                         const scoreIdx = availableScores.findIndex(ws => ws.text.toLowerCase() === cleanToken)
                         if (scoreIdx !== -1) {
                           scoreItem = availableScores[scoreIdx]
                           
-                          // ▼ Azure에서 "Omission(건너뜀)"으로 판단한 경우 투명도+빨간색 처리
                           if (scoreItem.errorType === "Omission") {
                             colorClass = "text-red-400 dark:text-red-500 opacity-50"
                             isOmitted = true;
@@ -584,20 +655,33 @@ export function WordQuiz({ words, accent }: { words: QuizWord[]; accent: string 
                         const isTarget = cleanToken === current.word.toLowerCase()
                         const showPhonemes = scoreItem && (isTarget || scoreItem.score < 80);
                         
+                        // ▼ 녹음 데이터가 있으면 단어를 '클릭' 가능하게 만듭니다
+                        const isClickable = scoreItem && userAudioUrl && scoreItem.offsetSec !== undefined && !isOmitted;
+
                         return (
-                          <span key={i} className="inline-flex flex-col items-center align-top relative group cursor-default">
+                          <span 
+                            key={i} 
+                            className={cn(
+                              "inline-flex flex-col items-center align-top relative group",
+                              isClickable && "cursor-pointer hover:bg-muted/50 rounded-lg px-1 transition-colors pb-1"
+                            )}
+                            onClick={() => {
+                              if (isClickable) {
+                                playUserWordAudio(scoreItem!.offsetSec!, scoreItem!.durationSec || 0.5)
+                              }
+                            }}
+                            title={isClickable ? "👆 눌러서 내 발음 듣기" : undefined}
+                          >
                             <span className={cn("transition-colors duration-500 leading-tight", colorClass, isTarget && "underline decoration-4 underline-offset-4")}>
                               {token}
                             </span>
                             
-                            {/* ▼ 안 읽은 단어는 발음기호 대신 "안 들림" 표시 */}
                             {isOmitted && (
                               <span className="mt-1 flex text-[11px] font-bold text-red-400 opacity-90 animate-in slide-in-from-top-1 fade-in duration-300">
                                 (안 들림 💦)
                               </span>
                             )}
 
-                            {/* ▼ 제대로 읽은 단어 중 점수가 낮은 단어는 발음기호 쪼개서 표시 */}
                             {!isOmitted && showPhonemes && scoreItem?.phonemes && scoreItem.phonemes.length > 0 && (
                               <span className="mt-1 flex gap-[2px] text-[13px] font-medium font-mono tracking-tighter opacity-90 animate-in slide-in-from-top-1 fade-in duration-300">
                                 <span className="text-muted-foreground/40">[</span>
@@ -624,6 +708,14 @@ export function WordQuiz({ words, accent }: { words: QuizWord[]; accent: string 
                       )
                     )}
                   </div>
+                  
+                  {/* ▼ 녹음이 완료되면 나타나는 귀여운 안내 툴팁 */}
+                  {pronResult && userAudioUrl && (
+                    <p className="text-[12px] font-bold text-indigo-500 animate-in fade-in zoom-in mb-4 bg-indigo-50 px-3 py-1.5 rounded-full border border-indigo-100 shadow-sm">
+                      👆 단어를 톡! 터치하면 내가 말한 발음을 들을 수 있어요
+                    </p>
+                  )}
+
                   <p className="text-sm font-semibold text-muted-foreground mb-6 text-center">
                     🇰🇷 {contextData[index].translation}
                   </p>
