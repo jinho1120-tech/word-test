@@ -1,7 +1,7 @@
 "use client"
 
 import React, { useMemo, useRef, useState, useEffect } from "react"
-import { Lightbulb, Check, X, ArrowRight, Volume2, Sparkles, BrainCircuit, Mic, Loader2, Headphones } from "lucide-react"
+import { Lightbulb, Check, X, ArrowRight, Volume2, Sparkles, BrainCircuit, Mic, Loader2, Headphones, Square } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { recordQuizResult, generateContextQuiz } from "@/app/actions/words"
 import confetti from "canvas-confetti"
@@ -101,6 +101,8 @@ export function WordQuiz({ words, accent }: { words: QuizWord[]; accent: string 
   
   const [userAudioUrl, setUserAudioUrl] = useState<string | null>(null)
   const [isSlowMode, setIsSlowMode] = useState(false)
+
+  const stopRecordingRef = useRef<(() => void) | null>(null)
 
   const current = deck[index]
   const total = deck.length
@@ -301,6 +303,10 @@ export function WordQuiz({ words, accent }: { words: QuizWord[]; accent: string 
     setFeedback("idle")
     setUserAudioUrl(null)
 
+    let mediaStream: MediaStream | null = null;
+    let mediaRecorder: MediaRecorder | null = null;
+    let audioChunks: Blob[] = [];
+
     try {
       const sdk = await import("microsoft-cognitiveservices-speech-sdk")
       const key = process.env.NEXT_PUBLIC_AZURE_SPEECH_KEY
@@ -312,9 +318,18 @@ export function WordQuiz({ words, accent }: { words: QuizWord[]; accent: string 
         return
       }
 
+      mediaStream = await navigator.mediaDevices.getUserMedia({ 
+        audio: {
+          echoCancellation: true,
+          noiseSuppression: true,
+          autoGainControl: true
+        } 
+      });
+
       const speechConfig = sdk.SpeechConfig.fromSubscription(key, region)
       speechConfig.speechRecognitionLanguage = "en-US"
-      speechConfig.setProperty(sdk.PropertyId.SpeechServiceConnection_EndSilenceTimeoutMs, "1200");
+      // 💡 수동 종료 버튼을 활용할 수 있도록 자동 정지 타임아웃을 10초로 설정
+      speechConfig.setProperty(sdk.PropertyId.SpeechServiceConnection_EndSilenceTimeoutMs, "10000");
 
       const audioConfig = sdk.AudioConfig.fromDefaultMicrophoneInput()
 
@@ -330,37 +345,33 @@ export function WordQuiz({ words, accent }: { words: QuizWord[]; accent: string 
       const recognizer = new sdk.SpeechRecognizer(speechConfig, audioConfig)
       pronConfig.applyTo(recognizer)
 
-      let mediaStream: MediaStream | null = null;
-      let mediaRecorder: MediaRecorder | null = null;
-      let audioChunks: Blob[] = [];
+      mediaRecorder = new MediaRecorder(mediaStream);
+      mediaRecorder.ondataavailable = (e) => {
+        if (e.data.size > 0) audioChunks.push(e.data);
+      };
+      mediaRecorder.start();
 
-      recognizer.sessionStarted = async (s, e) => {
+      recognizer.sessionStarted = (s, e) => {
         setIsMicReady(true)
-        try {
-          mediaStream = await navigator.mediaDevices.getUserMedia({ audio: true });
-          mediaRecorder = new MediaRecorder(mediaStream);
-          mediaRecorder.ondataavailable = (e) => {
-            if (e.data.size > 0) audioChunks.push(e.data);
-          };
-          mediaRecorder.start();
-        } catch(e) {
-          console.error("내부 녹음 실패", e);
-        }
       }
 
       const stopRecording = () => {
         if (mediaRecorder && mediaRecorder.state !== "inactive") {
           mediaRecorder.onstop = () => {
-            const blob = new Blob(audioChunks);
+            const blob = new Blob(audioChunks, { type: mediaRecorder?.mimeType || 'audio/webm' });
             setUserAudioUrl(URL.createObjectURL(blob));
           };
           mediaRecorder.stop();
+          mediaRecorder = null;
         }
         if (mediaStream) {
           mediaStream.getTracks().forEach((track) => track.stop());
           mediaStream = null;
         }
+        stopRecordingRef.current = null;
       }
+
+      stopRecordingRef.current = stopRecording;
 
       recognizer.recognizeOnceAsync(
         (result) => {
@@ -400,7 +411,7 @@ export function WordQuiz({ words, accent }: { words: QuizWord[]; accent: string 
               setFeedback("wrong")
             }
           } else {
-            alert("목소리가 너무 작거나 짧게 들렸어요. 화면에 '이제 말씀하세요!'가 뜨면 시작해 주세요.")
+            alert("목소리가 들리지 않았어요. 버튼을 누르고 다 읽은 후 완료 버튼을 눌러주세요.")
           }
           recognizer.close()
           setIsRecording(false)
@@ -417,6 +428,9 @@ export function WordQuiz({ words, accent }: { words: QuizWord[]; accent: string 
       )
     } catch (error) {
       console.error("발음 평가 초기화 실패:", error)
+      if (mediaStream) {
+        mediaStream.getTracks().forEach((track) => track.stop());
+      }
       setIsRecording(false)
       setIsMicReady(false)
     }
@@ -757,22 +771,31 @@ export function WordQuiz({ words, accent }: { words: QuizWord[]; accent: string 
                         <Volume2 className="size-5" />
                       </button>
                       
+                      {/* ▼ 수동 녹음 종료 및 채점하기 버튼 제어 */}
                       <button 
                         type="button" 
-                        onClick={() => handlePronunciationAssessment(getFullSentence())}
-                        disabled={isRecording}
+                        onClick={() => {
+                          if (isRecording) {
+                            if (isMicReady && stopRecordingRef.current) {
+                              stopRecordingRef.current();
+                            }
+                          } else {
+                            handlePronunciationAssessment(getFullSentence());
+                          }
+                        }}
+                        disabled={isRecording && !isMicReady}
                         className={cn("flex flex-1 items-center gap-2 rounded-2xl px-4 py-3 font-black text-white shadow-md transition-all active:scale-95 justify-center text-sm", 
-                          isRecording && !isMicReady ? "bg-amber-500 opacity-90" : 
-                          isRecording && isMicReady ? "bg-red-500 animate-pulse scale-105" : 
+                          isRecording && !isMicReady ? "bg-amber-500 opacity-90 cursor-wait" : 
+                          isRecording && isMicReady ? "bg-red-500 hover:bg-red-600 animate-pulse scale-105" : 
                           (pronResult ? "bg-gradient-to-r from-amber-500 to-orange-500 hover:scale-105" : "bg-gradient-to-r from-indigo-500 to-blue-600 hover:scale-105")
                         )}
                       >
                         {isRecording && !isMicReady && <Loader2 className="size-4 animate-spin" />}
-                        {isRecording && isMicReady && <Mic className="size-4 animate-bounce" />}
+                        {isRecording && isMicReady && <Square className="size-4 fill-white" />}
                         {!isRecording && <Mic className="size-4" />}
                         
                         {isRecording && !isMicReady ? "연결 중..." : 
-                         isRecording && isMicReady ? "🔴 이제 말씀하세요!" : 
+                         isRecording && isMicReady ? "⏹️ 다 읽었어요! (채점하기)" : 
                          (pronResult ? "다시 한번 채점하기" : "내 발음 채점하기")}
                       </button>
                     </div>
