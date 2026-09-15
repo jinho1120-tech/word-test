@@ -627,7 +627,6 @@ export function WordQuiz({ words, accent }: { words: QuizWord[]; accent: string 
 
             <div className="flex flex-col px-6 pb-8 pt-2 flex-1 overflow-y-auto">
               
-              {/* ▼ 화면을 넓고 당당하게 복구! 양옆에 아이콘과 응원 문구를 채웠습니다. */}
               {quizType === "speaking" ? (
                 <div className="mb-4 flex items-center justify-between text-xs font-medium text-muted-foreground">
                   <span className="flex items-center gap-1.5"><Mic className="size-4 text-indigo-500" /> <span className="font-bold text-foreground">스피킹 훈련</span></span>
@@ -644,7 +643,6 @@ export function WordQuiz({ words, accent }: { words: QuizWord[]; accent: string 
                 </div>
               )}
 
-              {/* ▼ 높이 고정으로 레이아웃 흔들림 방지 */}
               <div className="h-8 w-full flex justify-center mb-2">
                 {quizType !== "speaking" && streak >= 3 && (
                   <div key={streak} className="animate-in slide-in-from-bottom-2 fade-in zoom-in duration-300">
@@ -658,9 +656,8 @@ export function WordQuiz({ words, accent }: { words: QuizWord[]; accent: string 
               {quizType === "speaking" && contextData[index] ? (
                 <div className="mb-4 flex flex-col items-center justify-center w-full">
                   
-                  {/* (중복되던 'AI 문장 말하기 훈련' 미니 배지는 깔끔하게 삭제했습니다!) */}
-                  
-                  <div className="mb-3 text-balance text-center text-2xl sm:text-3xl font-black tracking-tight text-foreground leading-snug flex flex-wrap justify-center gap-x-2 gap-y-2">
+                  {/* ▼ 문장 폰트 크기 업 (text-3xl sm:text-4xl) & 여백 조정 */}
+                  <div className="mb-4 text-balance text-center text-3xl sm:text-4xl font-black tracking-tight text-foreground leading-normal flex flex-wrap justify-center gap-x-3 gap-y-3 px-1">
                     {wordScores.length > 0 ? (() => {
                       const fullSent = getFullSentence()
                       const availableScores = [...wordScores]
@@ -710,13 +707,13 @@ export function WordQuiz({ words, accent }: { words: QuizWord[]; accent: string 
                             </span>
                             
                             {isOmitted && (
-                              <span className="mt-1 flex text-[10px] font-bold text-red-400 opacity-90 animate-in slide-in-from-top-1 fade-in duration-300">
+                              <span className="mt-1 flex text-[11px] font-bold text-red-400 opacity-90 animate-in slide-in-from-top-1 fade-in duration-300">
                                 (안 들림💦)
                               </span>
                             )}
 
                             {!isOmitted && showPhonemes && scoreItem?.phonemes && scoreItem.phonemes.length > 0 && (
-                              <span className="mt-0.5 flex gap-[1px] text-[12px] font-medium font-mono tracking-tighter opacity-90 animate-in slide-in-from-top-1 fade-in duration-300">
+                              <span className="mt-0.5 flex gap-[1px] text-[13px] font-medium font-mono tracking-tighter opacity-90 animate-in slide-in-from-top-1 fade-in duration-300">
                                 <span className="text-muted-foreground/40">[</span>
                                 {scoreItem.phonemes.map((p, pIdx) => {
                                   let pColor = "text-red-500 font-black"
@@ -741,7 +738,8 @@ export function WordQuiz({ words, accent }: { words: QuizWord[]; accent: string 
                     )}
                   </div>
                   
-                  <p className="text-[13px] sm:text-sm font-semibold text-muted-foreground mb-4 text-center px-4">
+                  {/* ▼ 한국어 뜻 폰트도 한 단계 키우고 여백 확장 */}
+                  <p className="text-base font-semibold text-muted-foreground mb-6 text-center px-4 leading-relaxed">
                     🇰🇷 {contextData[index].translation}
                   </p>
 
