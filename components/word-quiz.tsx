@@ -164,14 +164,16 @@ export function WordQuiz({ words, accent }: { words: QuizWord[]; accent: string 
         window.speechSynthesis.cancel()
       }
 
+      // 💡 음성 재생 시 빗금(/) 기호 제거
+      const cleanTargetText = targetText.replace(/\s*\/\s*/g, ' ').trim();
       const audio = getGlobalAudio();
-      const cacheKey = `${targetText}_${ttsVoice}_${isSlowMode ? 'slow' : 'normal'}`;
+      const cacheKey = `${cleanTargetText}_${ttsVoice}_${isSlowMode ? 'slow' : 'normal'}`;
 
       if (audio && ttsCache.has(cacheKey)) {
         audio.src = ttsCache.get(cacheKey)!;
         audio.play().catch((e) => {
           console.error("캐시 오디오 재생 실패:", e);
-          fallbackTTS(targetText);
+          fallbackTTS(cleanTargetText);
         });
         return;
       }
@@ -180,7 +182,7 @@ export function WordQuiz({ words, accent }: { words: QuizWord[]; accent: string 
       const region = process.env.NEXT_PUBLIC_AZURE_SPEECH_REGION
 
       if (!key || !region) {
-        fallbackTTS(targetText)
+        fallbackTTS(cleanTargetText)
         return
       }
 
@@ -189,7 +191,7 @@ export function WordQuiz({ words, accent }: { words: QuizWord[]; accent: string 
       speechConfig.speechSynthesisOutputFormat = sdk.SpeechSynthesisOutputFormat.Riff24Khz16BitMonoPcm;
       
       const synthesizer = new sdk.SpeechSynthesizer(speechConfig, null)
-      const safeText = targetText.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+      const safeText = cleanTargetText.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
       const speedRate = isSlowMode ? "-20%" : "0%";
       
       const ssml = `
@@ -214,20 +216,20 @@ export function WordQuiz({ words, accent }: { words: QuizWord[]; accent: string 
               audio.src = url;
               audio.play().catch((e) => {
                 console.error("Azure 오디오 파일 재생 실패:", e);
-                fallbackTTS(targetText);
+                fallbackTTS(cleanTargetText);
               });
             } else {
-              fallbackTTS(targetText);
+              fallbackTTS(cleanTargetText);
             }
           } else {
             console.warn("Azure TTS 합성 실패, 기본 TTS로 전환합니다.")
-            fallbackTTS(targetText)
+            fallbackTTS(cleanTargetText)
           }
           synthesizer.close()
         },
         (err) => {
           console.error("Azure TTS 통신 에러:", err)
-          fallbackTTS(targetText)
+          fallbackTTS(cleanTargetText)
           synthesizer.close()
         }
       )
@@ -239,7 +241,8 @@ export function WordQuiz({ words, accent }: { words: QuizWord[]; accent: string 
 
   function fallbackTTS(text: string) {
     if (typeof window !== "undefined" && "speechSynthesis" in window) {
-      const utterance = new SpeechSynthesisUtterance(text)
+      const cleanText = text.replace(/\s*\/\s*/g, ' ').trim();
+      const utterance = new SpeechSynthesisUtterance(cleanText)
       utterance.lang = "en-US"
       utterance.rate = isSlowMode ? 0.75 : 0.9 
       window.speechSynthesis.speak(utterance)
@@ -270,12 +273,10 @@ export function WordQuiz({ words, accent }: { words: QuizWord[]; accent: string 
     }
   }
 
-  // 💡 Chunk 단위 재생을 위해 대기 시간(Delay) 계산식 고도화
   async function playComparison(targetText: string, offsetSec: number, durationSec: number) {
     playPronunciation(targetText);
     
     const wordCount = targetText.trim().split(/\s+/).length;
-    // 청크가 길어질 수 있으므로, 원어민 TTS가 완전히 끝난 뒤에 내 목소리가 나오도록 여유 시간(Delay) 확보
     const estimatedTtsMs = wordCount * 600 + 800; 
     const delay = Math.max(estimatedTtsMs, durationSec * 1000 + 500);
     
@@ -313,6 +314,9 @@ export function WordQuiz({ words, accent }: { words: QuizWord[]; accent: string 
     setFeedback("idle")
     setUserAudioUrl(null)
 
+    // 💡 Azure 발음 평가 시 빗금 기호 제거
+    const cleanTargetText = targetText.replace(/\s*\/\s*/g, ' ').trim();
+
     let mediaStream: MediaStream | null = null;
     let mediaRecorder: MediaRecorder | null = null;
     let audioChunks: Blob[] = [];
@@ -343,7 +347,7 @@ export function WordQuiz({ words, accent }: { words: QuizWord[]; accent: string 
       const audioConfig = sdk.AudioConfig.fromDefaultMicrophoneInput()
 
       const pronConfig = new sdk.PronunciationAssessmentConfig(
-        targetText,
+        cleanTargetText,
         sdk.PronunciationAssessmentGradingSystem.HundredMark,
         sdk.PronunciationAssessmentGranularity.Phoneme,
         true
@@ -698,7 +702,6 @@ export function WordQuiz({ words, accent }: { words: QuizWord[]; accent: string 
                       const fullSent = getFullSentence()
                       const availableScores = [...wordScores]
                       
-                      // 💡 1. 빗금(/) 기준으로 청크 나누기. 없으면 3단어 단위로 자동 분리
                       let rawChunks = fullSent.split('/').map(c => c.trim()).filter(Boolean);
                       if (rawChunks.length === 1 && fullSent.split(' ').length > 3) {
                         const words = fullSent.split(' ');
@@ -711,7 +714,6 @@ export function WordQuiz({ words, accent }: { words: QuizWord[]; accent: string 
                       return rawChunks.map((chunkStr, cIdx) => {
                         const chunkWords = chunkStr.split(' ');
 
-                        // 청크별 시간 추적용 변수
                         let chunkStartSec = 9999;
                         let chunkEndSec = 0;
                         let isChunkOmitted = true;
@@ -731,7 +733,6 @@ export function WordQuiz({ words, accent }: { words: QuizWord[]; accent: string 
                               isOmitted = true;
                             } else {
                               isChunkOmitted = false;
-                              // 청크 전체 시작/종료 시간 갱신
                               if (scoreItem.offsetSec !== undefined) {
                                 chunkStartSec = Math.min(chunkStartSec, scoreItem.offsetSec);
                                 chunkEndSec = Math.max(chunkEndSec, scoreItem.offsetSec + (scoreItem.durationSec || 0));
@@ -773,9 +774,8 @@ export function WordQuiz({ words, accent }: { words: QuizWord[]; accent: string 
                           )
                         });
 
-                        // 💡 2. 청크 단위 비교 재생 이벤트 바인딩
                         const isClickable = !isChunkOmitted && userAudioUrl && chunkStartSec !== 9999;
-                        const chunkDuration = chunkEndSec - chunkStartSec + 0.15; // 꼬리음 여유 0.15초 추가
+                        const chunkDuration = chunkEndSec - chunkStartSec + 0.15;
 
                         return (
                           <React.Fragment key={cIdx}>
@@ -802,7 +802,8 @@ export function WordQuiz({ words, accent }: { words: QuizWord[]; accent: string 
                         )
                       })
                     })() : (
-                      getFullSentence().split(new RegExp(`(${current.word})`, 'gi')).map((part, i) => 
+                      /* 💡 녹음 전 처음 읽을 때: 빗금(/) 기호를 완전히 제거하고 깨끗한 원문만 표시 */
+                      getFullSentence().replace(/\s*\/\s*/g, ' ').split(new RegExp(`(${current.word})`, 'gi')).map((part, i) => 
                         part.toLowerCase() === current.word.toLowerCase() ? (
                           <span key={i} className="text-indigo-600 dark:text-indigo-400 underline decoration-4 underline-offset-4">{part}</span>
                         ) : (
