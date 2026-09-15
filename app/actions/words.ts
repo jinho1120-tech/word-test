@@ -218,7 +218,7 @@ export async function generateContextQuiz(words: { word: string, meaning: string
     const apiKey = process.env.GEMINI_API_KEY?.trim();
     if (!apiKey) return { success: false, error: "API 키가 등록되지 않았습니다." };
 
-    const endpoint = `https://generativelanguage.googleapis.com/v1beta/models/gemini-3.6-flash:generateContent?key=${apiKey}`;
+    const endpoint = `https://generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash-lite:generateContent?key=${apiKey}`;
     
     const themes = ["신나는 학교 생활", "가족과의 따뜻한 일상", "귀여운 동물들의 숲", "신나는 해외 여행", "베스트 프렌드와의 놀이", "맛있는 요리 대회", "즐거운 취미 생활", "신비로운 마법 학교", "우주 탐험", "미래 도시"];
     const randomTheme = themes[Math.floor(Math.random() * themes.length)];
