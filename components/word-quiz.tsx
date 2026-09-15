@@ -1,7 +1,7 @@
 "use client"
 
 import React, { useMemo, useRef, useState, useEffect } from "react"
-import { Lightbulb, Check, X, ArrowRight, Volume2, Sparkles, BrainCircuit, Mic, Loader2 } from "lucide-react"
+import { Lightbulb, Check, X, ArrowRight, Volume2, Sparkles, BrainCircuit, Mic, Loader2, Headphones } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { recordQuizResult, generateContextQuiz } from "@/app/actions/words"
 import confetti from "canvas-confetti"
@@ -272,7 +272,6 @@ export function WordQuiz({ words, accent }: { words: QuizWord[]; accent: string 
     }, delay);
   }
 
-  // ▼ [수정된 부분] 전체 문장 듣기도 안정적인 AudioContext 엔진을 사용하도록 업그레이드!
   async function playFullUserAudio() {
     if (!userAudioUrl) return;
     try {
@@ -288,7 +287,6 @@ export function WordQuiz({ words, accent }: { words: QuizWord[]; accent: string 
       source.buffer = decodedBuffer;
       source.connect(ctx.destination);
       
-      // 처음부터 끝까지 전체를 재생합니다.
       source.start(0);
     } catch (e) {
       console.error("전체 녹음 Web Audio 재생 실패:", e);
@@ -634,7 +632,7 @@ export function WordQuiz({ words, accent }: { words: QuizWord[]; accent: string 
                 <span className={cn(streak >= 5 && "text-orange-500 animate-pulse font-bold")}>연속 <span className="font-black text-sm" style={streak >= 5 ? {} : { color: accent }}>{streak}</span></span>
               </div>
 
-              <div className="h-10 w-full flex justify-center mb-2">
+              <div className="h-8 w-full flex justify-center mb-2">
                 {streak >= 3 && (
                   <div key={streak} className="animate-in slide-in-from-bottom-2 fade-in zoom-in duration-300">
                     <span className={cn("rounded-full px-4 py-1.5 text-sm font-black text-white shadow-lg", streak >= 10 ? "bg-gradient-to-r from-red-500 to-orange-600 scale-110 shadow-red-500/50" : "bg-gradient-to-r from-amber-400 to-orange-500 shadow-orange-500/40")}>
@@ -645,10 +643,11 @@ export function WordQuiz({ words, accent }: { words: QuizWord[]; accent: string 
               </div>
 
               {quizType === "speaking" && contextData[index] ? (
-                <div className="mb-6 flex flex-col items-center justify-center w-full">
-                  <div className="mb-3 flex justify-center"><span className="rounded-full bg-muted/80 px-2.5 py-1 text-[11px] font-bold tracking-wide text-muted-foreground">AI 문장 말하기 훈련</span></div>
+                <div className="mb-4 flex flex-col items-center justify-center w-full">
+                  <div className="mb-2 flex justify-center"><span className="rounded-full bg-muted/80 px-2 py-0.5 text-[10px] font-bold tracking-wide text-muted-foreground">AI 문장 말하기 훈련</span></div>
                   
-                  <div className="mb-4 text-balance text-center text-3xl font-black tracking-tight text-foreground leading-snug flex flex-wrap justify-center gap-x-2 gap-y-4">
+                  {/* ▼ 문장 여백 축소 (gap-y-4 -> gap-y-2) */}
+                  <div className="mb-3 text-balance text-center text-2xl sm:text-3xl font-black tracking-tight text-foreground leading-snug flex flex-wrap justify-center gap-x-2 gap-y-2">
                     {wordScores.length > 0 ? (() => {
                       const fullSent = getFullSentence()
                       const availableScores = [...wordScores]
@@ -678,7 +677,6 @@ export function WordQuiz({ words, accent }: { words: QuizWord[]; accent: string 
 
                         const isTarget = cleanToken === current.word.toLowerCase()
                         const showPhonemes = scoreItem && (isTarget || scoreItem.score < 80);
-                        
                         const isClickable = scoreItem && userAudioUrl && scoreItem.offsetSec !== undefined && !isOmitted;
 
                         return (
@@ -686,33 +684,31 @@ export function WordQuiz({ words, accent }: { words: QuizWord[]; accent: string 
                             key={i} 
                             className={cn(
                               "inline-flex flex-col items-center align-top relative group",
-                              isClickable && "cursor-pointer hover:bg-muted/50 rounded-lg px-1 transition-colors pb-1"
+                              isClickable && "cursor-pointer hover:bg-muted/50 rounded-lg px-1 transition-colors pb-0.5"
                             )}
                             onClick={() => {
                               if (isClickable) {
                                 playComparison(cleanToken, scoreItem!.offsetSec!, scoreItem!.durationSec || 0.5)
                               }
                             }}
-                            title={isClickable ? "👆 눌러서 원어민 발음과 내 발음 비교하기" : undefined}
                           >
                             <span className={cn("transition-colors duration-500 leading-tight", colorClass, isTarget && "underline decoration-4 underline-offset-4")}>
                               {token}
                             </span>
                             
                             {isOmitted && (
-                              <span className="mt-1 flex text-[11px] font-bold text-red-400 opacity-90 animate-in slide-in-from-top-1 fade-in duration-300">
-                                (안 들림 💦)
+                              <span className="mt-1 flex text-[10px] font-bold text-red-400 opacity-90 animate-in slide-in-from-top-1 fade-in duration-300">
+                                (안 들림💦)
                               </span>
                             )}
 
                             {!isOmitted && showPhonemes && scoreItem?.phonemes && scoreItem.phonemes.length > 0 && (
-                              <span className="mt-1 flex gap-[2px] text-[13px] font-medium font-mono tracking-tighter opacity-90 animate-in slide-in-from-top-1 fade-in duration-300">
+                              <span className="mt-0.5 flex gap-[1px] text-[12px] font-medium font-mono tracking-tighter opacity-90 animate-in slide-in-from-top-1 fade-in duration-300">
                                 <span className="text-muted-foreground/40">[</span>
                                 {scoreItem.phonemes.map((p, pIdx) => {
                                   let pColor = "text-red-500 font-black"
                                   if (p.score >= 80) pColor = "text-green-500"
                                   else if (p.score >= 60) pColor = "text-amber-500 font-black"
-                                  
                                   return <span key={pIdx} className={pColor}>{p.phoneme}</span>
                                 })}
                                 <span className="text-muted-foreground/40">]</span>
@@ -732,93 +728,93 @@ export function WordQuiz({ words, accent }: { words: QuizWord[]; accent: string 
                     )}
                   </div>
                   
-                  {pronResult && userAudioUrl && (
-                    <p className="text-[12px] font-bold text-indigo-500 animate-in fade-in zoom-in mb-4 bg-indigo-50 px-3 py-1.5 rounded-full border border-indigo-100 shadow-sm">
-                      👆 단어를 톡! 터치하면 원어민 발음과 내 발음을 비교해 볼 수 있어요 🎧
-                    </p>
-                  )}
-
-                  <p className="text-sm font-semibold text-muted-foreground mb-6 text-center">
+                  {/* ▼ 한국어 뜻을 영어 문장과 더 가깝게 밀착 */}
+                  <p className="text-[13px] sm:text-sm font-semibold text-muted-foreground mb-4 text-center px-4">
                     🇰🇷 {contextData[index].translation}
                   </p>
 
-                  <div className="flex flex-col items-center gap-3 w-full">
-                    <div className="flex gap-3">
-                      <button type="button" onClick={() => playPronunciation(getFullSentence())} className="flex size-14 items-center justify-center rounded-full bg-muted text-foreground shadow-sm transition-transform hover:scale-105">
-                        <Volume2 className="size-6" />
+                  {/* ▼ 깔끔하게 하나로 통합된 알림 배지 */}
+                  {pronResult && userAudioUrl && (
+                    <div className="mb-4 flex items-center justify-center rounded-full bg-indigo-50/80 px-3 py-1 text-[11px] font-bold text-indigo-500 border border-indigo-100/50 animate-in fade-in zoom-in">
+                      👆 단어를 톡! 터치하면 내 발음과 비교할 수 있어요
+                    </div>
+                  )}
+
+                  {/* ▼ 버튼 구조 압축 (가로 배치) */}
+                  <div className="flex flex-col gap-2 w-full max-w-sm mb-2">
+                    <div className="flex gap-2 w-full">
+                      <button type="button" onClick={() => playPronunciation(getFullSentence())} className="flex size-12 shrink-0 items-center justify-center rounded-2xl bg-muted text-foreground shadow-sm transition-transform hover:scale-105 active:scale-95">
+                        <Volume2 className="size-5" />
                       </button>
                       
                       <button 
                         type="button" 
                         onClick={() => handlePronunciationAssessment(getFullSentence())}
                         disabled={isRecording}
-                        className={cn("flex items-center gap-2 rounded-full px-6 py-2 font-black text-white shadow-lg transition-all active:scale-95 min-w-[200px] justify-center", 
+                        className={cn("flex flex-1 items-center gap-2 rounded-2xl px-4 py-3 font-black text-white shadow-md transition-all active:scale-95 justify-center text-sm", 
                           isRecording && !isMicReady ? "bg-amber-500 opacity-90" : 
                           isRecording && isMicReady ? "bg-red-500 animate-pulse scale-105" : 
                           (pronResult ? "bg-gradient-to-r from-amber-500 to-orange-500 hover:scale-105" : "bg-gradient-to-r from-indigo-500 to-blue-600 hover:scale-105")
                         )}
                       >
-                        {isRecording && !isMicReady && <Loader2 className="size-5 animate-spin" />}
-                        {isRecording && isMicReady && <Mic className="size-5 animate-bounce" />}
-                        {!isRecording && <Mic className="size-5" />}
+                        {isRecording && !isMicReady && <Loader2 className="size-4 animate-spin" />}
+                        {isRecording && isMicReady && <Mic className="size-4 animate-bounce" />}
+                        {!isRecording && <Mic className="size-4" />}
                         
-                        {isRecording && !isMicReady ? "마이크 연결 중..." : 
+                        {isRecording && !isMicReady ? "연결 중..." : 
                          isRecording && isMicReady ? "🔴 이제 말씀하세요!" : 
                          (pronResult ? "다시 한번 채점하기" : "내 발음 채점하기")}
                       </button>
                     </div>
 
+                    {/* 내 녹음 듣기 버튼도 가로 폭에 맞춰 통일감 있게 배치 */}
                     {pronResult && userAudioUrl && (
                       <button
                         type="button"
                         onClick={playFullUserAudio}
-                        className="mt-1 flex items-center gap-2 rounded-full px-5 py-2 bg-indigo-50 border border-indigo-200 text-indigo-600 font-bold text-sm shadow-sm transition-transform hover:scale-105 active:scale-95 animate-in slide-in-from-top-2 fade-in"
+                        className="flex w-full items-center justify-center gap-2 rounded-2xl bg-indigo-50 py-2.5 text-indigo-600 font-bold text-sm shadow-sm transition-transform hover:bg-indigo-100 active:scale-95 animate-in fade-in"
                       >
-                        <Volume2 className="size-4" /> 🎧 내 전체 녹음 듣기
+                        <Headphones className="size-4" /> 내 전체 녹음 듣기
                       </button>
                     )}
-
-                    {!pronResult && <p className="text-[11px] font-semibold text-muted-foreground animate-in fade-in mt-1">💡 스피커 버튼을 누르면 다시 들을 수 있어요</p>}
                   </div>
                   
+                  {/* ▼ 점수판 여백 축소 */}
                   {pronResult && (
-                    <div className="mt-6 flex flex-col w-full items-center animate-in zoom-in duration-300">
-                      <div className="grid grid-cols-4 gap-2 w-full max-w-sm mb-4">
-                        <div className="flex flex-col items-center justify-center p-2 bg-muted/80 rounded-xl border border-border/50">
+                    <div className="mt-2 flex flex-col w-full items-center animate-in zoom-in duration-300">
+                      <div className="grid grid-cols-4 gap-1.5 w-full max-w-sm mb-3">
+                        <div className="flex flex-col items-center justify-center py-2 bg-muted/80 rounded-xl border border-border/50">
                           <span className="text-[10px] text-muted-foreground font-bold mb-0.5">정확도</span>
-                          <span className="text-xl font-black text-blue-500">{Math.round(pronResult.accuracy)}</span>
+                          <span className="text-lg font-black text-blue-500">{Math.round(pronResult.accuracy)}</span>
                         </div>
-                        <div className="flex flex-col items-center justify-center p-2 bg-muted/80 rounded-xl border border-border/50">
+                        <div className="flex flex-col items-center justify-center py-2 bg-muted/80 rounded-xl border border-border/50">
                           <span className="text-[10px] text-muted-foreground font-bold mb-0.5">유창성</span>
-                          <span className="text-xl font-black text-indigo-500">{Math.round(pronResult.fluency)}</span>
+                          <span className="text-lg font-black text-indigo-500">{Math.round(pronResult.fluency)}</span>
                         </div>
-                        <div className="flex flex-col items-center justify-center p-2 bg-muted/80 rounded-xl border border-border/50">
+                        <div className="flex flex-col items-center justify-center py-2 bg-muted/80 rounded-xl border border-border/50">
                           <span className="text-[10px] text-muted-foreground font-bold mb-0.5">완전성</span>
-                          <span className="text-xl font-black text-amber-500">{Math.round(pronResult.completeness)}</span>
+                          <span className="text-lg font-black text-amber-500">{Math.round(pronResult.completeness)}</span>
                         </div>
-                        <div className="flex flex-col items-center justify-center p-2 bg-muted/80 rounded-xl border border-border/50">
+                        <div className="flex flex-col items-center justify-center py-2 bg-muted/80 rounded-xl border border-border/50">
                           <span className="text-[10px] text-muted-foreground font-bold mb-0.5">억양</span>
-                          <span className="text-xl font-black text-purple-500">{Math.round(pronResult.prosody)}</span>
+                          <span className="text-lg font-black text-purple-500">{Math.round(pronResult.prosody)}</span>
                         </div>
                       </div>
                       
-                      <p className="mt-1 text-[15px] font-black text-foreground">
-                        {pronResult.score >= 90 ? "🏆 Perfect! 원어민처럼 완벽해요!" :
+                      <p className="text-[14px] font-black text-foreground mb-2">
+                        {pronResult.score >= 90 ? "✨ Perfect! 원어민처럼 완벽해요!" :
                          pronResult.score >= 80 ? "✨ Excellent! 아주 훌륭해요!" :
                          pronResult.score >= 60 ? "👍 Good! 조금만 더 연습해볼까요?" :
                          "💪 Try Again! 다시 한번 또박또박 읽어보세요!"}
                       </p>
 
                       {pronResult.prosody < 90 && contextData[index].guide && (
-                        <div className="mt-4 w-full animate-in slide-in-from-top-2 fade-in duration-500 rounded-xl bg-indigo-50/80 dark:bg-indigo-900/20 p-4 border border-indigo-100 dark:border-indigo-800/30 text-center shadow-inner">
-                          <p className="text-[11px] font-bold text-indigo-500 dark:text-indigo-400 mb-1.5 flex items-center justify-center gap-1.5">
-                            <Lightbulb className="size-3.5" /> 리듬을 타며 다시 읽어볼까요?
+                        <div className="w-full max-w-sm animate-in slide-in-from-top-2 fade-in duration-500 rounded-2xl bg-indigo-50/80 p-3 border border-indigo-100 dark:border-indigo-800/30 text-center shadow-inner">
+                          <p className="text-[10px] font-bold text-indigo-500 dark:text-indigo-400 mb-1 flex items-center justify-center gap-1">
+                            <Lightbulb className="size-3" /> 리듬을 타며 다시 읽어볼까요?
                           </p>
-                          <p className="text-base sm:text-lg font-black text-indigo-900 dark:text-indigo-100 tracking-wide">
+                          <p className="text-[14px] sm:text-base font-black text-indigo-900 dark:text-indigo-100 tracking-wide">
                             {contextData[index].guide}
-                          </p>
-                          <p className="mt-1 text-[10px] font-semibold text-indigo-400/80 dark:text-indigo-500">
-                            대문자는 세게, 슬래시(/)에서는 쉬어보세요
                           </p>
                         </div>
                       )}
