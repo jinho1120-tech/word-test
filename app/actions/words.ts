@@ -227,18 +227,26 @@ export async function generateContextQuiz(words: { word: string, meaning: string
     let promptText = "";
 
     if (quizType === "speaking") {
-      // 💡 [핵심 수정] sentence(메인 문장)에도 동일한 빗금(/) 기호를 넣도록 명확하게 지시!
       promptText = `
       너는 한국의 초등학생을 위한 친절하고 다정한 영어 선생님이야.
       다음 제공된 영어 단어들을 사용해서, 아이들이 쉐도잉(Shadowing) 훈련을 할 수 있는 쉽고 자연스러운 영어 예문을 딱 1개씩 만들어줘.
       
-      [규칙]
-      1. 문장은 초등학교 수준의 쉬운 단어로 구성하되, 절대 뻔한 교과서 예문(예: I like apples)을 반복하지 마.
-      2. 이번 예문의 배경 테마는 [${randomTheme}]야. 이 테마에 어울리는 재미있는 상황을 상상해서 매번 완전히 새로운 문장을 만들어줘! (Seed: ${randomSeed})
-      3. guide(리듬 가이드) 항목은 정답 단어가 포함된 '완성된 문장'을 바탕으로 아래의 [LINGUISTIC ANNOTATION RULES]를 엄격하게 적용해 작성해.
-      4. [매우 중요] sentence(메인 문장)에도 guide와 정확히 똑같은 위치에 의미 단위 구분 빗금(/)을 포함해서 만들어줘!
+      [필수 문장 작성 규칙]
+      1. sentence (메인 예문):
+         - 반드시 **정상적이고 완전한 표준 영어 문장**이어야 해.
+         - 문장 첫 글자는 무조건 대문자로 시작하고, 표준 스펠링 및 대소문자 규칙을 완벽하게 지켜!
+         - 절대로 sentence 항목에 대문자 강세 표시(예: SHAD-ow, RUN)나 음절 구분 하이픈(a-way)을 넣지 마!
+         - 오직 의미 단위 청크 구분을 위한 빗금("/") 기호만 포함해.
+         - 예시: "My funny shadow / tried to run away / from me."
 
-      [LINGUISTIC ANNOTATION RULES]
+      2. guide (하단 리듬 가이드):
+         - 정답 단어가 포함된 완성된 문장을 바탕으로, 아래 [LINGUISTIC ANNOTATION RULES]를 엄격히 적용해 강세와 하이픈을 넣은 가이드를 작성해.
+         - 예시: "my FUNny SHAD-ow / TRIED to RUN a-WAY / from ME."
+
+      3. 테마 및 난이도:
+         - 문장은 초등학교 수준의 쉬운 단어로 구성하되, 테마 [${randomTheme}]에 어울리는 재미있는 상황으로 구성해. (Seed: ${randomSeed})
+
+      [LINGUISTIC ANNOTATION RULES (guide 전용 규칙)]
       1. STRESS & SYLLABLE SPLITTING: Capitalize stressed syllables/words. Lowercase unstressed ones. For words with 2+ syllables, capitalize ONLY the primary-stressed syllable.
       - Stress (capitalize) content words: nouns, main/lexical verbs, adjectives, adverbs, demonstratives, question words, negatives.
       - Do NOT stress (lowercase) function words: articles, prepositions, pronouns, conjunctions, infinitive "to", the verb "be", and AFFIRMATIVE auxiliary/modal verbs.
@@ -248,7 +256,7 @@ export async function generateContextQuiz(words: { word: string, meaning: string
       - EXCEPTION 4: Articles ("a", "an", "the") must ALWAYS be lowercase, even at the very beginning of the sentence (e.g., "a BOY...", "the DOG..."). However, subject pronouns ("I", "We", "He", "She", "They") at the beginning of a sentence CAN be capitalized if they naturally carry stress (e.g., "WE FOUND...").
       - [CRITICAL HYPHENATION RULE]: If a word sounds like it stretches or has a trailing sound (even 1-syllable words with -s or -ed like "hands" or "looked"), heavily use hyphens to separate the strong and weak parts phonetically (e.g., hands -> HAN-ds, looked -> LOOK-ed, after -> AF-ter, body -> BO-dy, towel -> TOW-el).
 
-      2. PAUSE (빗금 위치 설정):
+      2. PAUSE (빗금 위치 설정 - sentence와 guide 공통 적용):
       - 의미 단위(부사구, 전치사구 등)마다 빗금(/)을 추가해줘.
       - Insert "/" at commas, semicolons, colons, and dashes.
       - Insert "/" at major clause boundaries, ESPECIALLY in longer sentences (roughly 8+ words).
@@ -259,17 +267,17 @@ export async function generateContextQuiz(words: { word: string, meaning: string
       Output sentence: A cat / is sleeping.
       Output guide: a CAT / is SLEEPing.
 
-      Input: The weather was so beautiful that we decided to go for a walk in the park.
-      Output sentence: The weather was so beautiful / that we decided / to go for a walk / in the park.
-      Output guide: the WEATHer was SO BEAUtiful / that we deCIDed / to GO for a WALK / in the PARK.
+      Input: My funny shadow tried to run away from me.
+      Output sentence: My funny shadow / tried to run away / from me.
+      Output guide: my FUNny SHAD-ow / TRIED to RUN a-WAY / from ME.
 
       결과는 반드시 아래 JSON 배열 형식으로만 대답할 것.
       [
         { 
-          "word": "apple", 
-          "sentence": "The magic alien / ate a glowing red apple.", 
-          "translation": "마법 외계인이 빛나는 빨간 사과를 먹었어요.",
-          "guide": "the MAGic A-lien / ATE a GLOWing RED AP-ple."
+          "word": "shadow", 
+          "sentence": "My funny shadow / tried to run away / from me.", 
+          "translation": "내 재미있는 그림자가 나에게서 도망치려고 했어요.",
+          "guide": "my FUNny SHAD-ow / TRIED to RUN a-WAY / from ME."
         }
       ]
 
