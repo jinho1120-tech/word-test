@@ -255,8 +255,6 @@ export function WordQuiz({ words, accent }: { words: QuizWord[]; accent: string 
       source.buffer = decodedBuffer;
       source.connect(ctx.destination);
       
-      // ▼ 앞부분은 여유 없이 칼같이 시작하고, 
-      // 뒷부분은 원래 단어 길이에서 -0.05초를 빼버려 다음 단어 연음을 강제로 차단합니다!
       const start = offsetSec;
       const dur = Math.max(0.1, durationSec - 0.05); 
       
@@ -264,6 +262,20 @@ export function WordQuiz({ words, accent }: { words: QuizWord[]; accent: string 
     } catch(e) {
       console.error("단어 부분 재생 실패:", e);
     }
+  }
+
+  // ▼ [추가된 핵심 마법 함수] 1. 원어민 발음 재생 -> 2. 내 발음 재생 (비교 모드)
+  async function playComparison(wordText: string, offsetSec: number, durationSec: number) {
+    // 먼저 원어민의 정확한 발음을 들려줍니다.
+    playPronunciation(wordText);
+    
+    // 원어민 발음이 끝날 즈음(약 1.2초 후)에 아이의 녹음된 목소리를 틀어줍니다.
+    // 긴 단어일 경우를 대비해 단어 길이에 비례해 약간의 여유를 둡니다.
+    const delay = Math.max(1200, durationSec * 1000 + 400);
+    
+    setTimeout(() => {
+      playUserWordAudio(offsetSec, durationSec);
+    }, delay);
   }
 
   async function handlePronunciationAssessment(targetText: string) {
@@ -661,10 +673,11 @@ export function WordQuiz({ words, accent }: { words: QuizWord[]; accent: string 
                             )}
                             onClick={() => {
                               if (isClickable) {
-                                playUserWordAudio(scoreItem!.offsetSec!, scoreItem!.durationSec || 0.5)
+                                // ▼ 단어만 재생하는 대신, "원어민 -> 내 발음" 연속 비교 재생!
+                                playComparison(cleanToken, scoreItem!.offsetSec!, scoreItem!.durationSec || 0.5)
                               }
                             }}
-                            title={isClickable ? "👆 눌러서 내 발음 듣기" : undefined}
+                            title={isClickable ? "👆 눌러서 원어민 발음과 내 발음 비교하기" : undefined}
                           >
                             <span className={cn("transition-colors duration-500 leading-tight", colorClass, isTarget && "underline decoration-4 underline-offset-4")}>
                               {token}
@@ -703,9 +716,10 @@ export function WordQuiz({ words, accent }: { words: QuizWord[]; accent: string 
                     )}
                   </div>
                   
+                  {/* ▼ 툴팁 내용도 '비교 모드'에 맞게 수정했습니다 */}
                   {pronResult && userAudioUrl && (
                     <p className="text-[12px] font-bold text-indigo-500 animate-in fade-in zoom-in mb-4 bg-indigo-50 px-3 py-1.5 rounded-full border border-indigo-100 shadow-sm">
-                      👆 단어를 톡! 터치하면 내가 말한 발음을 들을 수 있어요
+                      👆 단어를 톡! 터치하면 원어민 발음과 내 발음을 비교해 볼 수 있어요 🎧
                     </p>
                   )}
 
