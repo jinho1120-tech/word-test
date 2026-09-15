@@ -272,14 +272,26 @@ export function WordQuiz({ words, accent }: { words: QuizWord[]; accent: string 
     }, delay);
   }
 
-  // ▼ 전체 문장 듣기 함수 추가
-  function playFullUserAudio() {
+  // ▼ [수정된 부분] 전체 문장 듣기도 안정적인 AudioContext 엔진을 사용하도록 업그레이드!
+  async function playFullUserAudio() {
     if (!userAudioUrl) return;
     try {
-      const audio = new Audio(userAudioUrl);
-      audio.play().catch(console.error);
+      const ctx = getAudioContext();
+      if (!ctx) return;
+      if (ctx.state === "suspended") await ctx.resume();
+
+      const res = await fetch(userAudioUrl);
+      const arrayBuffer = await res.arrayBuffer();
+      const decodedBuffer = await ctx.decodeAudioData(arrayBuffer);
+
+      const source = ctx.createBufferSource();
+      source.buffer = decodedBuffer;
+      source.connect(ctx.destination);
+      
+      // 처음부터 끝까지 전체를 재생합니다.
+      source.start(0);
     } catch (e) {
-      console.error("전체 녹음 재생 실패:", e);
+      console.error("전체 녹음 Web Audio 재생 실패:", e);
     }
   }
 
@@ -756,7 +768,6 @@ export function WordQuiz({ words, accent }: { words: QuizWord[]; accent: string 
                       </button>
                     </div>
 
-                    {/* ▼ [새로 추가된 부분] 문장 전체 내 녹음 듣기 버튼! */}
                     {pronResult && userAudioUrl && (
                       <button
                         type="button"
