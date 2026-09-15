@@ -35,13 +35,12 @@ type PronunciationResult = {
   prosody: number;
 }
 
-// ▼ 단어 점수에 시간(Offset, Duration) 데이터 추가
 type WordScoreDetail = { 
   text: string; 
   score: number; 
   errorType?: string; 
-  offsetSec?: number; // 단어 시작 시간 (초)
-  durationSec?: number; // 단어 길이 (초)
+  offsetSec?: number; 
+  durationSec?: number; 
   phonemes: { phoneme: string; score: number }[];
 }
 
@@ -100,9 +99,7 @@ export function WordQuiz({ words, accent }: { words: QuizWord[]; accent: string 
   
   const [wordScores, setWordScores] = useState<WordScoreDetail[]>([])
   
-  // ▼ 아이가 마이크로 말한 음성을 저장해둘 공간
   const [userAudioUrl, setUserAudioUrl] = useState<string | null>(null)
-
   const [isSlowMode, setIsSlowMode] = useState(false)
 
   const current = deck[index]
@@ -243,7 +240,6 @@ export function WordQuiz({ words, accent }: { words: QuizWord[]; accent: string 
     }
   }
 
-  // ▼ 아이가 누른 단어 구간만 재생하는 가상 오디오 재생기
   async function playUserWordAudio(offsetSec: number, durationSec: number) {
     if (!userAudioUrl) return;
     try {
@@ -259,9 +255,9 @@ export function WordQuiz({ words, accent }: { words: QuizWord[]; accent: string 
       source.buffer = decodedBuffer;
       source.connect(ctx.destination);
       
-      // 앞뒤로 0.15초씩 덧붙여서 소리가 너무 기계적으로 뚝뚝 끊기지 않게 보완합니다.
-      const start = Math.max(0, offsetSec - 0.15);
-      const dur = durationSec + 0.3; 
+      // ▼ 앞부분은 0.1초 여유, 뒷부분은 다음 단어가 안 들리게 0.05초로 확 줄였습니다!
+      const start = Math.max(0, offsetSec - 0.1);
+      const dur = durationSec + 0.15; 
       
       source.start(0, start, dur);
     } catch(e) {
@@ -275,7 +271,7 @@ export function WordQuiz({ words, accent }: { words: QuizWord[]; accent: string 
     setPronResult(null)
     setWordScores([]) 
     setFeedback("idle")
-    setUserAudioUrl(null) // 기존 녹음 초기화
+    setUserAudioUrl(null)
 
     try {
       const sdk = await import("microsoft-cognitiveservices-speech-sdk")
@@ -311,7 +307,6 @@ export function WordQuiz({ words, accent }: { words: QuizWord[]; accent: string 
 
       recognizer.sessionStarted = async (s, e) => {
         setIsMicReady(true)
-        // ▼ Azure가 인식을 시작할 때, 백그라운드에서 동시에 녹음을 시작합니다!
         try {
           const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
           mediaRecorder = new MediaRecorder(stream);
@@ -336,7 +331,7 @@ export function WordQuiz({ words, accent }: { words: QuizWord[]; accent: string 
 
       recognizer.recognizeOnceAsync(
         (result) => {
-          stopRecording(); // 음성 인식 끝나면 녹음 종료
+          stopRecording();
 
           if (result.reason === sdk.ResultReason.RecognizedSpeech) {
             const pron = sdk.PronunciationAssessmentResult.fromResult(result)
@@ -352,7 +347,6 @@ export function WordQuiz({ words, accent }: { words: QuizWord[]; accent: string 
             
             const wordsDetail = pron.detailResult?.Words || []
             
-            // Azure의 시간 단위(Ticks = 100나노초)를 우리가 쓰는 '초(Seconds)' 단위로 변환
             const mappedWords: WordScoreDetail[] = wordsDetail.map((w: any) => ({
               text: w.Word,
               score: w.PronunciationAssessment.AccuracyScore,
@@ -655,7 +649,6 @@ export function WordQuiz({ words, accent }: { words: QuizWord[]; accent: string 
                         const isTarget = cleanToken === current.word.toLowerCase()
                         const showPhonemes = scoreItem && (isTarget || scoreItem.score < 80);
                         
-                        // ▼ 녹음 데이터가 있으면 단어를 '클릭' 가능하게 만듭니다
                         const isClickable = scoreItem && userAudioUrl && scoreItem.offsetSec !== undefined && !isOmitted;
 
                         return (
@@ -709,7 +702,6 @@ export function WordQuiz({ words, accent }: { words: QuizWord[]; accent: string 
                     )}
                   </div>
                   
-                  {/* ▼ 녹음이 완료되면 나타나는 귀여운 안내 툴팁 */}
                   {pronResult && userAudioUrl && (
                     <p className="text-[12px] font-bold text-indigo-500 animate-in fade-in zoom-in mb-4 bg-indigo-50 px-3 py-1.5 rounded-full border border-indigo-100 shadow-sm">
                       👆 단어를 톡! 터치하면 내가 말한 발음을 들을 수 있어요
