@@ -220,7 +220,7 @@ export async function generateContextQuiz(words: { word: string, meaning: string
 
     const endpoint = `https://generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash-lite:generateContent?key=${apiKey}`;
     
-    const themes = ["신나는 학교 생활", "가족과의 따뜻한 일상", "귀여운 동물들의 숲", "신나는 해외 여행", "베스트 프렌드와의 놀이", "맛있는 요리 대회", "즐거운 취미 생활", "신비로운 마법 학교", "우주 탐험", "미래 도시"];
+    const themes = ["신나는 학교 생활", "가족과의 따뜻한 일상", "신나는 해외 여행", "베스트 프렌드와의 놀이", "즐거운 취미 생활"];
     const randomTheme = themes[Math.floor(Math.random() * themes.length)];
     const randomSeed = Math.random().toString(36).substring(7);
 
@@ -234,7 +234,7 @@ export async function generateContextQuiz(words: { word: string, meaning: string
       
       [규칙]
       1. 문장은 초등학교 수준의 쉬운 단어로 구성하되, 절대 뻔한 교과서 예문(예: I like apples)을 반복하지 마.
-      2. 이번 예문의 배경 테마는 [${randomTheme}]야. 이 테마에 어울리거나 아주 기발하고 재미있는 상황을 상상해서 매번 완전히 새로운 문장을 만들어줘! (Seed: ${randomSeed})
+      2. 이번 예문의 배경 테마는 [${randomTheme}]야. 이 테마에 어울리는 재미있는 상황을 상상해서 매번 완전히 새로운 문장을 만들어줘! (Seed: ${randomSeed})
       3. guide(리듬 가이드) 항목은 정답 단어가 포함된 '완성된 문장'을 바탕으로 아래의 [LINGUISTIC ANNOTATION RULES]를 엄격하게 적용해 작성해.
 
       [LINGUISTIC ANNOTATION RULES]
@@ -287,7 +287,7 @@ export async function generateContextQuiz(words: { word: string, meaning: string
       [규칙]
       1. 대상 단어가 들어갈 자리는 세 개의 밑줄("___")로 비워둘 것.
       2. 문장은 초등학교 수준의 쉬운 단어로 구성하되, 절대 뻔한 교과서 예문(예: I like apples)을 반복하지 마.
-      3. 이번 예문의 배경 테마는 [${randomTheme}]야. 이 테마에 어울리거나 아주 기발하고 재미있는 상황을 상상해서 매번 완전히 새로운 문장을 만들어줘! (Seed: ${randomSeed})
+      3. 이번 예문의 배경 테마는 [${randomTheme}]야. 이 테마에 어울리는 상황을 상상해서 매번 완전히 새로운 문장을 만들어줘! (Seed: ${randomSeed})
       4. clue(해설) 항목에는 문장 속 어떤 단어가 힌트가 되어서 이 정답이 나오게 되었는지 아이들 눈높이에서 친절하게 설명해 줄 것.
       
       결과는 반드시 아래 JSON 배열 형식으로만 대답할 것 (다른 설명 절대 금지).
