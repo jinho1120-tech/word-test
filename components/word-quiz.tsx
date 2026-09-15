@@ -11,7 +11,13 @@ import { QuizResult } from "./quiz-result"
 
 const DAD_PHONE = "01032854101" 
 
-const TTS_VOICE = "en-US-AnaNeural" 
+// 💡 선택 가능한 Azure TTS 음성 목록
+const TTS_VOICES = [
+  { id: "en-US-AnaNeural", label: "👧 Ana (아동)" },
+  { id: "en-US-JennyNeural", label: "👩 Jenny (여성)" },
+  { id: "en-US-GuyNeural", label: "👨 Guy (남성)" },
+  { id: "en-US-AriaNeural", label: "👩 Aria (표준)" },
+]
 
 export type QuizWord = {
   id: number
@@ -101,6 +107,9 @@ export function WordQuiz({ words, accent }: { words: QuizWord[]; accent: string 
   
   const [userAudioUrl, setUserAudioUrl] = useState<string | null>(null)
   const [isSlowMode, setIsSlowMode] = useState(false)
+  
+  // 💡 선택된 TTS 음성 상태 관리
+  const [ttsVoice, setTtsVoice] = useState<string>("en-US-AnaNeural")
 
   const current = deck[index]
   const total = deck.length
@@ -159,7 +168,8 @@ export function WordQuiz({ words, accent }: { words: QuizWord[]; accent: string 
       }
 
       const audio = getGlobalAudio();
-      const cacheKey = `${targetText}_${isSlowMode ? 'slow' : 'normal'}`;
+      // 💡 선택된 목소리와 속도 조합으로 캐시 키 생성
+      const cacheKey = `${targetText}_${ttsVoice}_${isSlowMode ? 'slow' : 'normal'}`;
 
       if (audio && ttsCache.has(cacheKey)) {
         audio.src = ttsCache.get(cacheKey)!;
@@ -188,7 +198,7 @@ export function WordQuiz({ words, accent }: { words: QuizWord[]; accent: string 
       
       const ssml = `
         <speak version="1.0" xmlns="http://www.w3.org/2001/10/synthesis" xml:lang="en-US">
-          <voice name="${TTS_VOICE}">
+          <voice name="${ttsVoice}">
             <prosody rate="${speedRate}">${safeText}</prosody>
           </voice>
         </speak>
@@ -326,7 +336,6 @@ export function WordQuiz({ words, accent }: { words: QuizWord[]; accent: string 
 
       const speechConfig = sdk.SpeechConfig.fromSubscription(key, region)
       speechConfig.speechRecognitionLanguage = "en-US"
-      // 💡 침묵 타임아웃 1.2초(1200ms) 복원
       speechConfig.setProperty(sdk.PropertyId.SpeechServiceConnection_EndSilenceTimeoutMs, "1200");
 
       const audioConfig = sdk.AudioConfig.fromDefaultMicrophoneInput()
@@ -620,16 +629,32 @@ export function WordQuiz({ words, accent }: { words: QuizWord[]; accent: string 
               <div className="h-1.5 transition-all duration-300" style={{ width: `${((index + 1) / total) * 100}%`, backgroundColor: streak >= 5 ? "#f59e0b" : accent }} />
             </div>
 
-            <div className="flex justify-between items-center p-4 pb-0 shrink-0">
-              <button 
-                onClick={() => setIsSlowMode(!isSlowMode)} 
-                className={cn(
-                  "flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-bold transition-colors border",
-                  isSlowMode ? "bg-indigo-50 border-indigo-200 text-indigo-600" : "bg-muted/50 border-transparent text-muted-foreground hover:bg-muted"
-                )}
-              >
-                {isSlowMode ? "🐢 느리게" : "🐇 보통 속도"}
-              </button>
+            <div className="flex justify-between items-center p-4 pb-0 shrink-0 gap-2">
+              <div className="flex items-center gap-1.5">
+                {/* 💡 재생 속도 변경 버튼 */}
+                <button 
+                  onClick={() => setIsSlowMode(!isSlowMode)} 
+                  className={cn(
+                    "flex items-center gap-1 rounded-full px-2.5 py-1 text-xs font-bold transition-colors border",
+                    isSlowMode ? "bg-indigo-50 border-indigo-200 text-indigo-600" : "bg-muted/50 border-transparent text-muted-foreground hover:bg-muted"
+                  )}
+                >
+                  {isSlowMode ? "🐢 느리게" : "🐇 보통"}
+                </button>
+
+                {/* 💡 TTS 원어민 목소리 선택 셀렉트 박스 */}
+                <select
+                  value={ttsVoice}
+                  onChange={(e) => setTtsVoice(e.target.value)}
+                  className="rounded-full bg-muted/50 border border-transparent px-2.5 py-1 text-xs font-bold text-muted-foreground outline-none transition-colors hover:bg-muted cursor-pointer"
+                >
+                  {TTS_VOICES.map((voice) => (
+                    <option key={voice.id} value={voice.id}>
+                      {voice.label}
+                    </option>
+                  ))}
+                </select>
+              </div>
               
               <button 
                 onClick={() => { if (window.confirm("퀴즈를 중단할까요?")) setPhase("start") }} 
