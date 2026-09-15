@@ -627,11 +627,14 @@ export function WordQuiz({ words, accent }: { words: QuizWord[]; accent: string 
 
             <div className="flex flex-col px-6 pb-8 pt-2 flex-1 overflow-y-auto">
               
+              {/* ▼ 화면을 넓고 당당하게 복구! 양옆에 아이콘과 응원 문구를 채웠습니다. */}
               {quizType === "speaking" ? (
-                <div className="mb-4 flex items-center justify-center text-xs font-medium text-muted-foreground">
-                  <span className="rounded-full bg-indigo-50 dark:bg-indigo-950/50 px-3 py-1 font-bold text-indigo-600 dark:text-indigo-400 border border-indigo-100 dark:border-indigo-900">
-                    🗣️ 문장 말하기 연습 ({index + 1} / {total})
+                <div className="mb-4 flex items-center justify-between text-xs font-medium text-muted-foreground">
+                  <span className="flex items-center gap-1.5"><Mic className="size-4 text-indigo-500" /> <span className="font-bold text-foreground">스피킹 훈련</span></span>
+                  <span className="rounded-full bg-indigo-50 dark:bg-indigo-950/50 px-4 py-1 font-black text-indigo-600 dark:text-indigo-400 border border-indigo-100 dark:border-indigo-900 shadow-sm">
+                    {index + 1} / {total}
                   </span>
+                  <span className="flex items-center gap-1 font-bold text-amber-500 animate-pulse"><Sparkles className="size-4" /> 자신감 UP!</span>
                 </div>
               ) : (
                 <div className="mb-4 flex items-center justify-between text-xs font-medium text-muted-foreground">
@@ -641,21 +644,21 @@ export function WordQuiz({ words, accent }: { words: QuizWord[]; accent: string 
                 </div>
               )}
 
-              {quizType !== "speaking" && (
-                <div className="h-8 w-full flex justify-center mb-2">
-                  {streak >= 3 && (
-                    <div key={streak} className="animate-in slide-in-from-bottom-2 fade-in zoom-in duration-300">
-                      <span className={cn("rounded-full px-4 py-1.5 text-sm font-black text-white shadow-lg", streak >= 10 ? "bg-gradient-to-r from-red-500 to-orange-600 scale-110 shadow-red-500/50" : "bg-gradient-to-r from-amber-400 to-orange-500 shadow-orange-500/40")}>
-                        {streak >= 10 ? `🔥🔥 ${currentName} 폭주 중!! 멈출 수 없어!` : `🔥 ${currentName} ${streak}연속 정답!`}
-                      </span>
-                    </div>
-                  )}
-                </div>
-              )}
+              {/* ▼ 높이 고정으로 레이아웃 흔들림 방지 */}
+              <div className="h-8 w-full flex justify-center mb-2">
+                {quizType !== "speaking" && streak >= 3 && (
+                  <div key={streak} className="animate-in slide-in-from-bottom-2 fade-in zoom-in duration-300">
+                    <span className={cn("rounded-full px-4 py-1.5 text-sm font-black text-white shadow-lg", streak >= 10 ? "bg-gradient-to-r from-red-500 to-orange-600 scale-110 shadow-red-500/50" : "bg-gradient-to-r from-amber-400 to-orange-500 shadow-orange-500/40")}>
+                      {streak >= 10 ? `🔥🔥 ${currentName} 폭주 중!! 멈출 수 없어!` : `🔥 ${currentName} ${streak}연속 정답!`}
+                    </span>
+                  </div>
+                )}
+              </div>
 
               {quizType === "speaking" && contextData[index] ? (
                 <div className="mb-4 flex flex-col items-center justify-center w-full">
-                  <div className="mb-2 flex justify-center"><span className="rounded-full bg-muted/80 px-2 py-0.5 text-[10px] font-bold tracking-wide text-muted-foreground">AI 문장 말하기 훈련</span></div>
+                  
+                  {/* (중복되던 'AI 문장 말하기 훈련' 미니 배지는 깔끔하게 삭제했습니다!) */}
                   
                   <div className="mb-3 text-balance text-center text-2xl sm:text-3xl font-black tracking-tight text-foreground leading-snug flex flex-wrap justify-center gap-x-2 gap-y-2">
                     {wordScores.length > 0 ? (() => {
@@ -812,6 +815,17 @@ export function WordQuiz({ words, accent }: { words: QuizWord[]; accent: string 
                          pronResult.score >= 60 ? "👍 Good! 조금만 더 연습해볼까요?" :
                          "💪 Try Again! 다시 한번 또박또박 읽어보세요!"}
                       </p>
+
+                      {pronResult.prosody < 90 && contextData[index].guide && (
+                        <div className="w-full max-w-sm animate-in slide-in-from-top-2 fade-in duration-500 rounded-2xl bg-indigo-50/80 p-3 border border-indigo-100 dark:border-indigo-800/30 text-center shadow-inner mt-2">
+                          <p className="text-[10px] font-bold text-indigo-500 dark:text-indigo-400 mb-1 flex items-center justify-center gap-1">
+                            <Lightbulb className="size-3" /> 리듬을 타며 다시 읽어볼까요? (대문자 강하게, /에서 쉬기)
+                          </p>
+                          <p className="text-[14px] sm:text-base font-black text-indigo-900 dark:text-indigo-100 tracking-wide mt-1.5">
+                            {contextData[index].guide}
+                          </p>
+                        </div>
+                      )}
                     </div>
                   )}
                 </div>
