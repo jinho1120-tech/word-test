@@ -330,14 +330,15 @@ export function WordQuiz({ words, accent }: { words: QuizWord[]; accent: string 
       const recognizer = new sdk.SpeechRecognizer(speechConfig, audioConfig)
       pronConfig.applyTo(recognizer)
 
+      let mediaStream: MediaStream | null = null;
       let mediaRecorder: MediaRecorder | null = null;
       let audioChunks: Blob[] = [];
 
       recognizer.sessionStarted = async (s, e) => {
         setIsMicReady(true)
         try {
-          const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-          mediaRecorder = new MediaRecorder(stream);
+          mediaStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+          mediaRecorder = new MediaRecorder(mediaStream);
           mediaRecorder.ondataavailable = (e) => {
             if (e.data.size > 0) audioChunks.push(e.data);
           };
@@ -354,6 +355,10 @@ export function WordQuiz({ words, accent }: { words: QuizWord[]; accent: string 
             setUserAudioUrl(URL.createObjectURL(blob));
           };
           mediaRecorder.stop();
+        }
+        if (mediaStream) {
+          mediaStream.getTracks().forEach((track) => track.stop());
+          mediaStream = null;
         }
       }
 
@@ -655,8 +660,6 @@ export function WordQuiz({ words, accent }: { words: QuizWord[]; accent: string 
 
               {quizType === "speaking" && contextData[index] ? (
                 <div className="mb-4 flex flex-col items-center justify-center w-full">
-                  
-                  {/* ▼ 문장 폰트 크기 업 (text-3xl sm:text-4xl) & 여백 조정 */}
                   <div className="mb-4 text-balance text-center text-3xl sm:text-4xl font-black tracking-tight text-foreground leading-normal flex flex-wrap justify-center gap-x-3 gap-y-3 px-1">
                     {wordScores.length > 0 ? (() => {
                       const fullSent = getFullSentence()
@@ -738,7 +741,6 @@ export function WordQuiz({ words, accent }: { words: QuizWord[]; accent: string 
                     )}
                   </div>
                   
-                  {/* ▼ 한국어 뜻 폰트도 한 단계 키우고 여백 확장 */}
                   <p className="text-base font-semibold text-muted-foreground mb-6 text-center px-4 leading-relaxed">
                     🇰🇷 {contextData[index].translation}
                   </p>
