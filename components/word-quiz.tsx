@@ -108,7 +108,6 @@ export function WordQuiz({ words, accent }: { words: QuizWord[]; accent: string 
   const [isSlowMode, setIsSlowMode] = useState(false)
   const [ttsVoice, setTtsVoice] = useState<string>("en-US-AnaNeural")
 
-  // 💡 앱 진입 시 저장된 TTS 목소리 설정을 로드
   useEffect(() => {
     const savedVoice = localStorage.getItem("word_quiz_tts_voice");
     if (savedVoice && TTS_VOICES.some(v => v.id === savedVoice)) {
@@ -116,7 +115,6 @@ export function WordQuiz({ words, accent }: { words: QuizWord[]; accent: string 
     }
   }, []);
 
-  // 💡 TTS 목소리 변경 시 localStorage에 저장
   const handleTtsVoiceChange = (newVoice: string) => {
     setTtsVoice(newVoice);
     localStorage.setItem("word_quiz_tts_voice", newVoice);
@@ -709,7 +707,7 @@ export function WordQuiz({ words, accent }: { words: QuizWord[]; accent: string 
 
               {quizType === "speaking" && contextData[index] ? (
                 <div className="mb-4 flex flex-col items-center justify-center w-full">
-                  <div className="mb-8 text-balance text-center text-3xl sm:text-4xl font-black tracking-tight text-foreground leading-relaxed flex flex-wrap justify-center items-baseline gap-x-2 gap-y-6 px-1">
+                  <div className="mb-8 text-balance text-center text-3xl sm:text-4xl font-black tracking-tight text-foreground leading-relaxed flex flex-wrap justify-center items-baseline gap-x-2 gap-y-7 px-1">
                     {wordScores.length > 0 ? (() => {
                       const fullSent = getFullSentence()
                       const availableScores = [...wordScores]
@@ -761,17 +759,17 @@ export function WordQuiz({ words, accent }: { words: QuizWord[]; accent: string 
                           const showPhonemes = scoreItem && (isTarget || scoreItem.score < 80);
 
                           return (
-                            <span key={i} className="relative inline-flex items-center align-baseline px-0.5">
+                            <span key={i} className="relative inline-flex items-center align-baseline px-0.5 my-1">
                               <span className={cn("transition-colors duration-500 leading-tight", colorClass, isTarget && "underline decoration-4 underline-offset-4")}>
                                 {token}
                               </span>
                               {isOmitted && (
-                                <span className="absolute top-full left-1/2 -translate-x-1/2 mt-1 text-[10px] font-bold text-red-400 opacity-90 whitespace-nowrap">
+                                <span className="absolute top-full left-1/2 -translate-x-1/2 mt-1 text-[10px] font-bold text-red-400 opacity-90 whitespace-nowrap z-10">
                                   (누락)
                                 </span>
                               )}
                               {!isOmitted && showPhonemes && scoreItem?.phonemes && scoreItem.phonemes.length > 0 && (
-                                <span className="absolute top-full left-1/2 -translate-x-1/2 mt-0.5 flex gap-[1px] text-[12px] font-medium font-mono tracking-tighter opacity-90 whitespace-nowrap">
+                                <span className="absolute top-full left-1/2 -translate-x-1/2 mt-0.5 flex gap-[1px] text-[12px] font-medium font-mono tracking-tighter opacity-90 whitespace-nowrap z-10">
                                   <span className="text-muted-foreground/40">[</span>
                                   {scoreItem.phonemes.map((p, pIdx) => {
                                     let pColor = "text-red-500 font-black"
@@ -787,14 +785,14 @@ export function WordQuiz({ words, accent }: { words: QuizWord[]; accent: string 
                         });
 
                         const isClickable = !isChunkOmitted && userAudioUrl && chunkStartSec !== 9999;
-                        // 💡 뒤 여유 시간을 -0.02초로 설정하여 다음 청크 소리 침범 방지
                         const chunkDuration = Math.max(0.1, chunkEndSec - chunkStartSec - 0.02);
 
                         return (
                           <React.Fragment key={cIdx}>
+                            {/* 💡 청크 박스: flex-wrap 및 max-w-full 추가로 긴 청크 화면 잘림 완벽 방지 */}
                             <span
                               className={cn(
-                                "inline-flex items-baseline justify-center group rounded-2xl px-2 py-1.5 my-0.5 transition-all duration-200 relative",
+                                "inline-flex flex-wrap items-baseline justify-center max-w-full group rounded-2xl px-2 py-1.5 my-1 transition-all duration-200 relative",
                                 isClickable && "cursor-pointer hover:bg-muted/80 hover:scale-[1.01] active:scale-95 shadow-sm border border-border/40"
                               )}
                               onClick={() => {
