@@ -3,7 +3,8 @@
 import React, { useMemo, useRef, useState, useEffect } from "react"
 import { Lightbulb, Check, X, ArrowRight, Volume2, Sparkles, BrainCircuit, Mic, Loader2, Headphones } from "lucide-react"
 import { cn } from "@/lib/utils"
-import { recordQuizResult, generateContextQuiz } from "@/app/actions/words"
+// 💡 방금 만든 generateSpeakingCoachFeedback 함수를 import에 추가
+import { recordQuizResult, generateContextQuiz, generateSpeakingCoachFeedback } from "@/app/actions/words"
 import confetti from "canvas-confetti"
 
 import { QuizStart } from "./quiz-start"
@@ -106,6 +107,10 @@ export function WordQuiz({ words, accent }: { words: QuizWord[]; accent: string 
   const [pronResult, setPronResult] = useState<PronunciationResult | null>(null)
   
   const [wordScores, setWordScores] = useState<WordScoreDetail[]>([])
+  
+  // 💡 AI 맞춤 코칭용 상태 추가
+  const [aiCoachMsg, setAiCoachMsg] = useState<string | null>(null)
+  const [isCoachLoading, setIsCoachLoading] = useState(false)
   
   const [userAudioUrl, setUserAudioUrl] = useState<string | null>(null)
   const [isSlowMode, setIsSlowMode] = useState(false)
@@ -347,6 +352,7 @@ export function WordQuiz({ words, accent }: { words: QuizWord[]; accent: string 
     setPronResult(null)
     setWordScores([]) 
     setFeedback("idle")
+    setAiCoachMsg(null)
     setUserAudioUrl(null)
 
     const cleanTargetText = targetText.replace(/\s*\/\s*/g, ' ').trim();
@@ -418,7 +424,7 @@ export function WordQuiz({ words, accent }: { words: QuizWord[]; accent: string 
       }
 
       recognizer.recognizeOnceAsync(
-        (result) => {
+        async (result) => {
           stopRecording();
 
           if (result.reason === sdk.ResultReason.RecognizedSpeech) {
@@ -453,6 +459,20 @@ export function WordQuiz({ words, accent }: { words: QuizWord[]; accent: string 
               setFeedback("correct")
             } else {
               setFeedback("wrong")
+            }
+
+            // 💡 [핵심] Gemini 3.5 Flash-lite AI 맞춤 코칭 요청
+            setIsCoachLoading(true);
+            const coachRes = await generateSpeakingCoachFeedback({
+              sentence: cleanTargetText,
+              childName: currentName,
+              pronResult: finalResult,
+              wordScores: mappedWords
+            });
+            setIsCoachLoading(false);
+
+            if (coachRes.success && coachRes.feedback) {
+              setAiCoachMsg(coachRes.feedback);
             }
           } else {
             alert("목소리가 너무 작거나 짧게 들렸어요. 화면에 '이제 말씀하세요!'가 뜨면 시작해 주세요.")
@@ -511,6 +531,7 @@ export function WordQuiz({ words, accent }: { words: QuizWord[]; accent: string 
     setUsedHintInQuiz(false);
     setPronResult(null);
     setWordScores([]);
+    setAiCoachMsg(null);
     setUserAudioUrl(null);
     setPhase("quiz");
 
@@ -603,6 +624,7 @@ export function WordQuiz({ words, accent }: { words: QuizWord[]; accent: string 
     setUsedHintInQuiz(false)
     setPronResult(null)
     setWordScores([])
+    setAiCoachMsg(null)
     setUserAudioUrl(null)
     setPhase("quiz")
     
@@ -624,7 +646,7 @@ export function WordQuiz({ words, accent }: { words: QuizWord[]; accent: string 
     const nextAnswered = [...answered, record]
     const nextIndex = index + 1
     if (nextIndex < total) {
-      setAnswered(nextAnswered); setIndex(nextIndex); setValue(""); setFeedback("idle"); setHintUsed(false); setPronResult(null); setWordScores([]); setUserAudioUrl(null);
+      setAnswered(nextAnswered); setIndex(nextIndex); setValue(""); setFeedback("idle"); setHintUsed(false); setPronResult(null); setWordScores([]); setAiCoachMsg(null); setUserAudioUrl(null);
       if (quizType !== "speaking") requestAnimationFrame(() => inputRef.current?.focus())
       
       if (quizType === "listening") {
@@ -722,7 +744,6 @@ export function WordQuiz({ words, accent }: { words: QuizWord[]; accent: string 
 
             <div className="flex justify-between items-center p-4 pb-0 shrink-0 gap-2">
               <div className="flex items-center gap-1.5">
-                {/* 💡 거북이 버튼 테마 연동 완료 (투명도 1A=10%, 33=20% 계산 마법) */}
                 <button 
                   onClick={() => setIsSlowMode(!isSlowMode)} 
                   className={cn(
@@ -758,7 +779,6 @@ export function WordQuiz({ words, accent }: { words: QuizWord[]; accent: string 
               
               {quizType === "speaking" ? (
                 <div className="mb-4 flex items-center justify-between text-xs font-medium text-muted-foreground">
-                  {/* 💡 상단 헤더 마이크/배지 테마 연동 완료 */}
                   <span className="flex items-center gap-1.5"><Mic className="size-4" style={{ color: accent }} /> <span className="font-bold text-foreground">스피킹 훈련</span></span>
                   <span className="rounded-full px-4 py-1 font-black border shadow-sm" style={{ color: accent, backgroundColor: accent + '1A', borderColor: accent + '33' }}>
                     {index + 1} / {total}
@@ -840,7 +860,6 @@ export function WordQuiz({ words, accent }: { words: QuizWord[]; accent: string 
 
                             return (
                               <span key={i} className="relative inline-flex items-center align-baseline px-0.5">
-                                {/* 💡 타겟 단어 밑줄 테마 연동 완료 */}
                                 <span 
                                   className={cn("transition-colors duration-500 leading-tight", colorClass !== "text-foreground" ? colorClass : "", isTarget && "underline decoration-4 underline-offset-4")}
                                   style={colorClass === "text-foreground" && isTarget ? { color: accent, textDecorationColor: accent } : undefined}
@@ -889,7 +908,6 @@ export function WordQuiz({ words, accent }: { words: QuizWord[]; accent: string 
                               >
                                 {renderedWords}
                                 {isClickable && (
-                                  // 💡 호버 시 나타나는 청크 스피커 아이콘 테마 연동 완료
                                   <span 
                                     className="inline-flex self-center items-center justify-center rounded-full p-0.5 ml-1 opacity-0 group-hover:opacity-100 transition-opacity"
                                     style={{ backgroundColor: accent + '1A', color: accent }}
@@ -907,7 +925,6 @@ export function WordQuiz({ words, accent }: { words: QuizWord[]; accent: string 
                     <div className="mb-6 text-balance text-center text-3xl sm:text-4xl font-black tracking-tight text-foreground leading-relaxed px-1">
                       {getFullSentence().replace(/\s*\/\s*/g, ' ').split(new RegExp(`(${current.word})`, 'gi')).map((part, i) => 
                         part.toLowerCase() === current.word.toLowerCase() ? (
-                          // 💡 녹음 전 초기 화면: 타겟 단어 텍스트 및 밑줄 테마 연동 완료
                           <span key={i} className="underline decoration-4 underline-offset-4" style={{ color: accent, textDecorationColor: accent }}>{part}</span>
                         ) : (
                           <span key={i}>{part}</span>
@@ -921,7 +938,6 @@ export function WordQuiz({ words, accent }: { words: QuizWord[]; accent: string 
                   </p>
 
                   {pronResult && userAudioUrl && (
-                    // 💡 "청크를 톡 터치하면..." 안내 문구 테마 연동 완료
                     <div 
                       className="mb-4 flex items-center justify-center rounded-full px-3 py-1 text-[11px] font-bold border animate-in fade-in zoom-in"
                       style={{ color: accent, backgroundColor: accent + '1A', borderColor: accent + '33' }}
@@ -936,7 +952,6 @@ export function WordQuiz({ words, accent }: { words: QuizWord[]; accent: string 
                         <Volume2 className="size-5" />
                       </button>
                       
-                      {/* 💡 "내 발음 채점하기" 메인 버튼 테마 연동 완료 */}
                       <button 
                         type="button" 
                         onClick={() => handlePronunciationAssessment(getFullSentence())}
@@ -959,7 +974,6 @@ export function WordQuiz({ words, accent }: { words: QuizWord[]; accent: string 
                     </div>
 
                     {pronResult && userAudioUrl && (
-                      // 💡 "내 전체 녹음 듣기" 하단 서브 버튼 테마 연동 완료
                       <button
                         type="button"
                         onClick={playFullUserAudio}
@@ -973,7 +987,6 @@ export function WordQuiz({ words, accent }: { words: QuizWord[]; accent: string 
                   
                   {pronResult && (
                     <div className="mt-2 flex flex-col w-full items-center animate-in zoom-in duration-300">
-                      {/* 점수판 숫자는 색깔 구분이 예뻐서 기본 컬러들을 유지했습니다! */}
                       <div className="grid grid-cols-4 gap-1.5 w-full max-w-sm mb-3">
                         <div className="flex flex-col items-center justify-center py-2 bg-muted/80 rounded-xl border border-border/50">
                           <span className="text-[10px] text-muted-foreground font-bold mb-0.5">정확도</span>
@@ -1000,18 +1013,25 @@ export function WordQuiz({ words, accent }: { words: QuizWord[]; accent: string 
                          "💪 Try Again! 다시 한번 또박또박 읽어보세요!"}
                       </p>
 
-                      {pronResult.prosody < 90 && contextData[index].guide && (
-                        // 💡 하단 리듬 가이드 박스 테마 연동 완료 (투명도 0D=5%)
+                      {/* 💡 [핵심] Gemini AI 실시간 코칭 렌더링 영역 */}
+                      {(isCoachLoading || aiCoachMsg) && (
                         <div 
-                          className="w-full max-w-sm animate-in slide-in-from-top-2 fade-in duration-500 rounded-2xl p-3 border text-center shadow-inner mt-2"
+                          className="w-full max-w-sm animate-in slide-in-from-top-2 fade-in duration-500 rounded-2xl p-3.5 border text-center shadow-inner mt-2"
                           style={{ backgroundColor: accent + '0D', borderColor: accent + '33' }}
                         >
-                          <p className="text-[10px] font-bold mb-1 flex items-center justify-center gap-1" style={{ color: accent }}>
-                            <Lightbulb className="size-3" /> 리듬을 타며 다시 읽어볼까요? (대문자 강하게, /에서 쉬기)
+                          <p className="text-[11px] font-bold mb-1 flex items-center justify-center gap-1.5" style={{ color: accent }}>
+                            <Sparkles className="size-3.5 animate-spin" /> AI 선생님의 맞춤 코칭
                           </p>
-                          <p className="text-[14px] sm:text-base font-black tracking-wide mt-1.5 text-foreground">
-                            {contextData[index].guide}
-                          </p>
+
+                          {isCoachLoading ? (
+                            <p className="text-xs font-semibold text-muted-foreground animate-pulse py-1">
+                              🤖 {currentName}이의 발음을 정밀 분석해서 코칭을 작성하는 중...
+                            </p>
+                          ) : (
+                            <p className="text-[13px] sm:text-sm font-bold tracking-wide mt-1 text-foreground leading-relaxed">
+                              {aiCoachMsg}
+                            </p>
+                          )}
                         </div>
                       )}
                     </div>
@@ -1170,64 +1190,4 @@ export function WordQuiz({ words, accent }: { words: QuizWord[]; accent: string 
       </div>
     </>
   )
-}
-export async function generateSpeakingCoachFeedback(data: {
-  sentence: string;
-  childName: string;
-  pronResult: { score: number; accuracy: number; fluency: number; completeness: number; prosody: number };
-  wordScores: { text: string; score: number; errorType?: string; phonemes: { phoneme: string; score: number }[] }[];
-}) {
-  try {
-    const apiKey = process.env.GEMINI_API_KEY?.trim();
-    if (!apiKey) return { success: false, error: "API 키가 등록되지 않았습니다." };
-
-    const endpoint = `https://generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash-lite:generateContent?key=${apiKey}`;
-
-    // Azure 상세 평가 결과(틀린 단어 및 음소) 요약 생성
-    const lowAccuracyWords = data.wordScores
-      .filter(w => w.score < 80 || w.errorType === "Omission")
-      .map(w => {
-        const badPhonemes = w.phonemes.filter(p => p.score < 70).map(p => p.phoneme).join(", ");
-        return `- 단어: "${w.text}" (점수: ${Math.round(w.score)}점, 상태: ${w.errorType || "발음미흡"}${badPhonemes ? `, 미흡한 발음기호: [${badPhonemes}]` : ""})`;
-      })
-      .join("\n");
-
-    const promptText = `
-너는 한국의 초등학생('${data.childName}')을 다정하게 칭찬하고 지도하는 1:1 원어민 영어 선생님이야.
-아이가 방금 읽은 문장과 Azure 음성 평가 데이터가 주어질 거야. 이를 바탕으로 아이가 어떻게 발음을 보완하면 좋을지 1~2문장의 친절한 한국어 피드백을 작성해줘.
-
-[원문]
-"${data.sentence}"
-
-[평가 데이터]
-- 종합점수: ${Math.round(data.pronResult.score)}점
-- 정확도: ${Math.round(data.pronResult.accuracy)}점 / 유창성: ${Math.round(data.pronResult.fluency)}점 / 억양: ${Math.round(data.pronResult.prosody)}점
-${lowAccuracyWords ? `\n[주의가 필요한 단어들]\n${lowAccuracyWords}` : "\n[모든 단어 발음 훌륭함]"}
-
-[작성 규칙]
-1. 아이의 이름(${data.childName})을 부르며 시작하고, 점수가 높거나 잘한 점을 먼저 따뜻하게 칭찬해줘.
-2. 데이터에 '주의가 필요한 단어'가 있다면 그 단어를 어떻게 발음하면 좋을지(입모양, 혀 위치 등 초등학생 눈높이에 맞춰서) 짚어줘. 
-3. 억양(prosody)이나 유창성(fluency)이 낮다면 리듬감이나 끊어 읽기에 대한 팁을 줘.
-4. 반드시 1~2문장으로 아주 짧고 간결하게 작성하고, 다정한 이모지를 1~2개 써줘.
-    `.trim();
-
-    const response = await fetch(endpoint, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      cache: "no-store",
-      body: JSON.stringify({
-        contents: [{ parts: [{ text: promptText }] }],
-        generationConfig: { temperature: 0.7 }
-      })
-    });
-
-    if (!response.ok) return { success: false, error: "구글 AI 응답 실패" };
-    const resData = await response.json();
-    const feedback = resData.candidates?.[0]?.content?.parts?.[0]?.text || "💡 조금만 더 힘을 내서 또박또박 읽어볼까요?";
-
-    return { success: true, feedback: feedback.trim() };
-  } catch (error: any) {
-    console.error("AI 코칭 피드백 생성 에러:", error);
-    return { success: false, feedback: "💡 다시 한번 또박또박 자신감 있게 읽어볼까요?" };
-  }
 }
