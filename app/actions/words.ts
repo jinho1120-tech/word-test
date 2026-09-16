@@ -371,24 +371,26 @@ export async function generateSpeakingCoachFeedback(data: {
       })
       .join("\n");
 
-    // 💡 프롬프트 규칙 세분화 (단어 팁 + 억양 팁 동시 제공 및 분량 확장)
+    // 💡 프롬프트 수정: 필수 정보를 모두 넣되 1~2문장으로 압축된 예시를 강제로 제공
     const promptText = `
-너는 한국의 초등학생('${data.childName}')을 다정하게 칭찬하고 지도하는 1:1 원어민 영어 선생님이야.
-아이가 방금 읽은 문장과 Azure 음성 평가 데이터가 주어질 거야. 이를 바탕으로 아이가 어떻게 발음을 보완하면 좋을지 친절한 한국어 피드백을 작성해줘.
+너는 한국의 초등학생('${data.childName}')을 다정하게 지도하는 1:1 영어 선생님이야.
+아이가 방금 읽은 문장의 평가 데이터를 바탕으로, 보완할 점을 **핵심만 아주 짧고 간결하게** 작성해줘.
 
 [원문]
 "${data.sentence}"
 
 [평가 데이터]
-- 종합점수: ${Math.round(data.pronResult.score)}점
-- 정확도: ${Math.round(data.pronResult.accuracy)}점 / 유창성: ${Math.round(data.pronResult.fluency)}점 / 억양: ${Math.round(data.pronResult.prosody)}점
+- 종합점수: ${Math.round(data.pronResult.score)}점 (정확도: ${Math.round(data.pronResult.accuracy)}, 유창성: ${Math.round(data.pronResult.fluency)}, 억양: ${Math.round(data.pronResult.prosody)})
 ${lowAccuracyWords ? `\n[주의가 필요한 단어들]\n${lowAccuracyWords}` : "\n[모든 단어 발음 훌륭함]"}
 
-[작성 규칙]
-1. 아이의 이름(${data.childName})을 부르며 점수가 높거나 잘한 점을 먼저 따뜻하게 칭찬해줘.
-2. [주의가 필요한 단어]가 있다면 가장 교정이 필요한 단어 1~2개의 발음 팁(입모양, 혀 위치 등)을 쉽게 알려줘.
-3. 억양(Prosody)이나 유창성(Fluency) 점수가 80점 미만이라면, 단어 발음 팁에 덧붙여서 "문장의 리듬, 끊어 읽기, 마침표에서 끝음 내리기" 등에 대한 억양 팁도 반드시 함께 알려줄 것!
-4. 분량은 2~3문장 정도로, 다정하고 친근한 이모지를 곁들여서 작성해줘.
+[작성 규칙 (매우 중요)]
+1. 반드시 1~2문장(최대 3줄 이내)으로 아주 짧고 명확하게 작성할 것! (불필요한 부연 설명 절대 금지)
+2. 첫 시작은 아이 이름(${data.childName})을 부르며 점수나 잘한 점을 짧게 칭찬해줘.
+3. [주의가 필요한 단어] 중 1개의 발음 팁(입모양 등)과, 억양/유창성이 낮다면 리듬 팁을 합쳐서 한 문장으로 자연스럽게 이어 말해줘.
+4. 다정하고 친근한 말투와 이모지를 사용해.
+
+[완벽한 대답 예시]
+"${data.childName}아, 87점 정말 잘했어! 👏 'step'은 입술을 톡 떼며 발음하고, 문장 끝에선 목소리를 살짝 내려서 리듬을 타볼까? ✨"
     `.trim();
 
     const response = await fetch(endpoint, {
