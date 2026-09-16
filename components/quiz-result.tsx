@@ -52,12 +52,13 @@ export function QuizResult({
   const isContextMode = quizType === "context"
   const isEligibleForReward = score === 100 && total >= 10 && !usedHint
 
-  // ▼ 스피킹(말하기) 모드 전용 결과 화면 (원장님 요청 반영!)
+  // ▼ 스피킹(말하기) 모드 전용 결과 화면 (테마 색상 100% 동기화!)
   if (quizType === "speaking") {
     return (
       <div className="flex flex-col px-6 py-10 animate-in fade-in zoom-in-95 duration-500">
         <div className="mb-6 flex flex-col items-center text-center">
-          <div className="mb-3 flex size-16 items-center justify-center rounded-2xl text-white bg-gradient-to-br from-indigo-400 to-blue-500 shadow-lg">
+          {/* 하드코딩된 파란색 제거 -> accent 컬러 적용 */}
+          <div className="mb-3 flex size-16 items-center justify-center rounded-2xl text-white shadow-lg" style={{ backgroundColor: accent }}>
             <Mic className="size-8" />
           </div>
           <h2 className="text-2xl font-black text-foreground">
@@ -73,7 +74,8 @@ export function QuizResult({
         <div className="mb-6 rounded-2xl bg-muted/50 p-6 text-center shadow-inner">
           <p className="mb-1 text-sm font-bold text-muted-foreground">성공한 문장</p>
           <div className="mb-4 flex items-baseline justify-center gap-1">
-            <span className="text-6xl font-black text-blue-500">{correctCount}</span>
+            {/* 하드코딩된 text-blue-500 제거 -> accent 컬러 적용 */}
+            <span className="text-6xl font-black" style={{ color: accent }}>{correctCount}</span>
             <span className="text-3xl font-bold text-muted-foreground">/ {total}</span>
           </div>
           <div className="flex justify-center text-sm text-muted-foreground">
@@ -107,7 +109,7 @@ export function QuizResult({
     )
   }
 
-  // ▼ 그 외 일반 모드 및 실전 문장 모드 화면 (기존 원본 코드 완벽 유지)
+  // ▼ 그 외 일반 모드 및 실전 문장 모드 화면
   return (
     <div className="flex flex-col px-6 py-10 animate-in fade-in duration-500">
       <div className="mb-6 flex flex-col items-center text-center">
@@ -167,7 +169,6 @@ export function QuizResult({
         )}
       </div>
       
-      {/* AI 문장 퀴즈가 아닐 때만 틀린 단어 목록 표시 */}
       {!isContextMode && wrongWords.length > 0 && (
         <div className="mb-6">
           <p className="mb-2 text-sm font-semibold text-foreground">틀린 단어 ({wrongWords.length})</p>
@@ -183,7 +184,6 @@ export function QuizResult({
       )}
 
       <div className="flex flex-col gap-3 mt-2">
-        {/* AI 문장 퀴즈가 아닐 때만 '틀린 단어만 다시 풀기' 표시 */}
         {!isContextMode && wrongWords.length > 0 && (
           <button 
             onClick={onRetryWrong} 
