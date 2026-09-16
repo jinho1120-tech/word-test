@@ -349,7 +349,7 @@ export async function generateContextQuiz(words: { word: string, meaning: string
   }
 }
 
-// 💡 [수정됨] TypeScript 코드 레벨에서 억양/유창성 부족 여부를 먼저 판단하여 프롬프트를 동적으로 변경
+// 💡 [수정됨] 단어가 완벽할 때 쓸데없는 단어를 지적하는 환각 방지!
 export async function generateSpeakingCoachFeedback(data: {
   sentence: string;
   childName: string;
@@ -370,8 +370,15 @@ export async function generateSpeakingCoachFeedback(data: {
       })
       .join("\n");
 
-    // 💡 핵심 로직: 유창성이 80점 미만이거나 억양이 75점 미만일 때만 리듬/멜로디 팁 활성화
     const needsProsodyTip = data.pronResult.fluency < 80 || data.pronResult.prosody < 75;
+
+    // 💡 핵심: 주의가 필요한 단어가 있는지 없는지에 따라 룰을 동적으로 변경
+    let wordRule = "";
+    if (lowAccuracyWords.trim()) {
+      wordRule = "3. [주의가 필요한 단어] 중 1개의 발음 팁(입모양 등)을 쉽게 알려줘.";
+    } else {
+      wordRule = "3. 모든 단어의 발음이 훌륭하므로, 특정 단어의 발음을 고치라는 지적이나 팁은 **절대로** 쓰지 마!";
+    }
 
     let prosodyRule = "";
     let perfectExample = "";
@@ -379,11 +386,10 @@ export async function generateSpeakingCoachFeedback(data: {
     if (needsProsodyTip) {
       prosodyRule = `4. **[핵심 억양/리듬 팁]** 유창성이나 억양 점수가 낮으므로 화면의 스피커(원어민 목소리)를 듣고 '멜로디와 리듬'을 흉내내도록 유도해줘.
    (예: "스피커 버튼을 눌러서 선생님 목소리를 노래하듯 똑같이 흉내내볼까?" 또는 "선생님이 어디서 숨을 쉬는지 듣고 똑같이 쉬어보자.")`;
-      perfectExample = `"예온아, 87점 정말 잘했어! 👏 'careful'은 입술을 살짝 깨물며 발음해보고, 스피커 버튼을 눌러서 원어민 선생님의 멜로디를 노래하듯 똑같이 흉내내볼까? 🎶"`;
+      perfectExample = `"예온아, 87점 정말 잘했어! 👏 ${lowAccuracyWords.trim() ? "'careful'은 입술을 살짝 깨물며 발음해보고, " : ""}스피커 버튼을 눌러서 원어민 선생님의 멜로디를 노래하듯 똑같이 흉내내볼까? 🎶"`;
     } else {
-      // 억양이 75점 이상이면 아예 멜로디 관련 조언을 하지 않도록 엄격하게 제한
-      prosodyRule = `4. **[핵심 억양/리듬 팁]** 유창성과 억양 점수가 이미 훌륭해! **따라서 리듬, 멜로디, 억양, 스피커 버튼 흉내내기에 대한 조언은 절대로 포함하지 마.** 오직 단어 발음 팁 하나만 주고 아주 깔끔하게 끝내.`;
-      perfectExample = `"예온아, 89점 정말 대단해! 👏 'careful' 발음할 때 윗니로 아랫입술을 살짝 깨물어주면 완벽할 거야! ✨"`;
+      prosodyRule = `4. **[핵심 억양/리듬 팁]** 유창성과 억양 점수가 이미 훌륭해! **따라서 리듬, 멜로디, 억양, 스피커 버튼 흉내내기에 대한 조언은 절대로 포함하지 마.** 오직 단어 발음 팁 하나만 주고 아주 깔끔하게 끝내. (만약 단어 발음도 완벽하다면 그냥 순수하게 칭찬만 할 것!)`;
+      perfectExample = `"예온아, 완벽해! 👏 발음부터 억양까지 원어민 같아, 정말 대단해! ✨"`;
     }
 
     const promptText = `
@@ -400,9 +406,9 @@ ${lowAccuracyWords ? `\n[주의가 필요한 단어들]\n${lowAccuracyWords}` : 
 [작성 규칙 (매우 중요)]
 1. 반드시 1~2문장(최대 3줄 이내)으로 아주 짧고 명확하게 작성할 것! (불필요한 부연 설명 금지)
 2. 첫 시작은 아이 이름(${data.childName})을 부르며 점수나 잘한 점을 짧게 칭찬해줘.
-3. [주의가 필요한 단어] 중 1개의 발음 팁(입모양 등)을 쉽게 알려줘.
+${wordRule}
 ${prosodyRule}
-5. 단어 팁과 코칭 내용을 한 문장으로 자연스럽게 이어 말하고, 다정하고 친근한 이모지를 사용해.
+5. 다정하고 친근한 이모지를 사용해.
 
 [완벽한 대답 예시]
 ${perfectExample}
