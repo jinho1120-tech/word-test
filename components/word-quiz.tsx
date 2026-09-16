@@ -707,121 +707,129 @@ export function WordQuiz({ words, accent }: { words: QuizWord[]; accent: string 
 
               {quizType === "speaking" && contextData[index] ? (
                 <div className="mb-4 flex flex-col items-center justify-center w-full">
-                  <div className="mb-8 text-balance text-center text-3xl sm:text-4xl font-black tracking-tight text-foreground leading-relaxed flex flex-wrap justify-center items-baseline gap-x-2 gap-y-7 px-1">
-                    {wordScores.length > 0 ? (() => {
-                      const fullSent = getFullSentence()
-                      const availableScores = [...wordScores]
-                      
-                      let rawChunks = fullSent.split('/').map(c => c.trim()).filter(Boolean);
-                      if (rawChunks.length === 1 && fullSent.split(' ').length > 3) {
-                        const words = fullSent.split(' ');
-                        rawChunks = [];
-                        for (let i = 0; i < words.length; i += 3) {
-                          rawChunks.push(words.slice(i, i + 3).join(' '));
-                        }
-                      }
-
-                      return rawChunks.map((chunkStr, cIdx) => {
-                        const chunkWords = chunkStr.split(' ');
-
-                        let chunkStartSec = 9999;
-                        let chunkEndSec = 0;
-                        let isChunkOmitted = true;
-
-                        const renderedWords = chunkWords.map((token, i) => {
-                          const cleanToken = token.replace(/[^a-zA-Z0-9']/g, '').toLowerCase()
-                          let colorClass = "text-foreground"
-                          let scoreItem: WordScoreDetail | null = null;
-                          let isOmitted = false; 
-                          
-                          const scoreIdx = availableScores.findIndex(ws => ws.text.toLowerCase() === cleanToken)
-                          if (scoreIdx !== -1) {
-                            scoreItem = availableScores[scoreIdx]
-                            
-                            if (scoreItem.errorType === "Omission") {
-                              colorClass = "text-red-400 dark:text-red-500 opacity-50"
-                              isOmitted = true;
-                            } else {
-                              isChunkOmitted = false;
-                              if (scoreItem.offsetSec !== undefined) {
-                                chunkStartSec = Math.min(chunkStartSec, scoreItem.offsetSec);
-                                chunkEndSec = Math.max(chunkEndSec, scoreItem.offsetSec + (scoreItem.durationSec || 0));
-                              }
-
-                              if (scoreItem.score >= 80) colorClass = "text-green-500 dark:text-green-400"
-                              else if (scoreItem.score >= 60) colorClass = "text-amber-500 dark:text-amber-400"
-                              else colorClass = "text-red-500 dark:text-red-400"
-                            }
-                            availableScores.splice(scoreIdx, 1) 
+                  
+                  {/* 💡 1. 렌더링 영역: 발음기호가 있을 땐 묶음(flex-wrap) 구조 적용, 평소엔 자연스러운 일반 텍스트 렌더링 */}
+                  {wordScores.length > 0 ? (
+                    <div className="mb-8 text-center text-3xl sm:text-4xl font-black tracking-tight text-foreground leading-relaxed flex flex-wrap justify-center items-baseline gap-x-1.5 gap-y-8 px-1">
+                      {(() => {
+                        const fullSent = getFullSentence()
+                        const availableScores = [...wordScores]
+                        
+                        let rawChunks = fullSent.split('/').map(c => c.trim()).filter(Boolean);
+                        if (rawChunks.length === 1 && fullSent.split(' ').length > 3) {
+                          const words = fullSent.split(' ');
+                          rawChunks = [];
+                          for (let i = 0; i < words.length; i += 3) {
+                            rawChunks.push(words.slice(i, i + 3).join(' '));
                           }
+                        }
 
-                          const isTarget = cleanToken === current.word.toLowerCase()
-                          const showPhonemes = scoreItem && (isTarget || scoreItem.score < 80);
+                        return rawChunks.map((chunkStr, cIdx) => {
+                          const chunkWords = chunkStr.split(' ');
+
+                          let chunkStartSec = 9999;
+                          let chunkEndSec = 0;
+                          let isChunkOmitted = true;
+
+                          const renderedWords = chunkWords.map((token, i) => {
+                            const cleanToken = token.replace(/[^a-zA-Z0-9']/g, '').toLowerCase()
+                            let colorClass = "text-foreground"
+                            let scoreItem: WordScoreDetail | null = null;
+                            let isOmitted = false; 
+                            
+                            const scoreIdx = availableScores.findIndex(ws => ws.text.toLowerCase() === cleanToken)
+                            if (scoreIdx !== -1) {
+                              scoreItem = availableScores[scoreIdx]
+                              
+                              if (scoreItem.errorType === "Omission") {
+                                colorClass = "text-red-400 dark:text-red-500 opacity-50"
+                                isOmitted = true;
+                              } else {
+                                isChunkOmitted = false;
+                                if (scoreItem.offsetSec !== undefined) {
+                                  chunkStartSec = Math.min(chunkStartSec, scoreItem.offsetSec);
+                                  chunkEndSec = Math.max(chunkEndSec, scoreItem.offsetSec + (scoreItem.durationSec || 0));
+                                }
+
+                                if (scoreItem.score >= 80) colorClass = "text-green-500 dark:text-green-400"
+                                else if (scoreItem.score >= 60) colorClass = "text-amber-500 dark:text-amber-400"
+                                else colorClass = "text-red-500 dark:text-red-400"
+                              }
+                              availableScores.splice(scoreIdx, 1) 
+                            }
+
+                            const isTarget = cleanToken === current.word.toLowerCase()
+                            const showPhonemes = scoreItem && (isTarget || scoreItem.score < 80);
+
+                            return (
+                              <span key={i} className="relative inline-flex items-center align-baseline">
+                                <span className={cn("transition-colors duration-500 leading-tight", colorClass, isTarget && "underline decoration-4 underline-offset-4")}>
+                                  {token}
+                                </span>
+                                {isOmitted && (
+                                  <span className="absolute top-full left-1/2 -translate-x-1/2 mt-1 text-[10px] font-bold text-red-400 opacity-90 whitespace-nowrap z-10">
+                                    (누락)
+                                  </span>
+                                )}
+                                {!isOmitted && showPhonemes && scoreItem?.phonemes && scoreItem.phonemes.length > 0 && (
+                                  <span className="absolute top-full left-1/2 -translate-x-1/2 mt-0.5 flex gap-[1px] text-[12px] font-medium font-mono tracking-tighter opacity-90 whitespace-nowrap z-10">
+                                    <span className="text-muted-foreground/40">[</span>
+                                    {scoreItem.phonemes.map((p, pIdx) => {
+                                      let pColor = "text-red-500 font-black"
+                                      if (p.score >= 80) pColor = "text-green-500"
+                                      else if (p.score >= 60) pColor = "text-amber-500 font-black"
+                                      return <span key={pIdx} className={pColor}>{p.phoneme}</span>
+                                    })}
+                                    <span className="text-muted-foreground/40">]</span>
+                                  </span>
+                                )}
+                              </span>
+                            )
+                          });
+
+                          const isClickable = !isChunkOmitted && userAudioUrl && chunkStartSec !== 9999;
+                          const chunkDuration = Math.max(0.1, chunkEndSec - chunkStartSec - 0.02);
 
                           return (
-                            <span key={i} className="relative inline-flex items-center align-baseline px-0.5 my-1">
-                              <span className={cn("transition-colors duration-500 leading-tight", colorClass, isTarget && "underline decoration-4 underline-offset-4")}>
-                                {token}
+                            <React.Fragment key={cIdx}>
+                              {/* 💡 2. 덩어리(Chunk) 컨테이너: 줄바꿈 시 발음기호가 겹치지 않게 gap-y-7 추가 및 pb-6으로 박스 하단 여백 완벽 확보 */}
+                              <span
+                                className={cn(
+                                  "inline-flex flex-wrap items-baseline justify-center max-w-full group rounded-2xl px-3 transition-all duration-200 relative",
+                                  "pt-2.5 pb-6 gap-x-1.5 gap-y-7",
+                                  isClickable ? "cursor-pointer bg-card hover:bg-muted/80 shadow-sm border border-border/50 active:scale-[0.98]" : "border border-transparent"
+                                )}
+                                onClick={() => {
+                                  if (isClickable) {
+                                    playComparison(chunkStr.replace(/[^a-zA-Z0-9' ]/g, ''), chunkStartSec, chunkDuration)
+                                  }
+                                }}
+                              >
+                                {renderedWords}
+                                {isClickable && (
+                                  <span className="inline-flex self-center items-center justify-center bg-indigo-100 dark:bg-indigo-900/50 text-indigo-500 rounded-full p-0.5 ml-1.5 opacity-0 group-hover:opacity-100 transition-opacity">
+                                    <Volume2 className="size-3" />
+                                  </span>
+                                )}
                               </span>
-                              {isOmitted && (
-                                <span className="absolute top-full left-1/2 -translate-x-1/2 mt-1 text-[10px] font-bold text-red-400 opacity-90 whitespace-nowrap z-10">
-                                  (누락)
-                                </span>
-                              )}
-                              {!isOmitted && showPhonemes && scoreItem?.phonemes && scoreItem.phonemes.length > 0 && (
-                                <span className="absolute top-full left-1/2 -translate-x-1/2 mt-0.5 flex gap-[1px] text-[12px] font-medium font-mono tracking-tighter opacity-90 whitespace-nowrap z-10">
-                                  <span className="text-muted-foreground/40">[</span>
-                                  {scoreItem.phonemes.map((p, pIdx) => {
-                                    let pColor = "text-red-500 font-black"
-                                    if (p.score >= 80) pColor = "text-green-500"
-                                    else if (p.score >= 60) pColor = "text-amber-500 font-black"
-                                    return <span key={pIdx} className={pColor}>{p.phoneme}</span>
-                                  })}
-                                  <span className="text-muted-foreground/40">]</span>
-                                </span>
-                              )}
-                            </span>
+                              {/* 💡 3. 구분선(/): items-baseline 구조에서 첫째 줄 텍스트 높이와 정확히 맞도록 self-center 제거 */}
+                              {cIdx < rawChunks.length - 1 && <span className="text-muted-foreground/30 mx-1 text-3xl font-light">/</span>}
+                            </React.Fragment>
                           )
-                        });
-
-                        const isClickable = !isChunkOmitted && userAudioUrl && chunkStartSec !== 9999;
-                        const chunkDuration = Math.max(0.1, chunkEndSec - chunkStartSec - 0.02);
-
-                        return (
-                          <React.Fragment key={cIdx}>
-                            {/* 💡 청크 박스: flex-wrap 및 max-w-full 추가로 긴 청크 화면 잘림 완벽 방지 */}
-                            <span
-                              className={cn(
-                                "inline-flex flex-wrap items-baseline justify-center max-w-full group rounded-2xl px-2 py-1.5 my-1 transition-all duration-200 relative",
-                                isClickable && "cursor-pointer hover:bg-muted/80 hover:scale-[1.01] active:scale-95 shadow-sm border border-border/40"
-                              )}
-                              onClick={() => {
-                                if (isClickable) {
-                                  playComparison(chunkStr.replace(/[^a-zA-Z0-9' ]/g, ''), chunkStartSec, chunkDuration)
-                                }
-                              }}
-                            >
-                              {renderedWords}
-                              {isClickable && (
-                                <span className="inline-flex items-center justify-center bg-indigo-100 dark:bg-indigo-900/50 text-indigo-500 rounded-full p-0.5 ml-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                                  <Volume2 className="size-3" />
-                                </span>
-                              )}
-                            </span>
-                            {cIdx < rawChunks.length - 1 && <span className="text-muted-foreground/30 mx-1 align-baseline text-3xl self-center">/</span>}
-                          </React.Fragment>
-                        )
-                      })
-                    })() : (
-                      getFullSentence().replace(/\s*\/\s*/g, ' ').split(new RegExp(`(${current.word})`, 'gi')).map((part, i) => 
+                        })
+                      })()}
+                    </div>
+                  ) : (
+                    <div className="mb-8 text-balance text-center text-3xl sm:text-4xl font-black tracking-tight text-foreground leading-relaxed px-1">
+                      {getFullSentence().replace(/\s*\/\s*/g, ' ').split(new RegExp(`(${current.word})`, 'gi')).map((part, i) => 
                         part.toLowerCase() === current.word.toLowerCase() ? (
                           <span key={i} className="text-indigo-600 dark:text-indigo-400 underline decoration-4 underline-offset-4">{part}</span>
                         ) : (
                           <span key={i}>{part}</span>
                         )
-                      )
-                    )}
-                  </div>
+                      )}
+                    </div>
+                  )}
                   
                   <p className="text-base font-semibold text-muted-foreground mb-6 text-center px-4 leading-relaxed">
                     🇰🇷 {contextData[index].translation}
