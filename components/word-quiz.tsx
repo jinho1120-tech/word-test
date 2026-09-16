@@ -108,6 +108,20 @@ export function WordQuiz({ words, accent }: { words: QuizWord[]; accent: string 
   const [isSlowMode, setIsSlowMode] = useState(false)
   const [ttsVoice, setTtsVoice] = useState<string>("en-US-AnaNeural")
 
+  // 💡 앱 진입 시 저장된 TTS 목소리 설정을 로드
+  useEffect(() => {
+    const savedVoice = localStorage.getItem("word_quiz_tts_voice");
+    if (savedVoice && TTS_VOICES.some(v => v.id === savedVoice)) {
+      setTtsVoice(savedVoice);
+    }
+  }, []);
+
+  // 💡 TTS 목소리 변경 시 localStorage에 저장
+  const handleTtsVoiceChange = (newVoice: string) => {
+    setTtsVoice(newVoice);
+    localStorage.setItem("word_quiz_tts_voice", newVoice);
+  };
+
   const current = deck[index]
   const total = deck.length
   const currentName = accent === "#6366f1" ? "지온" : "예온"
@@ -646,7 +660,7 @@ export function WordQuiz({ words, accent }: { words: QuizWord[]; accent: string 
                 </button>
                 <select
                   value={ttsVoice}
-                  onChange={(e) => setTtsVoice(e.target.value)}
+                  onChange={(e) => handleTtsVoiceChange(e.target.value)}
                   className="rounded-full bg-muted/50 border border-transparent px-2.5 py-1 text-xs font-bold text-muted-foreground outline-none transition-colors hover:bg-muted cursor-pointer"
                 >
                   {TTS_VOICES.map((voice) => (
@@ -695,7 +709,6 @@ export function WordQuiz({ words, accent }: { words: QuizWord[]; accent: string 
 
               {quizType === "speaking" && contextData[index] ? (
                 <div className="mb-4 flex flex-col items-center justify-center w-full">
-                  {/* 💡 문장 전체 레이아웃: 발음기호 공간 지정을 위해 gap-y-6 및 mb-8 추가 */}
                   <div className="mb-8 text-balance text-center text-3xl sm:text-4xl font-black tracking-tight text-foreground leading-relaxed flex flex-wrap justify-center items-baseline gap-x-2 gap-y-6 px-1">
                     {wordScores.length > 0 ? (() => {
                       const fullSent = getFullSentence()
@@ -748,7 +761,6 @@ export function WordQuiz({ words, accent }: { words: QuizWord[]; accent: string 
                           const showPhonemes = scoreItem && (isTarget || scoreItem.score < 80);
 
                           return (
-                            // 💡 단어 레이아웃: absolute 포지셔닝으로 모든 단어의 베이스라인 정렬 유지
                             <span key={i} className="relative inline-flex items-center align-baseline px-0.5">
                               <span className={cn("transition-colors duration-500 leading-tight", colorClass, isTarget && "underline decoration-4 underline-offset-4")}>
                                 {token}
@@ -775,7 +787,7 @@ export function WordQuiz({ words, accent }: { words: QuizWord[]; accent: string 
                         });
 
                         const isClickable = !isChunkOmitted && userAudioUrl && chunkStartSec !== 9999;
-                        // 💡 뒤 여유 시간을 -0.02초로 설정
+                        // 💡 뒤 여유 시간을 -0.02초로 설정하여 다음 청크 소리 침범 방지
                         const chunkDuration = Math.max(0.1, chunkEndSec - chunkStartSec - 0.02);
 
                         return (
