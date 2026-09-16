@@ -1171,3 +1171,63 @@ export function WordQuiz({ words, accent }: { words: QuizWord[]; accent: string 
     </>
   )
 }
+export async function generateSpeakingCoachFeedback(data: {
+  sentence: string;
+  childName: string;
+  pronResult: { score: number; accuracy: number; fluency: number; completeness: number; prosody: number };
+  wordScores: { text: string; score: number; errorType?: string; phonemes: { phoneme: string; score: number }[] }[];
+}) {
+  try {
+    const apiKey = process.env.GEMINI_API_KEY?.trim();
+    if (!apiKey) return { success: false, error: "API 키가 등록되지 않았습니다." };
+
+    const endpoint = `https://generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash-lite:generateContent?key=${apiKey}`;
+
+    // Azure 상세 평가 결과(틀린 단어 및 음소) 요약 생성
+    const lowAccuracyWords = data.wordScores
+      .filter(w => w.score < 80 || w.errorType === "Omission")
+      .map(w => {
+        const badPhonemes = w.phonemes.filter(p => p.score < 70).map(p => p.phoneme).join(", ");
+        return `- 단어: "${w.text}" (점수: ${Math.round(w.score)}점, 상태: ${w.errorType || "발음미흡"}${badPhonemes ? `, 미흡한 발음기호: [${badPhonemes}]` : ""})`;
+      })
+      .join("\n");
+
+    const promptText = `
+너는 한국의 초등학생('${data.childName}')을 다정하게 칭찬하고 지도하는 1:1 원어민 영어 선생님이야.
+아이가 방금 읽은 문장과 Azure 음성 평가 데이터가 주어질 거야. 이를 바탕으로 아이가 어떻게 발음을 보완하면 좋을지 1~2문장의 친절한 한국어 피드백을 작성해줘.
+
+[원문]
+"${data.sentence}"
+
+[평가 데이터]
+- 종합점수: ${Math.round(data.pronResult.score)}점
+- 정확도: ${Math.round(data.pronResult.accuracy)}점 / 유창성: ${Math.round(data.pronResult.fluency)}점 / 억양: ${Math.round(data.pronResult.prosody)}점
+${lowAccuracyWords ? `\n[주의가 필요한 단어들]\n${lowAccuracyWords}` : "\n[모든 단어 발음 훌륭함]"}
+
+[작성 규칙]
+1. 아이의 이름(${data.childName})을 부르며 시작하고, 점수가 높거나 잘한 점을 먼저 따뜻하게 칭찬해줘.
+2. 데이터에 '주의가 필요한 단어'가 있다면 그 단어를 어떻게 발음하면 좋을지(입모양, 혀 위치 등 초등학생 눈높이에 맞춰서) 짚어줘. 
+3. 억양(prosody)이나 유창성(fluency)이 낮다면 리듬감이나 끊어 읽기에 대한 팁을 줘.
+4. 반드시 1~2문장으로 아주 짧고 간결하게 작성하고, 다정한 이모지를 1~2개 써줘.
+    `.trim();
+
+    const response = await fetch(endpoint, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      cache: "no-store",
+      body: JSON.stringify({
+        contents: [{ parts: [{ text: promptText }] }],
+        generationConfig: { temperature: 0.7 }
+      })
+    });
+
+    if (!response.ok) return { success: false, error: "구글 AI 응답 실패" };
+    const resData = await response.json();
+    const feedback = resData.candidates?.[0]?.content?.parts?.[0]?.text || "💡 조금만 더 힘을 내서 또박또박 읽어볼까요?";
+
+    return { success: true, feedback: feedback.trim() };
+  } catch (error: any) {
+    console.error("AI 코칭 피드백 생성 에러:", error);
+    return { success: false, feedback: "💡 다시 한번 또박또박 자신감 있게 읽어볼까요?" };
+  }
+}
