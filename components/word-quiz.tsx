@@ -263,8 +263,8 @@ export function WordQuiz({ words, accent }: { words: QuizWord[]; accent: string 
       source.buffer = decodedBuffer;
       source.connect(ctx.destination);
       
-      const start = offsetSec; // 앞 여유: 0초
-      const dur = Math.max(0.1, durationSec); // 뒤 여유 (+0.02초 반영된 정확한 기간만 재생)
+      const start = offsetSec;
+      const dur = Math.max(0.1, durationSec); 
       
       source.start(0, start, dur);
     } catch(e) {
@@ -695,7 +695,8 @@ export function WordQuiz({ words, accent }: { words: QuizWord[]; accent: string 
 
               {quizType === "speaking" && contextData[index] ? (
                 <div className="mb-4 flex flex-col items-center justify-center w-full">
-                  <div className="mb-4 text-balance text-center text-3xl sm:text-4xl font-black tracking-tight text-foreground leading-normal flex flex-wrap justify-center gap-x-1 gap-y-3 px-1">
+                  {/* 💡 문장 전체 레이아웃: 발음기호 공간 지정을 위해 gap-y-6 및 mb-8 추가 */}
+                  <div className="mb-8 text-balance text-center text-3xl sm:text-4xl font-black tracking-tight text-foreground leading-relaxed flex flex-wrap justify-center items-baseline gap-x-2 gap-y-6 px-1">
                     {wordScores.length > 0 ? (() => {
                       const fullSent = getFullSentence()
                       const availableScores = [...wordScores]
@@ -747,17 +748,18 @@ export function WordQuiz({ words, accent }: { words: QuizWord[]; accent: string 
                           const showPhonemes = scoreItem && (isTarget || scoreItem.score < 80);
 
                           return (
-                            <span key={i} className="inline-flex flex-col items-center align-top relative px-1">
+                            // 💡 단어 레이아웃: absolute 포지셔닝으로 모든 단어의 베이스라인 정렬 유지
+                            <span key={i} className="relative inline-flex items-center align-baseline px-0.5">
                               <span className={cn("transition-colors duration-500 leading-tight", colorClass, isTarget && "underline decoration-4 underline-offset-4")}>
                                 {token}
                               </span>
                               {isOmitted && (
-                                <span className="mt-1 flex text-[11px] font-bold text-red-400 opacity-90">
+                                <span className="absolute top-full left-1/2 -translate-x-1/2 mt-1 text-[10px] font-bold text-red-400 opacity-90 whitespace-nowrap">
                                   (누락)
                                 </span>
                               )}
                               {!isOmitted && showPhonemes && scoreItem?.phonemes && scoreItem.phonemes.length > 0 && (
-                                <span className="mt-0.5 flex gap-[1px] text-[13px] font-medium font-mono tracking-tighter opacity-90">
+                                <span className="absolute top-full left-1/2 -translate-x-1/2 mt-0.5 flex gap-[1px] text-[12px] font-medium font-mono tracking-tighter opacity-90 whitespace-nowrap">
                                   <span className="text-muted-foreground/40">[</span>
                                   {scoreItem.phonemes.map((p, pIdx) => {
                                     let pColor = "text-red-500 font-black"
@@ -773,15 +775,15 @@ export function WordQuiz({ words, accent }: { words: QuizWord[]; accent: string 
                         });
 
                         const isClickable = !isChunkOmitted && userAudioUrl && chunkStartSec !== 9999;
-                        // 💡 꼬리 여유 시간을 0.15초에서 0.02초로 정밀하게 축소
-                        const chunkDuration = Math.max(0.1, chunkEndSec - chunkStartSec + 0.02);
+                        // 💡 뒤 여유 시간을 -0.02초로 설정
+                        const chunkDuration = Math.max(0.1, chunkEndSec - chunkStartSec - 0.02);
 
                         return (
                           <React.Fragment key={cIdx}>
                             <span
                               className={cn(
-                                "inline-flex flex-wrap items-end justify-center align-top group rounded-2xl px-1 py-1.5 transition-all duration-200",
-                                isClickable && "cursor-pointer hover:bg-muted/80 hover:scale-[1.02] active:scale-95 shadow-sm hover:shadow-md"
+                                "inline-flex items-baseline justify-center group rounded-2xl px-2 py-1.5 my-0.5 transition-all duration-200 relative",
+                                isClickable && "cursor-pointer hover:bg-muted/80 hover:scale-[1.01] active:scale-95 shadow-sm border border-border/40"
                               )}
                               onClick={() => {
                                 if (isClickable) {
@@ -791,12 +793,12 @@ export function WordQuiz({ words, accent }: { words: QuizWord[]; accent: string 
                             >
                               {renderedWords}
                               {isClickable && (
-                                <span className="flex items-center justify-center bg-indigo-100 text-indigo-500 rounded-full p-1 ml-1 mb-1.5 opacity-0 group-hover:opacity-100 transition-opacity">
+                                <span className="inline-flex items-center justify-center bg-indigo-100 dark:bg-indigo-900/50 text-indigo-500 rounded-full p-0.5 ml-1 opacity-0 group-hover:opacity-100 transition-opacity">
                                   <Volume2 className="size-3" />
                                 </span>
                               )}
                             </span>
-                            {cIdx < rawChunks.length - 1 && <span className="text-muted-foreground/30 mx-1 align-top text-4xl self-center">/</span>}
+                            {cIdx < rawChunks.length - 1 && <span className="text-muted-foreground/30 mx-1 align-baseline text-3xl self-center">/</span>}
                           </React.Fragment>
                         )
                       })
