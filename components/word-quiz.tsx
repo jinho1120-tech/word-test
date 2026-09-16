@@ -70,6 +70,10 @@ function getAudioContext() {
 
 const ttsCache = new Map<string, string>();
 
+// 💡 재생 겹침 방지를 위한 전역 타이머/소스 변수
+let activeAudioSource: AudioBufferSourceNode | null = null;
+let activeTimeout: any = null;
+
 function shuffle<T>(arr: T[]): T[] {
   const copy = [...arr]
   for (let i = copy.length - 1; i > 0; i--) {
@@ -172,6 +176,9 @@ export function WordQuiz({ words, accent }: { words: QuizWord[]; accent: string 
 
   async function playPronunciation(targetText: string) {
     try {
+      if (activeTimeout) { clearTimeout(activeTimeout); activeTimeout = null; }
+      if (activeAudioSource) { try { activeAudioSource.stop(); } catch(e){} activeAudioSource = null; }
+
       if (typeof window !== "undefined" && "speechSynthesis" in window) {
         window.speechSynthesis.cancel()
       }
@@ -267,6 +274,12 @@ export function WordQuiz({ words, accent }: { words: QuizWord[]; accent: string 
       if (!ctx) return;
       if (ctx.state === "suspended") await ctx.resume();
 
+      if (activeAudioSource) {
+        try { activeAudioSource.stop(); } catch(e) {}
+        activeAudioSource.disconnect();
+        activeAudioSource = null;
+      }
+
       const res = await fetch(userAudioUrl);
       const arrayBuffer = await res.arrayBuffer();
       const decodedBuffer = await ctx.decodeAudioData(arrayBuffer);
@@ -278,6 +291,7 @@ export function WordQuiz({ words, accent }: { words: QuizWord[]; accent: string 
       const start = offsetSec;
       const dur = Math.max(0.1, durationSec); 
       
+      activeAudioSource = source;
       source.start(0, start, dur);
     } catch(e) {
       console.error("단어 부분 재생 실패:", e);
@@ -287,11 +301,13 @@ export function WordQuiz({ words, accent }: { words: QuizWord[]; accent: string 
   async function playComparison(targetText: string, offsetSec: number, durationSec: number) {
     playPronunciation(targetText);
     
+    if (activeTimeout) { clearTimeout(activeTimeout); activeTimeout = null; }
+
     const wordCount = targetText.trim().split(/\s+/).length;
     const estimatedTtsMs = wordCount * 600 + 800; 
     const delay = Math.max(estimatedTtsMs, durationSec * 1000 + 500);
     
-    setTimeout(() => {
+    activeTimeout = setTimeout(() => {
       playUserWordAudio(offsetSec, durationSec);
     }, delay);
   }
@@ -299,6 +315,11 @@ export function WordQuiz({ words, accent }: { words: QuizWord[]; accent: string 
   async function playFullUserAudio() {
     if (!userAudioUrl) return;
     try {
+      if (activeTimeout) { clearTimeout(activeTimeout); activeTimeout = null; }
+      if (activeAudioSource) { try { activeAudioSource.stop(); } catch(e){} activeAudioSource = null; }
+      const audio = getGlobalAudio();
+      if (audio) { audio.pause(); audio.currentTime = 0; }
+
       const ctx = getAudioContext();
       if (!ctx) return;
       if (ctx.state === "suspended") await ctx.resume();
@@ -311,6 +332,7 @@ export function WordQuiz({ words, accent }: { words: QuizWord[]; accent: string 
       source.buffer = decodedBuffer;
       source.connect(ctx.destination);
       
+      activeAudioSource = source;
       source.start(0);
     } catch (e) {
       console.error("전체 녹음 Web Audio 재생 실패:", e);
@@ -318,6 +340,9 @@ export function WordQuiz({ words, accent }: { words: QuizWord[]; accent: string 
   }
 
   async function handlePronunciationAssessment(targetText: string) {
+    if (activeTimeout) { clearTimeout(activeTimeout); activeTimeout = null; }
+    if (activeAudioSource) { try { activeAudioSource.stop(); } catch(e){} activeAudioSource = null; }
+
     setIsRecording(true)
     setIsMicReady(false)
     setPronResult(null)
@@ -411,12 +436,13 @@ export function WordQuiz({ words, accent }: { words: QuizWord[]; accent: string 
             
             const wordsDetail = pron.detailResult?.Words || []
             
+            // 💡 버그 픽스: w.Offset이 누락(undefined)되었을 때 0으로 강제 변환하지 않고 undefined를 유지하도록 수정
             const mappedWords: WordScoreDetail[] = wordsDetail.map((w: any) => ({
               text: w.Word,
               score: w.PronunciationAssessment.AccuracyScore,
               errorType: w.PronunciationAssessment.ErrorType,
-              offsetSec: w.Offset ? w.Offset / 10000000 : 0, 
-              durationSec: w.Duration ? w.Duration / 10000000 : 0,
+              offsetSec: typeof w.Offset === 'number' ? w.Offset / 10000000 : undefined, 
+              durationSec: typeof w.Duration === 'number' ? w.Duration / 10000000 : undefined,
               phonemes: w.Phonemes?.map((p: any) => ({
                 phoneme: p.Phoneme,
                 score: p.PronunciationAssessment.AccuracyScore
@@ -458,6 +484,9 @@ export function WordQuiz({ words, accent }: { words: QuizWord[]; accent: string 
 
   async function begin(list: QuizWord[]) {
     try {
+      if (activeTimeout) { clearTimeout(activeTimeout); activeTimeout = null; }
+      if (activeAudioSource) { try { activeAudioSource.stop(); } catch(e){} activeAudioSource = null; }
+      
       if (typeof window !== "undefined") {
         if ("speechSynthesis" in window) {
           window.speechSynthesis.cancel()
@@ -546,6 +575,9 @@ export function WordQuiz({ words, accent }: { words: QuizWord[]; accent: string 
   }
 
   function advance(record: Answered) {
+    if (activeTimeout) { clearTimeout(activeTimeout); activeTimeout = null; }
+    if (activeAudioSource) { try { activeAudioSource.stop(); } catch(e){} activeAudioSource = null; }
+
     const nextAnswered = [...answered, record]
     const nextIndex = index + 1
     if (nextIndex < total) {
@@ -708,9 +740,9 @@ export function WordQuiz({ words, accent }: { words: QuizWord[]; accent: string 
               {quizType === "speaking" && contextData[index] ? (
                 <div className="mb-4 flex flex-col items-center justify-center w-full">
                   
-                  {/* 💡 1. 렌더링 영역: 발음기호가 있을 땐 묶음(flex-wrap) 구조 적용, 평소엔 자연스러운 일반 텍스트 렌더링 */}
                   {wordScores.length > 0 ? (
-                    <div className="mb-8 text-center text-3xl sm:text-4xl font-black tracking-tight text-foreground leading-relaxed flex flex-wrap justify-center items-baseline gap-x-1.5 gap-y-8 px-1">
+                    // 💡 gap-y-7 -> gap-y-5, gap-x-1.5 -> gap-x-1 등 전체적인 간격을 좁혀서 쫀쫀하게 구성
+                    <div className="mb-6 text-center text-3xl sm:text-4xl font-black tracking-tight text-foreground leading-relaxed flex flex-wrap justify-center items-baseline gap-x-1 gap-y-5 px-1">
                       {(() => {
                         const fullSent = getFullSentence()
                         const availableScores = [...wordScores]
@@ -746,6 +778,7 @@ export function WordQuiz({ words, accent }: { words: QuizWord[]; accent: string 
                                 isOmitted = true;
                               } else {
                                 isChunkOmitted = false;
+                                // 💡 undefined 방어 로직 적용 완료
                                 if (scoreItem.offsetSec !== undefined) {
                                   chunkStartSec = Math.min(chunkStartSec, scoreItem.offsetSec);
                                   chunkEndSec = Math.max(chunkEndSec, scoreItem.offsetSec + (scoreItem.durationSec || 0));
@@ -792,11 +825,11 @@ export function WordQuiz({ words, accent }: { words: QuizWord[]; accent: string 
 
                           return (
                             <React.Fragment key={cIdx}>
-                              {/* 💡 2. 덩어리(Chunk) 컨테이너: 줄바꿈 시 발음기호가 겹치지 않게 gap-y-7 추가 및 pb-6으로 박스 하단 여백 완벽 확보 */}
+                              {/* 💡 청크 버튼 여백 축소: pt-2 pb-5, gap-y-4, my-1 등으로 콤팩트하게 다듬음 */}
                               <span
                                 className={cn(
-                                  "inline-flex flex-wrap items-baseline justify-center max-w-full group rounded-2xl px-3 transition-all duration-200 relative",
-                                  "pt-2.5 pb-6 gap-x-1.5 gap-y-7",
+                                  "inline-flex flex-wrap items-baseline justify-center max-w-full group rounded-2xl px-2.5 transition-all duration-200 relative",
+                                  "pt-2 pb-5 gap-x-1 gap-y-4 my-1",
                                   isClickable ? "cursor-pointer bg-card hover:bg-muted/80 shadow-sm border border-border/50 active:scale-[0.98]" : "border border-transparent"
                                 )}
                                 onClick={() => {
@@ -807,20 +840,19 @@ export function WordQuiz({ words, accent }: { words: QuizWord[]; accent: string 
                               >
                                 {renderedWords}
                                 {isClickable && (
-                                  <span className="inline-flex self-center items-center justify-center bg-indigo-100 dark:bg-indigo-900/50 text-indigo-500 rounded-full p-0.5 ml-1.5 opacity-0 group-hover:opacity-100 transition-opacity">
+                                  <span className="inline-flex self-center items-center justify-center bg-indigo-100 dark:bg-indigo-900/50 text-indigo-500 rounded-full p-0.5 ml-1 opacity-0 group-hover:opacity-100 transition-opacity">
                                     <Volume2 className="size-3" />
                                   </span>
                                 )}
                               </span>
-                              {/* 💡 3. 구분선(/): items-baseline 구조에서 첫째 줄 텍스트 높이와 정확히 맞도록 self-center 제거 */}
-                              {cIdx < rawChunks.length - 1 && <span className="text-muted-foreground/30 mx-1 text-3xl font-light">/</span>}
+                              {cIdx < rawChunks.length - 1 && <span className="text-muted-foreground/30 mx-0.5 text-3xl font-light">/</span>}
                             </React.Fragment>
                           )
                         })
                       })()}
                     </div>
                   ) : (
-                    <div className="mb-8 text-balance text-center text-3xl sm:text-4xl font-black tracking-tight text-foreground leading-relaxed px-1">
+                    <div className="mb-6 text-balance text-center text-3xl sm:text-4xl font-black tracking-tight text-foreground leading-relaxed px-1">
                       {getFullSentence().replace(/\s*\/\s*/g, ' ').split(new RegExp(`(${current.word})`, 'gi')).map((part, i) => 
                         part.toLowerCase() === current.word.toLowerCase() ? (
                           <span key={i} className="text-indigo-600 dark:text-indigo-400 underline decoration-4 underline-offset-4">{part}</span>
