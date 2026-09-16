@@ -349,7 +349,7 @@ export async function generateContextQuiz(words: { word: string, meaning: string
   }
 }
 
-// 💡 [수정됨] Gemini AI를 통한 실시간 스피킹 코칭 피드백 생성 (문맥 맞춤형 억양 팁 반영)
+// 💡 [수정됨] 쉐도잉(원어민 목소리 흉내내기) 기반 억양 코칭 도입!
 export async function generateSpeakingCoachFeedback(data: {
   sentence: string;
   childName: string;
@@ -362,7 +362,6 @@ export async function generateSpeakingCoachFeedback(data: {
 
     const endpoint = `https://generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash-lite:generateContent?key=${apiKey}`;
 
-    // 단어 전체 점수가 80점 이상이더라도, 세부 발음 기호 중 70점 미만이 하나라도 있으면 코치에게 전달
     const lowAccuracyWords = data.wordScores
       .filter(w => w.score < 80 || w.errorType === "Omission" || w.phonemes.some(p => p.score < 70))
       .map(w => {
@@ -383,15 +382,18 @@ export async function generateSpeakingCoachFeedback(data: {
 ${lowAccuracyWords ? `\n[주의가 필요한 단어들]\n${lowAccuracyWords}` : "\n[모든 단어 발음 훌륭함]"}
 
 [작성 규칙 (매우 중요)]
-1. 반드시 1~3문장(최대 4줄 이내)으로 아주 짧고 명확하게 작성할 것! (불필요한 부연 설명 절대 금지)
+1. 반드시 1~2문장(최대 3줄 이내)으로 아주 짧고 명확하게 작성할 것! (불필요한 부연 설명 금지)
 2. 첫 시작은 아이 이름(${data.childName})을 부르며 점수나 잘한 점을 짧게 칭찬해줘.
-3. [주의가 필요한 단어] 의 발음 팁(입모양 등)을 알려줘.
-4. 억양이나 유창성이 낮다면 기계적인 팁(마침표에서 내리기 등)은 버리고, **반드시 주어진 [원문]의 뜻과 문장 부호, 핵심 단어(동사/명사 등)에 맞춘 맞춤형 리듬 팁**을 줘!
-   (예: 물음표면 끝을 올리기, 감탄사면 신나게, 이 문장에서 제일 중요한 특정 단어를 콕 집어서 강하게 읽기, 쉼표에서 쉬기 등)
-5. 단어 팁과 억양 팁을 한 문장으로 자연스럽게 이어 말해줘. 다정하고 친근한 이모지도 사용해.
+3. [주의가 필요한 단어] 중 1개의 발음 팁(입모양 등)을 쉽게 알려줘.
+4. **[핵심 억양/리듬 팁] 억양이나 유창성 점수가 낮다면, 절대 "특정 단어를 세게/강조해서 읽어라"고 코칭하지 마!**
+   대신 아이가 화면의 스피커(원어민 목소리)를 듣고 그 '멜로디와 리듬'을 흉내내도록 유도해줘. 아래 3가지 중 상황에 맞는 하나를 골라 조언할 것:
+   - "스피커 버튼을 눌러서 원어민 선생님의 목소리를 먼저 듣고, 그 멜로디를 노래하듯 똑같이 흉내내볼까?" (전체적인 억양 부족 시)
+   - "버튼을 눌러서 선생님이 어디서 숨을 쉬는지 듣고, 똑같은 곳(/)에서 쉬어보자." (유창성 부족, 뚝뚝 끊어 읽을 때)
+   - "작은 단어들(in, the 등)은 힘을 빼고 스르륵~ 지나가듯이 원어민 선생님을 따라 해봐." (특정 단어만 너무 세게 읽어서 리듬이 깨졌을 때)
+5. 단어 팁과 억양 팁을 한 문장으로 자연스럽게 이어 말하고, 다정하고 친근한 이모지를 사용해.
 
 [완벽한 대답 예시]
-"예온아, 87점 정말 잘했어! 👏 'step'은 입술을 톡 떼며 발음해보고, 이 문장에선 제일 중요한 단어인 'block'을 아주 강하고 확실하게 강조해서 읽어볼까? ✨"
+"예온아, 87점 정말 잘했어! 👏 'careful'은 입술을 살짝 깨물며 발음해보고, 스피커 버튼을 눌러서 원어민 선생님의 멜로디를 노래하듯 똑같이 흉내내볼까? 🎶"
     `.trim();
 
     const response = await fetch(endpoint, {
@@ -411,6 +413,6 @@ ${lowAccuracyWords ? `\n[주의가 필요한 단어들]\n${lowAccuracyWords}` : 
     return { success: true, feedback: feedback.trim() };
   } catch (error: any) {
     console.error("AI 코칭 피드백 생성 에러:", error);
-    return { success: false, feedback: "💡 다시 한번 또박또박 자신감 있게 읽어볼까요?" };
+    return { success: false, feedback: "💡 스피커 버튼을 누르고 선생님 목소리를 똑같이 따라 해볼까요? 🎶" };
   }
 }
