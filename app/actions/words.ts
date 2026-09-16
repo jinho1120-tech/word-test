@@ -362,9 +362,9 @@ export async function generateSpeakingCoachFeedback(data: {
 
     const endpoint = `https://generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash-lite:generateContent?key=${apiKey}`;
 
-    // Azure 상세 평가 결과(틀린 단어 및 음소) 요약 생성
+    // 💡 버그 픽스: 단어 전체 점수가 80점 이상이더라도, 세부 발음 기호 중 70점 미만(노란색/빨간색)이 하나라도 있으면 무조건 AI 코치에게 전달!
     const lowAccuracyWords = data.wordScores
-      .filter(w => w.score < 80 || w.errorType === "Omission")
+      .filter(w => w.score < 80 || w.errorType === "Omission" || w.phonemes.some(p => p.score < 70))
       .map(w => {
         const badPhonemes = w.phonemes.filter(p => p.score < 70).map(p => p.phoneme).join(", ");
         return `- 단어: "${w.text}" (점수: ${Math.round(w.score)}점, 상태: ${w.errorType || "발음미흡"}${badPhonemes ? `, 미흡한 발음기호: [${badPhonemes}]` : ""})`;
