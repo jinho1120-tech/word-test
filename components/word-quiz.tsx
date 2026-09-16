@@ -164,7 +164,6 @@ export function WordQuiz({ words, accent }: { words: QuizWord[]; accent: string 
         window.speechSynthesis.cancel()
       }
 
-      // 💡 음성 재생 시 빗금(/) 기호 제거
       const cleanTargetText = targetText.replace(/\s*\/\s*/g, ' ').trim();
       const audio = getGlobalAudio();
       const cacheKey = `${cleanTargetText}_${ttsVoice}_${isSlowMode ? 'slow' : 'normal'}`;
@@ -264,8 +263,8 @@ export function WordQuiz({ words, accent }: { words: QuizWord[]; accent: string 
       source.buffer = decodedBuffer;
       source.connect(ctx.destination);
       
-      const start = offsetSec;
-      const dur = Math.max(0.1, durationSec - 0.05); 
+      const start = offsetSec; // 앞 여유: 0초
+      const dur = Math.max(0.1, durationSec); // 뒤 여유 (+0.02초 반영된 정확한 기간만 재생)
       
       source.start(0, start, dur);
     } catch(e) {
@@ -314,7 +313,6 @@ export function WordQuiz({ words, accent }: { words: QuizWord[]; accent: string 
     setFeedback("idle")
     setUserAudioUrl(null)
 
-    // 💡 Azure 발음 평가 시 빗금 기호 제거
     const cleanTargetText = targetText.replace(/\s*\/\s*/g, ' ').trim();
 
     let mediaStream: MediaStream | null = null;
@@ -775,7 +773,8 @@ export function WordQuiz({ words, accent }: { words: QuizWord[]; accent: string 
                         });
 
                         const isClickable = !isChunkOmitted && userAudioUrl && chunkStartSec !== 9999;
-                        const chunkDuration = chunkEndSec - chunkStartSec + 0.15;
+                        // 💡 꼬리 여유 시간을 0.15초에서 0.02초로 정밀하게 축소
+                        const chunkDuration = Math.max(0.1, chunkEndSec - chunkStartSec + 0.02);
 
                         return (
                           <React.Fragment key={cIdx}>
@@ -802,7 +801,6 @@ export function WordQuiz({ words, accent }: { words: QuizWord[]; accent: string 
                         )
                       })
                     })() : (
-                      /* 💡 녹음 전 처음 읽을 때: 빗금(/) 기호를 완전히 제거하고 깨끗한 원문만 표시 */
                       getFullSentence().replace(/\s*\/\s*/g, ' ').split(new RegExp(`(${current.word})`, 'gi')).map((part, i) => 
                         part.toLowerCase() === current.word.toLowerCase() ? (
                           <span key={i} className="text-indigo-600 dark:text-indigo-400 underline decoration-4 underline-offset-4">{part}</span>
