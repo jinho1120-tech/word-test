@@ -13,10 +13,8 @@ interface Props {
 
 export function QuizStart({ words, accent, quizType, setQuizType, isGenerating, onBegin }: Props) {
   return (
-    // 전체 상하 여백 축소 (py-6 -> py-4)
     <div className="flex flex-col items-center px-5 py-4 text-center">
       
-      {/* 아이콘 크기 및 하단 여백 축소 */}
       <div className="mb-2 flex size-10 items-center justify-center rounded-xl text-white shadow-sm" style={{ backgroundColor: accent }}>
         <Play className="size-5" fill="currentColor"/>
       </div>
@@ -24,7 +22,6 @@ export function QuizStart({ words, accent, quizType, setQuizType, isGenerating, 
       <h2 className="mb-0.5 text-base font-black text-foreground">단어 퀴즈</h2>
       <p className="mb-3 text-xs leading-relaxed text-muted-foreground">총 {words.length}개의 단어가 준비되어 있어요.</p>
       
-      {/* 옵션 박스 패딩(p-1.5) 및 간격(gap-1.5) 축소 */}
       <div className="mb-4 flex w-full flex-col gap-1.5 rounded-xl bg-muted p-1.5">
         <div className="flex gap-1.5">
           <button 
@@ -48,7 +45,9 @@ export function QuizStart({ words, accent, quizType, setQuizType, isGenerating, 
         </button>
         <button 
           onClick={() => setQuizType("speaking")} 
-          className={cn("w-full rounded-lg py-2 text-[13px] font-bold transition-all", quizType === "speaking" ? "bg-background text-foreground shadow-sm ring-1 ring-inset ring-indigo-200" : "text-muted-foreground hover:bg-muted-foreground/10")}
+          className={cn("w-full rounded-lg py-2 text-[13px] font-bold transition-all", quizType === "speaking" ? "bg-background text-foreground shadow-sm" : "text-muted-foreground hover:bg-muted-foreground/10")}
+          // 💡 하드코딩된 파란색 링을 제거하고 accent 기반의 테두리 그림자 자동 적용
+          style={quizType === "speaking" ? { boxShadow: `0 0 0 1.5px ${accent} inset` } : undefined}
         >
           🗣️ AI 문장 말하기 훈련
         </button>
