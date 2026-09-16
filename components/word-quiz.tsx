@@ -480,7 +480,6 @@ export function WordQuiz({ words, accent }: { words: QuizWord[]; accent: string 
     }
   }
 
-  // 💡 기존 데이터를 그대로 재활용하여 대기시간 없이 퀴즈를 다시 시작하는 기능
   function retryTest(onlyWrong: boolean) {
     if (activeTimeout) { clearTimeout(activeTimeout); activeTimeout = null; }
     if (activeAudioSource) { try { activeAudioSource.stop(); } catch(e){} activeAudioSource = null; }
@@ -490,7 +489,6 @@ export function WordQuiz({ words, accent }: { words: QuizWord[]; accent: string 
 
     if (onlyWrong) {
       nextDeck = answered.filter((a) => !a.correct).map((a) => a.word);
-      // AI 모드일 경우 틀린 단어에 해당하는 문장(Context)만 쏙 뽑아옵니다.
       if (quizType === "context" || quizType === "speaking") {
         nextContext = nextDeck.map(w => 
           contextData.find(c => c.word.toLowerCase() === w.word.toLowerCase())!
@@ -700,7 +698,7 @@ export function WordQuiz({ words, accent }: { words: QuizWord[]; accent: string 
       {isGenerating && (
         <div className="fixed inset-0 z-[100] flex flex-col items-center justify-center bg-background/90 backdrop-blur-md p-6 animate-in fade-in duration-300">
           <div className="relative mb-6 flex size-28 items-center justify-center rounded-3xl bg-card shadow-2xl border border-border">
-            <BrainCircuit className="size-14 animate-pulse text-indigo-500" style={{ color: accent }} />
+            <BrainCircuit className="size-14 animate-pulse" style={{ color: accent }} />
             <Sparkles className="absolute -top-2 -right-2 size-8 text-amber-400 animate-bounce" />
           </div>
           <h3 className="mb-2 text-xl font-black text-foreground tracking-tight">AI 시험지 제작 중</h3>
@@ -708,9 +706,9 @@ export function WordQuiz({ words, accent }: { words: QuizWord[]; accent: string 
             {loadingMessages[loadingMsgIdx]}
           </p>
           <div className="mt-8 flex gap-1.5">
-            <div className="size-2.5 rounded-full bg-indigo-500 animate-bounce" style={{ animationDelay: "0ms", backgroundColor: accent }} />
-            <div className="size-2.5 rounded-full bg-indigo-500 animate-bounce" style={{ animationDelay: "150ms", backgroundColor: accent }} />
-            <div className="size-2.5 rounded-full bg-indigo-500 animate-bounce" style={{ animationDelay: "300ms", backgroundColor: accent }} />
+            <div className="size-2.5 rounded-full animate-bounce" style={{ animationDelay: "0ms", backgroundColor: accent }} />
+            <div className="size-2.5 rounded-full animate-bounce" style={{ animationDelay: "150ms", backgroundColor: accent }} />
+            <div className="size-2.5 rounded-full animate-bounce" style={{ animationDelay: "300ms", backgroundColor: accent }} />
           </div>
         </div>
       )}
@@ -724,12 +722,14 @@ export function WordQuiz({ words, accent }: { words: QuizWord[]; accent: string 
 
             <div className="flex justify-between items-center p-4 pb-0 shrink-0 gap-2">
               <div className="flex items-center gap-1.5">
+                {/* 💡 거북이 버튼 테마 연동 완료 (투명도 1A=10%, 33=20% 계산 마법) */}
                 <button 
                   onClick={() => setIsSlowMode(!isSlowMode)} 
                   className={cn(
                     "flex items-center gap-1 rounded-full px-2.5 py-1 text-xs font-bold transition-colors border",
-                    isSlowMode ? "bg-indigo-50 border-indigo-200 text-indigo-600" : "bg-muted/50 border-transparent text-muted-foreground hover:bg-muted"
+                    !isSlowMode && "bg-muted/50 border-transparent text-muted-foreground hover:bg-muted"
                   )}
+                  style={isSlowMode ? { backgroundColor: accent + '1A', borderColor: accent + '33', color: accent } : undefined}
                 >
                   {isSlowMode ? "🐢 느리게" : "🐇 보통"}
                 </button>
@@ -758,8 +758,9 @@ export function WordQuiz({ words, accent }: { words: QuizWord[]; accent: string 
               
               {quizType === "speaking" ? (
                 <div className="mb-4 flex items-center justify-between text-xs font-medium text-muted-foreground">
-                  <span className="flex items-center gap-1.5"><Mic className="size-4 text-indigo-500" /> <span className="font-bold text-foreground">스피킹 훈련</span></span>
-                  <span className="rounded-full bg-indigo-50 dark:bg-indigo-950/50 px-4 py-1 font-black text-indigo-600 dark:text-indigo-400 border border-indigo-100 dark:border-indigo-900 shadow-sm">
+                  {/* 💡 상단 헤더 마이크/배지 테마 연동 완료 */}
+                  <span className="flex items-center gap-1.5"><Mic className="size-4" style={{ color: accent }} /> <span className="font-bold text-foreground">스피킹 훈련</span></span>
+                  <span className="rounded-full px-4 py-1 font-black border shadow-sm" style={{ color: accent, backgroundColor: accent + '1A', borderColor: accent + '33' }}>
                     {index + 1} / {total}
                   </span>
                   <span className="flex items-center gap-1 font-bold text-amber-500 animate-pulse"><Sparkles className="size-4" /> 자신감 UP!</span>
@@ -839,7 +840,11 @@ export function WordQuiz({ words, accent }: { words: QuizWord[]; accent: string 
 
                             return (
                               <span key={i} className="relative inline-flex items-center align-baseline px-0.5">
-                                <span className={cn("transition-colors duration-500 leading-tight", colorClass, isTarget && "underline decoration-4 underline-offset-4")}>
+                                {/* 💡 타겟 단어 밑줄 테마 연동 완료 */}
+                                <span 
+                                  className={cn("transition-colors duration-500 leading-tight", colorClass !== "text-foreground" ? colorClass : "", isTarget && "underline decoration-4 underline-offset-4")}
+                                  style={colorClass === "text-foreground" && isTarget ? { color: accent, textDecorationColor: accent } : undefined}
+                                >
                                   {token}
                                 </span>
                                 {isOmitted && (
@@ -884,7 +889,11 @@ export function WordQuiz({ words, accent }: { words: QuizWord[]; accent: string 
                               >
                                 {renderedWords}
                                 {isClickable && (
-                                  <span className="inline-flex self-center items-center justify-center bg-indigo-100 dark:bg-indigo-900/50 text-indigo-500 rounded-full p-0.5 ml-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                                  // 💡 호버 시 나타나는 청크 스피커 아이콘 테마 연동 완료
+                                  <span 
+                                    className="inline-flex self-center items-center justify-center rounded-full p-0.5 ml-1 opacity-0 group-hover:opacity-100 transition-opacity"
+                                    style={{ backgroundColor: accent + '1A', color: accent }}
+                                  >
                                     <Volume2 className="size-3" />
                                   </span>
                                 )}
@@ -898,7 +907,8 @@ export function WordQuiz({ words, accent }: { words: QuizWord[]; accent: string 
                     <div className="mb-6 text-balance text-center text-3xl sm:text-4xl font-black tracking-tight text-foreground leading-relaxed px-1">
                       {getFullSentence().replace(/\s*\/\s*/g, ' ').split(new RegExp(`(${current.word})`, 'gi')).map((part, i) => 
                         part.toLowerCase() === current.word.toLowerCase() ? (
-                          <span key={i} className="text-indigo-600 dark:text-indigo-400 underline decoration-4 underline-offset-4">{part}</span>
+                          // 💡 녹음 전 초기 화면: 타겟 단어 텍스트 및 밑줄 테마 연동 완료
+                          <span key={i} className="underline decoration-4 underline-offset-4" style={{ color: accent, textDecorationColor: accent }}>{part}</span>
                         ) : (
                           <span key={i}>{part}</span>
                         )
@@ -911,7 +921,11 @@ export function WordQuiz({ words, accent }: { words: QuizWord[]; accent: string 
                   </p>
 
                   {pronResult && userAudioUrl && (
-                    <div className="mb-4 flex items-center justify-center rounded-full bg-indigo-50/80 px-3 py-1 text-[11px] font-bold text-indigo-500 border border-indigo-100/50 animate-in fade-in zoom-in">
+                    // 💡 "청크를 톡 터치하면..." 안내 문구 테마 연동 완료
+                    <div 
+                      className="mb-4 flex items-center justify-center rounded-full px-3 py-1 text-[11px] font-bold border animate-in fade-in zoom-in"
+                      style={{ color: accent, backgroundColor: accent + '1A', borderColor: accent + '33' }}
+                    >
                       👆 덩어리(청크)를 톡! 터치하면 구 단위로 비교하며 들을 수 있어요
                     </div>
                   )}
@@ -922,6 +936,7 @@ export function WordQuiz({ words, accent }: { words: QuizWord[]; accent: string 
                         <Volume2 className="size-5" />
                       </button>
                       
+                      {/* 💡 "내 발음 채점하기" 메인 버튼 테마 연동 완료 */}
                       <button 
                         type="button" 
                         onClick={() => handlePronunciationAssessment(getFullSentence())}
@@ -929,8 +944,9 @@ export function WordQuiz({ words, accent }: { words: QuizWord[]; accent: string 
                         className={cn("flex flex-1 items-center gap-2 rounded-2xl px-4 py-3 font-black text-white shadow-md transition-all active:scale-95 justify-center text-sm", 
                           isRecording && !isMicReady ? "bg-amber-500 opacity-90" : 
                           isRecording && isMicReady ? "bg-red-500 animate-pulse scale-105" : 
-                          (pronResult ? "bg-gradient-to-r from-amber-500 to-orange-500 hover:scale-105" : "bg-gradient-to-r from-indigo-500 to-blue-600 hover:scale-105")
+                          (pronResult ? "bg-gradient-to-r from-amber-500 to-orange-500 hover:scale-105" : "hover:scale-105")
                         )}
+                        style={(!isRecording && !pronResult) ? { backgroundColor: accent } : undefined}
                       >
                         {isRecording && !isMicReady && <Loader2 className="size-4 animate-spin" />}
                         {isRecording && isMicReady && <Mic className="size-4 animate-bounce" />}
@@ -943,10 +959,12 @@ export function WordQuiz({ words, accent }: { words: QuizWord[]; accent: string 
                     </div>
 
                     {pronResult && userAudioUrl && (
+                      // 💡 "내 전체 녹음 듣기" 하단 서브 버튼 테마 연동 완료
                       <button
                         type="button"
                         onClick={playFullUserAudio}
-                        className="flex w-full items-center justify-center gap-2 rounded-2xl bg-indigo-50 py-2.5 text-indigo-600 font-bold text-sm shadow-sm transition-transform hover:bg-indigo-100 active:scale-95 animate-in fade-in"
+                        className="flex w-full items-center justify-center gap-2 rounded-2xl py-2.5 font-bold text-sm shadow-sm transition-transform hover:opacity-80 active:scale-95 animate-in fade-in"
+                        style={{ color: accent, backgroundColor: accent + '1A' }}
                       >
                         <Headphones className="size-4" /> 내 전체 녹음 듣기
                       </button>
@@ -955,6 +973,7 @@ export function WordQuiz({ words, accent }: { words: QuizWord[]; accent: string 
                   
                   {pronResult && (
                     <div className="mt-2 flex flex-col w-full items-center animate-in zoom-in duration-300">
+                      {/* 점수판 숫자는 색깔 구분이 예뻐서 기본 컬러들을 유지했습니다! */}
                       <div className="grid grid-cols-4 gap-1.5 w-full max-w-sm mb-3">
                         <div className="flex flex-col items-center justify-center py-2 bg-muted/80 rounded-xl border border-border/50">
                           <span className="text-[10px] text-muted-foreground font-bold mb-0.5">정확도</span>
@@ -982,11 +1001,15 @@ export function WordQuiz({ words, accent }: { words: QuizWord[]; accent: string 
                       </p>
 
                       {pronResult.prosody < 90 && contextData[index].guide && (
-                        <div className="w-full max-w-sm animate-in slide-in-from-top-2 fade-in duration-500 rounded-2xl bg-indigo-50/80 p-3 border border-indigo-100 dark:border-indigo-800/30 text-center shadow-inner mt-2">
-                          <p className="text-[10px] font-bold text-indigo-500 dark:text-indigo-400 mb-1 flex items-center justify-center gap-1">
+                        // 💡 하단 리듬 가이드 박스 테마 연동 완료 (투명도 0D=5%)
+                        <div 
+                          className="w-full max-w-sm animate-in slide-in-from-top-2 fade-in duration-500 rounded-2xl p-3 border text-center shadow-inner mt-2"
+                          style={{ backgroundColor: accent + '0D', borderColor: accent + '33' }}
+                        >
+                          <p className="text-[10px] font-bold mb-1 flex items-center justify-center gap-1" style={{ color: accent }}>
                             <Lightbulb className="size-3" /> 리듬을 타며 다시 읽어볼까요? (대문자 강하게, /에서 쉬기)
                           </p>
-                          <p className="text-[14px] sm:text-base font-black text-indigo-900 dark:text-indigo-100 tracking-wide mt-1.5">
+                          <p className="text-[14px] sm:text-base font-black tracking-wide mt-1.5 text-foreground">
                             {contextData[index].guide}
                           </p>
                         </div>
@@ -1126,7 +1149,6 @@ export function WordQuiz({ words, accent }: { words: QuizWord[]; accent: string 
         </div>
       )}
 
-      {/* 💡 QuizResult 컴포넌트 호출부 업데이트: onRetryWrong / onRetryAll 에 retryTest 연동 완료 */}
       <div className={cn("overflow-hidden rounded-3xl border border-border bg-card shadow-sm", phase === "quiz" ? "hidden" : "block")}>
         {phase === "start" && (
           <QuizStart words={words} accent={accent} quizType={quizType} setQuizType={setQuizType} isGenerating={isGenerating} onBegin={() => begin(words)} />
