@@ -70,7 +70,6 @@ function getAudioContext() {
 
 const ttsCache = new Map<string, string>();
 
-// 💡 재생 겹침 방지를 위한 전역 타이머/소스 변수
 let activeAudioSource: AudioBufferSourceNode | null = null;
 let activeTimeout: any = null;
 
@@ -481,6 +480,53 @@ export function WordQuiz({ words, accent }: { words: QuizWord[]; accent: string 
     }
   }
 
+  // 💡 기존 데이터를 그대로 재활용하여 대기시간 없이 퀴즈를 다시 시작하는 기능
+  function retryTest(onlyWrong: boolean) {
+    if (activeTimeout) { clearTimeout(activeTimeout); activeTimeout = null; }
+    if (activeAudioSource) { try { activeAudioSource.stop(); } catch(e){} activeAudioSource = null; }
+
+    let nextDeck = deck;
+    let nextContext = contextData;
+
+    if (onlyWrong) {
+      nextDeck = answered.filter((a) => !a.correct).map((a) => a.word);
+      // AI 모드일 경우 틀린 단어에 해당하는 문장(Context)만 쏙 뽑아옵니다.
+      if (quizType === "context" || quizType === "speaking") {
+        nextContext = nextDeck.map(w => 
+          contextData.find(c => c.word.toLowerCase() === w.word.toLowerCase())!
+        ).filter(Boolean);
+      }
+    }
+
+    setDeck(nextDeck);
+    if (quizType === "context" || quizType === "speaking") {
+      setContextData(nextContext);
+    }
+
+    setIndex(0);
+    setValue("");
+    setFeedback("idle");
+    setAnswered([]);
+    setStreak(0);
+    setBestStreak(0);
+    setHintUsed(false);
+    setUsedHintInQuiz(false);
+    setPronResult(null);
+    setWordScores([]);
+    setUserAudioUrl(null);
+    setPhase("quiz");
+
+    if (quizType !== "speaking") {
+      requestAnimationFrame(() => inputRef.current?.focus());
+    }
+    
+    if (quizType === "listening" && nextDeck.length > 0) {
+      setTimeout(() => playPronunciation(nextDeck[0].word), 800);
+    } else if (quizType === "speaking" && nextContext.length > 0 && nextDeck.length > 0) {
+      setTimeout(() => playPronunciation(nextContext[0].sentence.replace(/___/g, nextDeck[0].word)), 800);
+    }
+  }
+
   async function begin(list: QuizWord[]) {
     try {
       if (activeTimeout) { clearTimeout(activeTimeout); activeTimeout = null; }
@@ -740,7 +786,6 @@ export function WordQuiz({ words, accent }: { words: QuizWord[]; accent: string 
                 <div className="mb-4 flex flex-col items-center justify-center w-full">
                   
                   {wordScores.length > 0 ? (
-                    // 💡 전체 컨테이너 여백 축소: gap-y-2로 청크 간 상하 간격 바짝 좁힘
                     <div className="mb-6 text-center text-3xl sm:text-4xl font-black tracking-tight text-foreground leading-relaxed flex flex-wrap justify-center items-baseline gap-x-1 gap-y-2 px-1">
                       {(() => {
                         const fullSent = getFullSentence()
@@ -823,10 +868,8 @@ export function WordQuiz({ words, accent }: { words: QuizWord[]; accent: string 
 
                           return (
                             <React.Fragment key={cIdx}>
-                              {/* 💡 슬래시(/)를 청크 버튼 앞으로 이동 (첫 번째 청크는 제외) */}
                               {cIdx > 0 && <span className="text-muted-foreground/30 mx-1 align-baseline text-3xl font-light">/</span>}
 
-                              {/* 💡 개별 청크 버튼: my-0으로 상하 마진 제거, 내부 gap-y 조정 */}
                               <span
                                 className={cn(
                                   "inline-flex flex-wrap items-baseline justify-center max-w-full group rounded-2xl px-2.5 transition-all duration-200 relative",
@@ -1083,12 +1126,24 @@ export function WordQuiz({ words, accent }: { words: QuizWord[]; accent: string 
         </div>
       )}
 
+      {/* 💡 QuizResult 컴포넌트 호출부 업데이트: onRetryWrong / onRetryAll 에 retryTest 연동 완료 */}
       <div className={cn("overflow-hidden rounded-3xl border border-border bg-card shadow-sm", phase === "quiz" ? "hidden" : "block")}>
         {phase === "start" && (
           <QuizStart words={words} accent={accent} quizType={quizType} setQuizType={setQuizType} isGenerating={isGenerating} onBegin={() => begin(words)} />
         )}
         {phase === "result" && (
-          <QuizResult score={score} correctCount={correctCount} total={total} bestStreak={bestStreak} wrongWords={wrongWords} accent={accent} usedHint={usedHintInQuiz} quizType={quizType} onRetryWrong={() => begin(wrongWords)} onRetryAll={() => begin(words)} />
+          <QuizResult 
+            score={score} 
+            correctCount={correctCount} 
+            total={total} 
+            bestStreak={bestStreak} 
+            wrongWords={wrongWords} 
+            accent={accent} 
+            usedHint={usedHintInQuiz} 
+            quizType={quizType} 
+            onRetryWrong={() => retryTest(true)} 
+            onRetryAll={() => retryTest(false)} 
+          />
         )}
       </div>
     </>
