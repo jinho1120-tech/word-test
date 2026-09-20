@@ -9,18 +9,40 @@ interface Props {
   setQuizType: (t: QuizType) => void
   isGenerating: boolean
   onBegin: () => void
+  // 💡 몬스터 모드(오답 복습)인지 알려주는 스위치 추가 (기본값은 false)
+  isMonsterMode?: boolean 
 }
 
-export function QuizStart({ words, accent, quizType, setQuizType, isGenerating, onBegin }: Props) {
+export function QuizStart({ 
+  words, 
+  accent, 
+  quizType, 
+  setQuizType, 
+  isGenerating, 
+  onBegin, 
+  isMonsterMode = false // 부모가 값을 안 주면 기본 단어 퀴즈로 동작
+}: Props) {
   return (
     <div className="flex flex-col items-center px-5 py-4 text-center">
       
       <div className="mb-2 flex size-10 items-center justify-center rounded-xl text-white shadow-sm" style={{ backgroundColor: accent }}>
-        <Play className="size-5" fill="currentColor"/>
+        {/* 💡 몬스터 모드면 몬스터 이모지를, 아니면 일반 Play 아이콘을 보여줍니다 */}
+        {isMonsterMode ? (
+          <span className="text-xl">👾</span>
+        ) : (
+          <Play className="size-5" fill="currentColor"/>
+        )}
       </div>
       
-      <h2 className="mb-0.5 text-base font-black text-foreground">단어 퀴즈</h2>
-      <p className="mb-3 text-xs leading-relaxed text-muted-foreground">총 {words.length}개의 단어가 준비되어 있어요.</p>
+      {/* 💡 조건부 렌더링으로 문구 다르게 표시 */}
+      <h2 className="mb-0.5 text-base font-black text-foreground">
+        {isMonsterMode ? "몬스터 퇴치" : "단어 퀴즈"}
+      </h2>
+      <p className="mb-3 text-xs leading-relaxed text-muted-foreground">
+        {isMonsterMode 
+          ? `총 ${words.length}마리의 몬스터(틀린단어)가 남아있어요!` 
+          : `총 ${words.length}개의 단어가 준비되어 있어요.`}
+      </p>
       
       <div className="mb-4 flex w-full flex-col gap-1.5 rounded-xl bg-muted p-1.5">
         <div className="flex gap-1.5">
@@ -46,7 +68,6 @@ export function QuizStart({ words, accent, quizType, setQuizType, isGenerating, 
         <button 
           onClick={() => setQuizType("speaking")} 
           className={cn("w-full rounded-lg py-2 text-[13px] font-bold transition-all", quizType === "speaking" ? "bg-background text-foreground shadow-sm" : "text-muted-foreground hover:bg-muted-foreground/10")}
-          // 💡 하드코딩된 파란색 링을 제거하고 accent 기반의 테두리 그림자 자동 적용
           style={quizType === "speaking" ? { boxShadow: `0 0 0 1.5px ${accent} inset` } : undefined}
         >
           🗣️ AI 문장 말하기 훈련
@@ -59,7 +80,9 @@ export function QuizStart({ words, accent, quizType, setQuizType, isGenerating, 
         className="w-full rounded-2xl py-3 text-base font-bold text-white shadow-md transition-opacity hover:opacity-90 active:opacity-80 disabled:opacity-70 disabled:cursor-wait" 
         style={{ backgroundColor: accent }}
       >
-        {isGenerating ? "AI가 시험지 만드는 중... 🏃💨" : "퀴즈 시작하기"}
+        {isGenerating 
+          ? "AI가 시험지 만드는 중... 🏃💨" 
+          : (isMonsterMode ? "몬스터 무찌르기 시작!" : "퀴즈 시작하기")}
       </button>
     </div>
   )
