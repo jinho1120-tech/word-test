@@ -9,7 +9,8 @@ export const dynamic = "force-dynamic"
 
 const PROFILES: { name: Profile; accent: string }[] = [
   { name: "지온", accent: "#6366f1" },
-  { name: "예온", accent: "#ec4899" },
+  // 💡 예온이 테마를 상큼한 팝 민트색으로 변경 완료!
+  { name: "예온", accent: "#2dd4bf" },
 ]
 
 function todayInSeoul(): string {
