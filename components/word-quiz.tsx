@@ -83,7 +83,8 @@ function shuffle<T>(arr: T[]): T[] {
   return copy
 }
 
-export function WordQuiz({ words, accent }: { words: QuizWord[]; accent: string }) {
+// 💡 WordQuiz 컴포넌트도 isMonsterMode를 받을 수 있게 추가!
+export function WordQuiz({ words, accent, isMonsterMode = false }: { words: QuizWord[]; accent: string; isMonsterMode?: boolean }) {
   const [phase, setPhase] = useState<Phase>("start")
   const [deck, setDeck] = useState<QuizWord[]>([])
   const [index, setIndex] = useState(0)
@@ -130,7 +131,7 @@ export function WordQuiz({ words, accent }: { words: QuizWord[]; accent: string 
 
   const current = deck[index]
   const total = deck.length
-  const currentName = accent === "#6366f1" ? "지온" : "예온"
+  const currentName = accent === "#6366f1" || accent === "#a78bfa" || accent === "#c4b5fd" ? "지온" : "예온"
 
   const loadingMessages = [
     `🤖 ${currentName}이를 위한 맞춤 문장 생성 중...`,
@@ -1171,7 +1172,8 @@ export function WordQuiz({ words, accent }: { words: QuizWord[]; accent: string 
 
       <div className={cn("overflow-hidden rounded-3xl border border-border bg-card shadow-sm", phase === "quiz" ? "hidden" : "block")}>
         {phase === "start" && (
-          <QuizStart words={words} accent={accent} quizType={quizType} setQuizType={setQuizType} isGenerating={isGenerating} onBegin={() => begin(words)} />
+          {/* 💡 QuizStart에 isMonsterMode 속성 전달 추가! */}
+          <QuizStart words={words} accent={accent} quizType={quizType} setQuizType={setQuizType} isGenerating={isGenerating} onBegin={() => begin(words)} isMonsterMode={isMonsterMode} />
         )}
         {phase === "result" && (
           <QuizResult 
