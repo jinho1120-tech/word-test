@@ -1,4 +1,4 @@
-import { Play } from "lucide-react"
+import { Play, Ghost } from "lucide-react"
 import { cn } from "@/lib/utils"
 import type { QuizWord, QuizType } from "./word-quiz"
 
@@ -9,7 +9,6 @@ interface Props {
   setQuizType: (t: QuizType) => void
   isGenerating: boolean
   onBegin: () => void
-  // 💡 몬스터 모드(오답 복습)인지 알려주는 스위치 추가 (기본값은 false)
   isMonsterMode?: boolean 
 }
 
@@ -20,21 +19,20 @@ export function QuizStart({
   setQuizType, 
   isGenerating, 
   onBegin, 
-  isMonsterMode = false // 부모가 값을 안 주면 기본 단어 퀴즈로 동작
+  isMonsterMode = false 
 }: Props) {
   return (
     <div className="flex flex-col items-center px-5 py-4 text-center">
       
       <div className="mb-2 flex size-10 items-center justify-center rounded-xl text-white shadow-sm" style={{ backgroundColor: accent }}>
-        {/* 💡 몬스터 모드면 몬스터 이모지를, 아니면 일반 Play 아이콘을 보여줍니다 */}
+        {/* 💡 이모지 대신 Ghost 아이콘으로 변경하고 둥둥 떠다니는 애니메이션 추가! */}
         {isMonsterMode ? (
-          <span className="text-xl">👾</span>
+          <Ghost className="size-5 animate-bounce" />
         ) : (
           <Play className="size-5" fill="currentColor"/>
         )}
       </div>
       
-      {/* 💡 조건부 렌더링으로 문구 다르게 표시 */}
       <h2 className="mb-0.5 text-base font-black text-foreground">
         {isMonsterMode ? "몬스터 퇴치" : "단어 퀴즈"}
       </h2>
