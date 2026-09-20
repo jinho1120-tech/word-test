@@ -24,10 +24,37 @@ export function QuizStart({
   return (
     <div className="flex flex-col items-center px-5 py-4 text-center">
       
+      {/* 💡 몬스터 통통 튀며 좌우로 시선 바꾸는 커스텀 애니메이션 정의 */}
+      <style>{`
+        @keyframes monster-hop {
+          /* 중앙에서 오른쪽으로 점프 (오른쪽 보기) */
+          0% { transform: translate(0px, 0px) scaleX(1); animation-timing-function: ease-out; }
+          12.5% { transform: translate(4px, -6px) scaleX(1); animation-timing-function: ease-in; }
+          24.9% { transform: translate(8px, 0px) scaleX(1); }
+
+          /* 오른쪽에서 중앙으로 점프 (왼쪽 보기) */
+          25% { transform: translate(8px, 0px) scaleX(-1); animation-timing-function: ease-out; }
+          37.5% { transform: translate(4px, -6px) scaleX(-1); animation-timing-function: ease-in; }
+          49.9% { transform: translate(0px, 0px) scaleX(-1); }
+
+          /* 중앙에서 왼쪽으로 점프 (왼쪽 보기 유지) */
+          50% { transform: translate(0px, 0px) scaleX(-1); animation-timing-function: ease-out; }
+          62.5% { transform: translate(-4px, -6px) scaleX(-1); animation-timing-function: ease-in; }
+          74.9% { transform: translate(-8px, 0px) scaleX(-1); }
+
+          /* 왼쪽에서 중앙으로 점프 (오른쪽 보기) */
+          75% { transform: translate(-8px, 0px) scaleX(1); animation-timing-function: ease-out; }
+          87.5% { transform: translate(-4px, -6px) scaleX(1); animation-timing-function: ease-in; }
+          100% { transform: translate(0px, 0px) scaleX(1); }
+        }
+        .animate-monster-hop {
+          animation: monster-hop 2.4s infinite;
+        }
+      `}</style>
+
       <div className="mb-2 flex size-10 items-center justify-center rounded-xl text-white shadow-sm" style={{ backgroundColor: accent }}>
-        {/* 💡 이모지 대신 Ghost 아이콘으로 변경하고 둥둥 떠다니는 애니메이션 추가! */}
         {isMonsterMode ? (
-          <Ghost className="size-5 animate-bounce" />
+          <Ghost className="size-5 animate-monster-hop" />
         ) : (
           <Play className="size-5" fill="currentColor"/>
         )}
