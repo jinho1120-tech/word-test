@@ -3,7 +3,6 @@
 import React, { useMemo, useRef, useState, useEffect } from "react"
 import { Lightbulb, Check, X, ArrowRight, Volume2, Sparkles, BrainCircuit, Mic, Loader2, Headphones } from "lucide-react"
 import { cn } from "@/lib/utils"
-// 💡 방금 만든 generateSpeakingCoachFeedback 함수를 import에 추가
 import { recordQuizResult, generateContextQuiz, generateSpeakingCoachFeedback } from "@/app/actions/words"
 import confetti from "canvas-confetti"
 
@@ -83,7 +82,6 @@ function shuffle<T>(arr: T[]): T[] {
   return copy
 }
 
-// 💡 WordQuiz 컴포넌트도 isMonsterMode를 받을 수 있게 추가!
 export function WordQuiz({ words, accent, isMonsterMode = false }: { words: QuizWord[]; accent: string; isMonsterMode?: boolean }) {
   const [phase, setPhase] = useState<Phase>("start")
   const [deck, setDeck] = useState<QuizWord[]>([])
@@ -109,7 +107,6 @@ export function WordQuiz({ words, accent, isMonsterMode = false }: { words: Quiz
   
   const [wordScores, setWordScores] = useState<WordScoreDetail[]>([])
   
-  // 💡 AI 맞춤 코칭용 상태 추가
   const [aiCoachMsg, setAiCoachMsg] = useState<string | null>(null)
   const [isCoachLoading, setIsCoachLoading] = useState(false)
   
@@ -462,7 +459,6 @@ export function WordQuiz({ words, accent, isMonsterMode = false }: { words: Quiz
               setFeedback("wrong")
             }
 
-            // 💡 [핵심] Gemini 3.5 Flash-lite AI 맞춤 코칭 요청
             setIsCoachLoading(true);
             const coachRes = await generateSpeakingCoachFeedback({
               sentence: cleanTargetText,
@@ -1014,7 +1010,6 @@ export function WordQuiz({ words, accent, isMonsterMode = false }: { words: Quiz
                          "💪 Try Again! 다시 한번 또박또박 읽어보세요!"}
                       </p>
 
-                      {/* 💡 [핵심] Gemini AI 실시간 코칭 렌더링 영역 */}
                       {(isCoachLoading || aiCoachMsg) && (
                         <div 
                           className="w-full max-w-sm animate-in slide-in-from-top-2 fade-in duration-500 rounded-2xl p-3.5 border text-center shadow-inner mt-2"
@@ -1172,7 +1167,6 @@ export function WordQuiz({ words, accent, isMonsterMode = false }: { words: Quiz
 
       <div className={cn("overflow-hidden rounded-3xl border border-border bg-card shadow-sm", phase === "quiz" ? "hidden" : "block")}>
         {phase === "start" && (
-          {/* 💡 QuizStart에 isMonsterMode 속성 전달 추가! */}
           <QuizStart words={words} accent={accent} quizType={quizType} setQuizType={setQuizType} isGenerating={isGenerating} onBegin={() => begin(words)} isMonsterMode={isMonsterMode} />
         )}
         {phase === "result" && (
