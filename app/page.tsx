@@ -8,8 +8,8 @@ import { cn } from "@/lib/utils"
 export const dynamic = "force-dynamic"
 
 const PROFILES: { name: Profile; accent: string }[] = [
-  // 💡 지온이 테마를 부드럽고 화사한 연보라색으로 변경 완료!
-  { name: "지온", accent: "#a78bfa" },
+  // 💡 지온이 테마를 조금 더 연하고 부드러운 라벤더 연보라색으로 변경 완료!
+  { name: "지온", accent: "#c4b5fd" },
   { name: "예온", accent: "#2dd4bf" },
 ]
 
