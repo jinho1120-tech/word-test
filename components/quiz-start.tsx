@@ -65,7 +65,7 @@ export function QuizStart({
       </h2>
       <p className="mb-3 text-xs leading-relaxed text-muted-foreground">
         {isMonsterMode 
-          ? `총 ${words.length}마리의 몬스터(틀린단어)가 남아있어요!` 
+          ? `총 ${words.length}마리의 몬스터(틀린 단어)가 남아있어요!` 
           : `총 ${words.length}개의 단어가 준비되어 있어요.`}
       </p>
       
