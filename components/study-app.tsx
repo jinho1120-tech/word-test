@@ -72,7 +72,7 @@ export function StudyApp({
         </button>
       </div>
 
-      {/* ▼ 수정됨: 단어 입력 모드(manage)가 아닐 때만 이 바깥쪽 탭을 보여줍니다! */}
+      {/* 단어 입력 모드(manage)가 아닐 때만 이 바깥쪽 탭을 보여줍니다! */}
       {mode !== "manage" && (
         <div className="flex gap-2 overflow-x-auto pb-1 scrollbar-hide">
           {availableSubjects.map((s) => (
@@ -95,7 +95,8 @@ export function StudyApp({
       
       {mode === "wrong" && (
         displayWrongWords.length > 0 ? (
-          <WordQuiz key={`wrong-${filter}`} words={displayWrongWords} accent={accent} />
+          // 💡 여기에 isMonsterMode={true}를 추가했습니다!
+          <WordQuiz key={`wrong-${filter}`} words={displayWrongWords} accent={accent} isMonsterMode={true} />
         ) : (
           <div className="flex flex-col items-center justify-center rounded-3xl border border-dashed border-border bg-muted/30 px-6 py-16 text-center animate-in fade-in zoom-in duration-500">
             <div className="mb-5 text-6xl drop-shadow-md">✨🛡️✨</div>
@@ -107,7 +108,7 @@ export function StudyApp({
         )
       )}
 
-      {/* ▼ 수정됨: WordManager에는 필터링 되지 않은 전체 words를 통째로 넘겨줍니다. 
+      {/* WordManager에는 필터링 되지 않은 전체 words를 통째로 넘겨줍니다. 
           (WordManager 내부에서 자체적으로 필터 탭을 보여주고 작동시킵니다) */}
       {mode === "manage" && <WordManager profile={profile} date={date} words={words} accent={accent} />}
     </div>
