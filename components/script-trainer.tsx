@@ -1,7 +1,7 @@
 "use client"
 
 import React, { useState, useRef } from "react"
-import { Mic, Upload, Play, Sparkles, Loader2, RefreshCw } from "lucide-react"
+import { Mic, Upload, Play, Sparkles, Loader2 } from "lucide-react"
 import { extractSpeechScriptWithGemini, generateSpeakingCoachFeedback } from "@/app/actions/words"
 import { cn } from "@/lib/utils"
 
@@ -21,6 +21,40 @@ export function ScriptTrainer({ accent, profileName }: ScriptTrainerProps) {
   
   const fileInputRef = useRef<HTMLInputElement>(null)
 
+  // 💡 [핵심] 브라우저단에서 이미지를 가볍게 압축하는 함수 (Vercel 용량 초과 방지)
+  const compressImage = (file: File): Promise<string> => {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader()
+      reader.onload = (event) => {
+        const img = new Image()
+        img.onload = () => {
+          const canvas = document.createElement("canvas")
+          const MAX_WIDTH = 1000 // 서버 부담을 줄이기 위해 최대 가로폭 제한
+
+          let width = img.width
+          let height = img.height
+
+          if (width > MAX_WIDTH) {
+            height = Math.round((height * MAX_WIDTH) / width)
+            width = MAX_WIDTH
+          }
+
+          canvas.width = width
+          canvas.height = height
+          const ctx = canvas.getContext("2d")
+          ctx?.drawImage(img, 0, 0, width, height)
+
+          // 화질 0.7의 JPEG로 압축하여 Base64 텍스트만 추출
+          const compressedBase64 = canvas.toDataURL("image/jpeg", 0.7).split(",")[1]
+          resolve(compressedBase64)
+        }
+        img.src = event.target?.result as string
+      }
+      reader.onerror = (e) => reject(e)
+      reader.readAsDataURL(file)
+    })
+  }
+
   // 📸 이미지 업로드 및 AI 대본 변환
   const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
@@ -31,21 +65,27 @@ export function ScriptTrainer({ accent, profileName }: ScriptTrainerProps) {
     setPronResult(null)
     setAiCoachMsg(null)
 
-    const reader = new FileReader()
-    reader.onloadend = async () => {
-      const base64String = (reader.result as string).split(",")[1]
-      const mimeType = file.type
+    try {
+      // 1. 원본 파일 대신 압축된 데이터를 생성
+      const base64String = await compressImage(file)
+      const mimeType = "image/jpeg"
 
+      // 2. 서버로 전송
       const res = await extractSpeechScriptWithGemini(base64String, mimeType)
-      setIsAnalyzingImage(false)
 
       if (res.success && res.script) {
         setScript(res.script)
       } else {
-        alert("대본을 읽어오는 데 실패했어요. 다시 찍어볼까요?\n(에러: " + res.error + ")")
+        alert("대본을 읽어오는 데 실패했어요. 다시 찍어볼까요?\n(이유: " + res.error + ")")
       }
+    } catch (error) {
+      console.error("이미지 처리 에러:", error)
+      alert("사진을 처리하는 중 에러가 발생했습니다. 네트워크 문제일 수 있습니다.")
+    } finally {
+      // 💡 [핵심] 성공하든 실패하든 무조건 로딩 스피너를 종료하여 무한 로딩 방지
+      setIsAnalyzingImage(false)
+      if (fileInputRef.current) fileInputRef.current.value = ""
     }
-    reader.readAsDataURL(file)
   }
 
   // 🗣️ Azure 음성 평가 (긴 호흡)
@@ -62,7 +102,11 @@ export function ScriptTrainer({ accent, profileName }: ScriptTrainerProps) {
       const key = process.env.NEXT_PUBLIC_AZURE_SPEECH_KEY
       const region = process.env.NEXT_PUBLIC_AZURE_SPEECH_REGION
 
-      if (!key || !region) throw new Error("Azure Key Missing")
+      if (!key || !region) {
+        alert("Azure Key가 설정되지 않았습니다.")
+        setIsRecording(false)
+        return
+      }
 
       const speechConfig = sdk.SpeechConfig.fromSubscription(key, region)
       speechConfig.speechRecognitionLanguage = "en-US"
@@ -85,8 +129,6 @@ export function ScriptTrainer({ accent, profileName }: ScriptTrainerProps) {
 
       recognizer.sessionStarted = () => setIsMicReady(true)
 
-      // 긴 문장 인식을 위해 recognizeOnceAsync 대신 startContinuousRecognition을 사용할 수도 있으나, 
-      // 초등학생 발표 분량(1~2분)은 recognizeOnceAsync로도 충분히 커버 가능하며 관리하기가 훨씬 깔끔합니다.
       recognizer.recognizeOnceAsync(
         async (result) => {
           if (result.reason === sdk.ResultReason.RecognizedSpeech) {
@@ -114,7 +156,7 @@ export function ScriptTrainer({ accent, profileName }: ScriptTrainerProps) {
             }))
 
             const coachRes = await generateSpeakingCoachFeedback({
-              sentence: script, // 전체 스크립트를 전달
+              sentence: script,
               childName: profileName,
               pronResult: finalResult,
               wordScores: mappedWords
@@ -149,7 +191,7 @@ export function ScriptTrainer({ accent, profileName }: ScriptTrainerProps) {
       window.speechSynthesis.cancel()
       const utterance = new SpeechSynthesisUtterance(script)
       utterance.lang = "en-US"
-      // 약간 천천히 읽어주어 쉐도잉하기 좋게 설정
+      // 쉐도잉하기 좋게 약간 천천히 읽어줌
       utterance.rate = 0.85 
       window.speechSynthesis.speak(utterance)
     }
