@@ -349,7 +349,7 @@ export async function generateContextQuiz(words: { word: string, meaning: string
   }
 }
 
-// 💡 [수정됨] 단어가 완벽할 때 쓸데없는 단어를 지적하는 환각 방지!
+// 💡 단어가 완벽할 때 쓸데없는 단어를 지적하는 환각 방지!
 export async function generateSpeakingCoachFeedback(data: {
   sentence: string;
   childName: string;
@@ -432,5 +432,57 @@ ${perfectExample}
   } catch (error: any) {
     console.error("AI 코칭 피드백 생성 에러:", error);
     return { success: false, feedback: "💡 스피커 버튼을 누르고 선생님 목소리를 똑같이 따라 해볼까요? 🎶" };
+  }
+}
+
+// 💡 [새로 추가됨] 학습지 이미지를 분석해서 '완성된 발표 대본'으로 만들어주는 AI 스캐너
+export async function extractSpeechScriptWithGemini(base64Image: string, mimeType: string) {
+  try {
+    const apiKey = process.env.GEMINI_API_KEY?.trim();
+    if (!apiKey) return { success: false, error: "API 키가 등록되지 않았습니다." };
+
+    // 시각적 분석이 뛰어나고 속도가 빠른 1.5 Flash 모델 사용
+    const endpoint = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey}`;
+    
+    const promptText = `
+이 이미지는 초등학생의 영어 학습지(워크시트)입니다. 
+인쇄된 영어 문장들과, 연필로 적힌 아이의 손글씨 정답들이 섞여 있습니다.
+
+[당신의 임무]
+1. 인쇄된 문장의 흐름을 파악하고, 빈칸(밑줄) 자리에 아이가 연필로 적은 손글씨 정답을 완벽하게 끼워 넣으세요.
+2. 뚝뚝 끊어진 문장들을 하나로 자연스럽게 이어서, 아이가 발표(Speech) 연습을 할 수 있는 **하나의 완성된 영어 문단(Paragraph)**으로 만들어주세요.
+3. 지저분한 기호, 화살표, 한글 뜻, 점수 표시 등은 모두 무시하고 오직 "완성된 영어 문단 텍스트"만 출력하세요.
+4. "Here is the text" 같은 부연 설명은 절대 하지 말고, 오직 완성된 영어 텍스트만 결과로 반환하세요.
+
+[예시 결과물]
+Hi, everyone! I'm thinking of joining an after-school club. My top two choices are the knitting club and the art and craft club. I think I prefer knitting to art and craft. I want to learn how to knit a scarf. My friend Rocia also wants to join this club. She wants to learn how to knit a doll. We're going to sign up together. Joining the knitting club will be fun!
+    `.trim();
+
+    const response = await fetch(endpoint, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      cache: "no-store",
+      body: JSON.stringify({
+        contents: [{ parts: [{ text: promptText }, { inline_data: { mime_type: mimeType, data: base64Image } }] }],
+        generationConfig: { temperature: 0.2 } // 정확도를 위해 온도를 낮춤
+      })
+    });
+
+    if (!response.ok) return { success: false, error: "구글 AI 응답 실패" };
+    const data = await response.json();
+    
+    if (!data.candidates || data.candidates.length === 0) {
+      return { success: false, error: "응답 없음" };
+    }
+
+    const scriptText = data.candidates?.[0]?.content?.parts?.[0]?.text || "";
+    
+    if (!scriptText.trim()) {
+       return { success: false, error: "텍스트를 추출하지 못했습니다." };
+    }
+
+    return { success: true, script: scriptText.trim() };
+  } catch (e: any) {
+    return { success: false, error: `서버 에러: ${e.message}` };
   }
 }
