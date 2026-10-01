@@ -1,9 +1,9 @@
 "use client"
 
 import React, { useState, useRef, useEffect, useMemo } from "react"
-import { Mic, Upload, Play, Sparkles, Loader2, Save, FolderOpen, Trash2, Edit3, Square, Brain } from "lucide-react"
+// 💡 Headphones 아이콘 추가됨
+import { Mic, Upload, Play, Sparkles, Loader2, Save, FolderOpen, Trash2, Edit3, Square, Brain, Headphones } from "lucide-react"
 import confetti from "canvas-confetti"
-// 💡 방금 추가한 translateScriptWithGemini 불러오기 추가
 import { extractSpeechScriptWithGemini, generateSpeakingCoachFeedback, translateScriptWithGemini } from "@/app/actions/words"
 import { cn } from "@/lib/utils"
 
@@ -32,7 +32,6 @@ export function ScriptTrainer({ accent, profileName }: ScriptTrainerProps) {
   const [savedScripts, setSavedScripts] = useState<SavedScript[]>([])
   const [ttsVoice, setTtsVoice] = useState<string>("en-US-AnaNeural")
   
-  // 💡 훈련 모드 상태 및 한 문장씩 쪼개기
   const [trainingMode, setTrainingMode] = useState<"full" | "step" | "interpret">("full")
   const [memoLevel, setMemoLevel] = useState<number>(0)
   const [stepIndex, setStepIndex] = useState(0)
@@ -57,6 +56,13 @@ export function ScriptTrainer({ accent, profileName }: ScriptTrainerProps) {
   const [recognizerInstance, setRecognizerInstance] = useState<any>(null)
   const assessmentDataRef = useRef({ totalScore: 0, totalAcc: 0, totalFluency: 0, totalComp: 0, totalProsody: 0, chunks: 0, allWords: [] as any[] })
 
+  // 💡 내 녹음 상태 및 Ref 추가
+  const [userAudioUrl, setUserAudioUrl] = useState<string | null>(null)
+  const mediaStreamRef = useRef<MediaStream | null>(null)
+  const mediaRecorderRef = useRef<MediaRecorder | null>(null)
+  const audioChunksRef = useRef<Blob[]>([])
+  const userAudioRef = useRef<HTMLAudioElement | null>(null)
+
   const [pronResult, setPronResult] = useState<any>(null)
   const [aiCoachMsg, setAiCoachMsg] = useState<string | null>(null)
   const [isCoachLoading, setIsCoachLoading] = useState(false)
@@ -72,6 +78,7 @@ export function ScriptTrainer({ accent, profileName }: ScriptTrainerProps) {
     
     return () => {
       if (recognizerInstance) { try { recognizerInstance.close() } catch(e) {} }
+      if (userAudioRef.current) { userAudioRef.current.pause() }
       stopTTS()
     }
   }, [profileName, recognizerInstance])
@@ -83,11 +90,11 @@ export function ScriptTrainer({ accent, profileName }: ScriptTrainerProps) {
     }
   }, [script, memoLevel, trainingMode])
 
-  // 대본이 바뀌면 번역 데이터와 스텝을 초기화
   useEffect(() => {
     setKoTranslations([])
     setStepIndex(0)
     setTrainingMode("full")
+    setUserAudioUrl(null)
   }, [script])
 
   const saveCurrentScript = () => {
@@ -120,12 +127,14 @@ export function ScriptTrainer({ accent, profileName }: ScriptTrainerProps) {
     setAiCoachMsg(null)
     setMemoLevel(0)
     setTrainingMode("full")
+    setUserAudioUrl(null)
     setActiveTab("practice")
   }
 
   const handleModeChange = async (mode: "full" | "step" | "interpret") => {
     setTrainingMode(mode)
     setPronResult(null)
+    setUserAudioUrl(null)
     stopTTS()
 
     if (mode === "interpret" && koTranslations.length === 0) {
@@ -172,6 +181,7 @@ export function ScriptTrainer({ accent, profileName }: ScriptTrainerProps) {
     setScript("")
     setPronResult(null)
     setAiCoachMsg(null)
+    setUserAudioUrl(null)
 
     try {
       const base64String = await compressImage(file)
@@ -247,6 +257,18 @@ export function ScriptTrainer({ accent, profileName }: ScriptTrainerProps) {
     } catch (error) { console.error(error); setIsPlayingTTS(false) }
   }
 
+  // 💡 내 녹음 듣기 기능
+  const playUserAudio = () => {
+    if (!userAudioUrl) return
+    if (userAudioRef.current) {
+      userAudioRef.current.pause()
+      userAudioRef.current.currentTime = 0
+    }
+    const audio = new Audio(userAudioUrl)
+    userAudioRef.current = audio
+    audio.play()
+  }
+
   const startContinuousAssessment = async () => {
     const targetText = trainingMode === "full" ? script : (sentences[stepIndex] || "")
     if (!targetText.trim()) return
@@ -255,9 +277,22 @@ export function ScriptTrainer({ accent, profileName }: ScriptTrainerProps) {
     setIsMicReady(false)
     setPronResult(null)
     setAiCoachMsg(null)
+    setUserAudioUrl(null)
+    audioChunksRef.current = []
     assessmentDataRef.current = { totalScore: 0, totalAcc: 0, totalFluency: 0, totalComp: 0, totalProsody: 0, chunks: 0, allWords: [] }
 
     try {
+      // 💡 1. 사용자 음성 캡처 시작
+      const stream = await navigator.mediaDevices.getUserMedia({ 
+        audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true } 
+      })
+      mediaStreamRef.current = stream
+      const mr = new MediaRecorder(stream)
+      mr.ondataavailable = (e) => { if (e.data.size > 0) audioChunksRef.current.push(e.data) }
+      mr.start()
+      mediaRecorderRef.current = mr
+
+      // 💡 2. Azure Speech SDK 채점 시작
       const sdk = await import("microsoft-cognitiveservices-speech-sdk")
       const key = process.env.NEXT_PUBLIC_AZURE_SPEECH_KEY
       const region = process.env.NEXT_PUBLIC_AZURE_SPEECH_REGION
@@ -269,7 +304,7 @@ export function ScriptTrainer({ accent, profileName }: ScriptTrainerProps) {
 
       const audioConfig = sdk.AudioConfig.fromDefaultMicrophoneInput()
       const pronConfig = new sdk.PronunciationAssessmentConfig(
-        targetText, // 💡 전체 대본이 아닌 현재 훈련 모드의 문장만 평가
+        targetText,
         sdk.PronunciationAssessmentGradingSystem.HundredMark,
         sdk.PronunciationAssessmentGranularity.Phoneme,
         true
@@ -306,7 +341,11 @@ export function ScriptTrainer({ accent, profileName }: ScriptTrainerProps) {
       recognizer.startContinuousRecognitionAsync()
       setRecognizerInstance(recognizer)
 
-    } catch (error) { console.error(error); setIsRecording(false) }
+    } catch (error) { 
+      console.error(error)
+      setIsRecording(false)
+      alert("마이크를 켤 수 없습니다. 권한을 확인해주세요.")
+    }
   }
 
   const stopContinuousAssessment = () => {
@@ -316,6 +355,19 @@ export function ScriptTrainer({ accent, profileName }: ScriptTrainerProps) {
     setIsProcessingResult(true) 
     const targetText = trainingMode === "full" ? script : (sentences[stepIndex] || "")
 
+    // 💡 1. 사용자 음성 캡처 종료 및 저장
+    if (mediaRecorderRef.current && mediaRecorderRef.current.state !== "inactive") {
+      mediaRecorderRef.current.onstop = () => {
+        const blob = new Blob(audioChunksRef.current, { type: mediaRecorderRef.current?.mimeType || 'audio/webm' })
+        setUserAudioUrl(URL.createObjectURL(blob))
+      }
+      mediaRecorderRef.current.stop()
+    }
+    if (mediaStreamRef.current) {
+      mediaStreamRef.current.getTracks().forEach(track => track.stop())
+    }
+
+    // 💡 2. Azure 채점 종료
     recognizerInstance.stopContinuousRecognitionAsync(async () => {
       recognizerInstance.close()
       setRecognizerInstance(null)
@@ -331,7 +383,6 @@ export function ScriptTrainer({ accent, profileName }: ScriptTrainerProps) {
         }
         setPronResult(finalResult)
         
-        // 💡 80점 통과 시 팡파르 터트리기!
         if (finalResult.score >= 80 && trainingMode !== "full") {
           const colors = [accent, '#fbbf24'];
           confetti({ particleCount: 50, angle: 60, spread: 55, origin: { x: 0 }, colors });
@@ -351,6 +402,7 @@ export function ScriptTrainer({ accent, profileName }: ScriptTrainerProps) {
         if (coachRes.success && coachRes.feedback) { setAiCoachMsg(coachRes.feedback) }
       } else {
         setIsProcessingResult(false)
+        setUserAudioUrl(null)
         alert("인식된 목소리가 없어요. 마이크를 켜고 씩씩하게 다시 읽어볼까요?")
       }
     })
@@ -435,11 +487,11 @@ export function ScriptTrainer({ accent, profileName }: ScriptTrainerProps) {
               <div className="flex flex-wrap gap-1.5 shrink-0">
                 <button onClick={() => setActiveTab("archive")} className="flex items-center gap-1 text-xs font-bold px-2.5 py-1.5 rounded-full bg-blue-50 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 hover:bg-blue-100 transition-colors"><FolderOpen className="size-3" /> 불러오기</button>
                 {script && <button onClick={saveCurrentScript} className="flex items-center gap-1 text-xs font-bold px-2.5 py-1.5 rounded-full bg-green-50 dark:bg-green-900/30 text-green-600 dark:text-green-400 hover:bg-green-100 transition-colors"><Save className="size-3" /> 저장</button>}
-                {script && <button onClick={() => { if(confirm("대본을 지울까요?")) { stopTTS(); setScript(""); setMemoLevel(0); } }} className="flex items-center text-xs font-bold px-2.5 py-1.5 rounded-full bg-muted text-muted-foreground hover:bg-red-50 hover:text-red-500 transition-colors">지우기</button>}
+                {script && <button onClick={() => { if(confirm("대본을 지울까요?")) { stopTTS(); setScript(""); setMemoLevel(0); setUserAudioUrl(null); } }} className="flex items-center text-xs font-bold px-2.5 py-1.5 rounded-full bg-muted text-muted-foreground hover:bg-red-50 hover:text-red-500 transition-colors">지우기</button>}
               </div>
             </div>
 
-            {/* 💡 훈련 모드 탭 추가 */}
+            {/* 훈련 모드 탭 */}
             {script && (
               <div className="flex bg-muted/50 p-1 rounded-xl mb-1 border border-border/50">
                 <button onClick={() => handleModeChange("full")} className={cn("flex-1 text-[12px] sm:text-[13px] font-bold py-2 rounded-lg transition-all", trainingMode === "full" ? "bg-card text-foreground shadow-sm border border-border/50" : "text-muted-foreground hover:bg-muted")}>📝 전체 대본</button>
@@ -448,7 +500,7 @@ export function ScriptTrainer({ accent, profileName }: ScriptTrainerProps) {
               </div>
             )}
 
-            {/* 📝 전체 모드 UI */}
+            {/* 전체 모드 UI */}
             {trainingMode === "full" ? (
               <>
                 {script && (
@@ -466,7 +518,7 @@ export function ScriptTrainer({ accent, profileName }: ScriptTrainerProps) {
                 )}
               </>
             ) : (
-              // 🎯 한 문장씩 & 동시통역 모드 UI (Step Card)
+              // 한 문장씩 & 동시통역 모드 UI (Step Card)
               <div className="flex flex-col items-center justify-center py-8 px-4 sm:px-6 bg-card border-2 border-muted rounded-2xl shadow-sm relative overflow-hidden animate-in zoom-in-95 duration-200">
                 <div className="absolute top-3 left-3 text-[11px] font-black text-muted-foreground bg-muted px-2.5 py-1 rounded-md">
                   STEP {stepIndex + 1} <span className="opacity-50">/ {sentences.length}</span>
@@ -492,7 +544,6 @@ export function ScriptTrainer({ accent, profileName }: ScriptTrainerProps) {
                   )}
                 </div>
                 
-                {/* 진행률 바 */}
                 <div className="w-full h-1.5 bg-muted rounded-full overflow-hidden absolute bottom-0 left-0">
                    <div className="h-full bg-green-500 transition-all duration-500" style={{ width: `${((stepIndex + 1) / sentences.length) * 100}%` }} />
                 </div>
@@ -515,14 +566,14 @@ export function ScriptTrainer({ accent, profileName }: ScriptTrainerProps) {
 
                 <button onClick={isRecording && isMicReady ? stopContinuousAssessment : startContinuousAssessment} disabled={(isRecording && !isMicReady) || isPlayingTTS || isAnalyzingImage || isProcessingResult} className={cn("flex w-full items-center justify-center gap-2 rounded-2xl py-4 text-[15px] font-black text-white shadow-md transition-all active:scale-[0.98]", isRecording && !isMicReady ? "bg-amber-500 opacity-90" : isRecording && isMicReady ? "bg-red-500 animate-pulse" : isProcessingResult ? "bg-indigo-500 opacity-90" : "")} style={(!isRecording && !isProcessingResult) ? { backgroundColor: accent, textShadow: "0 1px 2px rgba(0,0,0,0.2)" } : undefined}>
                   {(isRecording && !isMicReady) || isProcessingResult ? <Loader2 className="size-4 animate-spin" /> : isRecording && isMicReady ? <Square className="size-4" fill="currentColor" /> : <Mic className="size-4" />}
-                  {isRecording && !isMicReady ? "마이크 연결 중..." : isRecording && isMicReady ? "다 읽었으면 여기를 눌러 완료하세요! ◼️️" : isProcessingResult ? "결과를 집계하고 있어요..." : (pronResult ? "다시 발표하기" : "발표 시작하기!")}
+                  {isRecording && !isMicReady ? "마이크 연결 중..." : isRecording && isMicReady ? "다 읽었으면 여기를 눌러 완료하세요! ◼" : isProcessingResult ? "결과를 집계하고 있어요..." : (pronResult ? "다시 발표하기" : "발표 시작하기!")}
                 </button>
 
-                {/* 💡 80점 통과 시 다음 문장으로 넘어가는 버튼 (도장 깨기 핵심!) */}
+                {/* 80점 통과 시 다음 문장으로 넘어가는 버튼 */}
                 {pronResult && pronResult.score >= 80 && trainingMode !== "full" && (
                   <div className="mt-1 w-full animate-in slide-in-from-bottom-2">
                     {stepIndex < sentences.length - 1 ? (
-                      <button onClick={() => { setStepIndex(i => i + 1); setPronResult(null); }} className="w-full py-4 bg-green-500 text-white font-black rounded-2xl shadow-md hover:bg-green-600 transition-colors flex items-center justify-center gap-2">
+                      <button onClick={() => { setStepIndex(i => i + 1); setPronResult(null); setUserAudioUrl(null); }} className="w-full py-4 bg-green-500 text-white font-black rounded-2xl shadow-md hover:bg-green-600 transition-colors flex items-center justify-center gap-2">
                         🎉 통과! 다음 문장으로 ➔
                       </button>
                     ) : (
@@ -542,9 +593,22 @@ export function ScriptTrainer({ accent, profileName }: ScriptTrainerProps) {
                        <div className="flex flex-col items-center justify-center py-2 bg-card rounded-xl border border-border shadow-sm"><span className="text-[10px] text-muted-foreground font-bold mb-0.5">완전성</span><span className="text-lg font-black text-amber-500">{Math.round(pronResult.completeness)}</span></div>
                        <div className="flex flex-col items-center justify-center py-2 bg-card rounded-xl border border-border shadow-sm"><span className="text-[10px] text-muted-foreground font-bold mb-0.5">억양</span><span className="text-lg font-black text-purple-500">{Math.round(pronResult.prosody)}</span></div>
                     </div>
-                    <p className="text-[15px] font-black text-foreground mb-3 text-center">
+                    
+                    <p className="text-[15px] font-black text-foreground mb-4 text-center">
                       {pronResult.score >= 90 ? "✨ 아나운서 같아요! 완벽한 발표입니다!" : pronResult.score >= 80 ? "👏 아주 훌륭한 발표였어요!" : pronResult.score >= 60 ? "👍 좋아요! 자신감 있게 한 번만 더 연습해볼까요?" : "💪 긴장했나요? 심호흡하고 천천히 다시 해봐요!"}
                     </p>
+
+                    {/* 💡 내 전체 발표 다시 듣기 버튼 */}
+                    {userAudioUrl && (
+                      <button
+                        onClick={playUserAudio}
+                        className="w-full mb-4 flex items-center justify-center gap-2 rounded-xl py-3 font-bold text-[13px] shadow-sm transition-transform hover:opacity-80 active:scale-95 animate-in fade-in border border-transparent"
+                        style={{ color: accent, backgroundColor: accent + '1A', borderColor: accent + '33' }}
+                      >
+                        <Headphones className="size-5" /> 내 {trainingMode === "full" ? "전체 발표" : "문장"} 다시 듣기
+                      </button>
+                    )}
+
                     {(isCoachLoading || aiCoachMsg) && (
                       <div className="w-full rounded-xl p-3.5 border shadow-inner text-center" style={{ backgroundColor: accent + '1A', borderColor: accent + '33' }}>
                          <p className="text-[11px] font-bold mb-1.5 flex items-center justify-center gap-1.5" style={{ color: accent }}><Sparkles className="size-3.5 animate-spin" /> AI 원어민 선생님의 코칭</p>
