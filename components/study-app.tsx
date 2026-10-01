@@ -1,13 +1,16 @@
 "use client"
 
 import { useState, useMemo, useEffect } from "react"
-import { GraduationCap, Pencil, Ghost } from "lucide-react"
+// 💡 Mic 아이콘과 ScriptTrainer를 추가로 불러옵니다
+import { GraduationCap, Pencil, Ghost, Mic } from "lucide-react"
 import { WordQuiz, type QuizWord } from "@/components/word-quiz"
 import { WordManager } from "@/components/word-manager"
+import { ScriptTrainer } from "@/components/script-trainer"
 import type { Profile } from "@/app/actions/words"
 import { cn } from "@/lib/utils"
 
-type Mode = "quiz" | "wrong" | "manage"
+// 💡 "script" 모드 추가
+type Mode = "quiz" | "wrong" | "script" | "manage"
 
 // 전체 과목 목록
 const ALL_SUBJECTS = ["전체", "리딩", "스피킹", "문법", "단어"]
@@ -45,35 +48,48 @@ export function StudyApp({
 
   return (
     <div className="flex flex-col gap-5">
-      <div className="grid grid-cols-3 gap-1.5 rounded-2xl border border-border bg-muted/50 p-1.5">
+      {/* 💡 탭이 4개로 늘어났으므로 grid-cols-4로 변경하고 모바일에서도 잘 보이게 조정 */}
+      <div className="grid grid-cols-4 gap-1 sm:gap-1.5 rounded-2xl border border-border bg-muted/50 p-1 sm:p-1.5">
         <button
           onClick={() => setMode("quiz")}
-          className={cn("flex items-center justify-center gap-1 sm:gap-1.5 rounded-xl py-2.5 text-xs sm:text-sm font-semibold transition-colors", mode === "quiz" ? "bg-card text-foreground shadow-sm" : "text-muted-foreground")}
+          className={cn("flex flex-col sm:flex-row items-center justify-center gap-1 sm:gap-1.5 rounded-xl py-2 sm:py-2.5 text-[11px] sm:text-sm font-semibold transition-colors", mode === "quiz" ? "bg-card text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground/80")}
         >
           <GraduationCap className="size-4 shrink-0" /> <span className="hidden sm:inline">날짜별</span> 퀴즈
         </button>
         
         <button
           onClick={() => setMode("wrong")}
-          className={cn("flex items-center justify-center gap-1 sm:gap-1.5 rounded-xl py-2.5 text-xs sm:text-sm font-semibold transition-colors", mode === "wrong" ? "bg-card text-foreground shadow-sm" : "text-muted-foreground")}
+          className={cn("flex flex-col sm:flex-row items-center justify-center gap-1 sm:gap-1.5 rounded-xl py-2 sm:py-2.5 text-[11px] sm:text-sm font-semibold transition-colors", mode === "wrong" ? "bg-card text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground/80")}
         >
           <Ghost 
-            className={cn("size-4 shrink-0", mode === "wrong" ? "animate-bounce" : "")} 
+            className={cn("size-4 shrink-0", mode === "wrong" ? "animate-monster-hop" : "")} 
             style={mode === "wrong" ? { color: accent } : undefined} 
           /> 
           <span className="hidden sm:inline">오답</span> 몬스터
         </button>
+
+        {/* 💡 새로 추가된 발표 대본 탭 */}
+        <button
+          onClick={() => setMode("script")}
+          className={cn("flex flex-col sm:flex-row items-center justify-center gap-1 sm:gap-1.5 rounded-xl py-2 sm:py-2.5 text-[11px] sm:text-sm font-semibold transition-colors", mode === "script" ? "bg-card text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground/80")}
+        >
+          <Mic 
+            className={cn("size-4 shrink-0", mode === "script" ? "animate-pulse" : "")} 
+            style={mode === "script" ? { color: accent } : undefined} 
+          /> 
+          <span className="hidden sm:inline">발표</span> 대본
+        </button>
         
         <button
           onClick={() => setMode("manage")}
-          className={cn("flex items-center justify-center gap-1 sm:gap-1.5 rounded-xl py-2.5 text-xs sm:text-sm font-semibold transition-colors", mode === "manage" ? "bg-card text-foreground shadow-sm" : "text-muted-foreground")}
+          className={cn("flex flex-col sm:flex-row items-center justify-center gap-1 sm:gap-1.5 rounded-xl py-2 sm:py-2.5 text-[11px] sm:text-sm font-semibold transition-colors", mode === "manage" ? "bg-card text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground/80")}
         >
           <Pencil className="size-4 shrink-0" /> 단어 입력
         </button>
       </div>
 
-      {/* 단어 입력 모드(manage)가 아닐 때만 이 바깥쪽 탭을 보여줍니다! */}
-      {mode !== "manage" && (
+      {/* 💡 단어 입력이나 대본 연습 모드가 아닐 때만 과목 탭을 보여줍니다 */}
+      {mode !== "manage" && mode !== "script" && (
         <div className="flex gap-2 overflow-x-auto pb-1 scrollbar-hide">
           {availableSubjects.map((s) => (
             <button
@@ -95,7 +111,6 @@ export function StudyApp({
       
       {mode === "wrong" && (
         displayWrongWords.length > 0 ? (
-          // 💡 여기에 isMonsterMode={true}를 추가했습니다!
           <WordQuiz key={`wrong-${filter}`} words={displayWrongWords} accent={accent} isMonsterMode={true} />
         ) : (
           <div className="flex flex-col items-center justify-center rounded-3xl border border-dashed border-border bg-muted/30 px-6 py-16 text-center animate-in fade-in zoom-in duration-500">
@@ -108,8 +123,9 @@ export function StudyApp({
         )
       )}
 
-      {/* WordManager에는 필터링 되지 않은 전체 words를 통째로 넘겨줍니다. 
-          (WordManager 내부에서 자체적으로 필터 탭을 보여주고 작동시킵니다) */}
+      {/* 💡 새로 추가된 대본 훈련 모드 화면 렌더링 */}
+      {mode === "script" && <ScriptTrainer accent={accent} profileName={profile} />}
+
       {mode === "manage" && <WordManager profile={profile} date={date} words={words} accent={accent} />}
     </div>
   )
