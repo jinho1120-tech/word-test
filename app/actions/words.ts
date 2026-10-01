@@ -486,3 +486,43 @@ Hi, everyone! I'm thinking of joining an after-school club. My top two choices a
     return { success: false, error: `서버 에러: ${e.message}` };
   }
 }
+// 💡 [새로 추가됨] 대본을 한 문장씩 한국어로 번역해주는 AI 동시통역 번역기
+export async function translateScriptWithGemini(script: string) {
+  try {
+    const apiKey = process.env.GEMINI_API_KEY?.trim();
+    if (!apiKey) return { success: false, error: "API 키가 등록되지 않았습니다." };
+
+    const endpoint = `https://generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash-lite:generateContent?key=${apiKey}`;
+    
+    const promptText = `
+다음 영어 대본을 한 문장씩 자연스러운 한국어로 번역하세요.
+각 문장별 번역을 순수한 JSON 배열 형태로만 출력하세요. (다른 설명이나 마크다운 코드블록 절대 금지)
+
+[대본]
+${script}
+
+[출력 예시]
+["안녕, 얘들아!", "나는 방과 후 클럽에 가입할까 생각 중이야.", "뜨개질 클럽에 들어갈 거야."]
+    `.trim();
+
+    const response = await fetch(endpoint, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      cache: "no-store",
+      body: JSON.stringify({
+        contents: [{ parts: [{ text: promptText }] }],
+        generationConfig: { temperature: 0.1 } 
+      })
+    });
+
+    if (!response.ok) return { success: false, error: "구글 AI 응답 실패" };
+    const data = await response.json();
+    
+    const text = data.candidates?.[0]?.content?.parts?.[0]?.text || "[]";
+    const cleanText = text.replace(/```json/g, "").replace(/```/g, "").trim();
+
+    return { success: true, translations: JSON.parse(cleanText) };
+  } catch (e: any) {
+    return { success: false, error: `서버 에러: ${e.message}` };
+  }
+}
