@@ -39,6 +39,7 @@ export function ScriptTrainer({ accent, profileName }: ScriptTrainerProps) {
   const [isCoachLoading, setIsCoachLoading] = useState(false)
   
   const fileInputRef = useRef<HTMLInputElement>(null)
+  const textareaRef = useRef<HTMLTextAreaElement>(null)
 
   // 💾 컴포넌트 로드 시 저장된 대본과 설정 불러오기
   useEffect(() => {
@@ -49,10 +50,18 @@ export function ScriptTrainer({ accent, profileName }: ScriptTrainerProps) {
     if (savedVoice) setTtsVoice(savedVoice)
   }, [profileName])
 
+  // 📝 텍스트 창 크기 자동 조절 (스크롤 없애기)
+  useEffect(() => {
+    if (textareaRef.current) {
+      textareaRef.current.style.height = "auto"
+      textareaRef.current.style.height = textareaRef.current.scrollHeight + "px"
+    }
+  }, [script])
+
   // 💾 대본 보관함에 저장하기
   const saveCurrentScript = () => {
     if (!script.trim()) return alert("저장할 대본 내용이 없습니다.")
-    const title = prompt("이 대본의 제목을 입력하세요 (예: Joining a Club)")
+    const title = prompt("이 대본의 제목을 입력하세요 (예: 학원 발표 숙제)")
     if (!title) return
 
     const newScript: SavedScript = {
@@ -84,7 +93,7 @@ export function ScriptTrainer({ accent, profileName }: ScriptTrainerProps) {
     setActiveTab("practice")
   }
 
-  // 브라우저 단에서 이미지 압축 (Vercel 용량 초과 방지)
+  // 브라우저 단에서 이미지 압축 (Vercel 용량 초과 에러 방지)
   const compressImage = (file: File): Promise<string> => {
     return new Promise((resolve, reject) => {
       const reader = new FileReader()
@@ -92,7 +101,7 @@ export function ScriptTrainer({ accent, profileName }: ScriptTrainerProps) {
         const img = new Image()
         img.onload = () => {
           const canvas = document.createElement("canvas")
-          const MAX_WIDTH = 1000
+          const MAX_WIDTH = 1200
           let width = img.width
           let height = img.height
           if (width > MAX_WIDTH) {
@@ -312,19 +321,19 @@ export function ScriptTrainer({ accent, profileName }: ScriptTrainerProps) {
         <>
           {/* 1. 학습지 사진 업로드 (대본이 없을 때만 크게 표시) */}
           {!script && (
-            <div className="flex flex-col items-center justify-center rounded-3xl border-2 border-dashed border-border bg-card p-6 text-center shadow-sm">
+            <div className="flex flex-col items-center justify-center rounded-3xl border-2 border-dashed border-border bg-card p-6 text-center shadow-sm animate-in zoom-in-95">
               <div className="mb-4 flex size-14 items-center justify-center rounded-2xl shadow-sm text-white" style={{ backgroundColor: accent }}>
                 {isAnalyzingImage ? <Loader2 className="size-6 animate-spin" /> : <Upload className="size-6" />}
               </div>
               <h3 className="mb-2 text-lg font-black text-foreground">새로운 발표 대본</h3>
               <p className="mb-5 text-sm text-muted-foreground">
-                학습지를 찰칵 찍어서 올리거나,<br/>아래 빈칸에 직접 영어 대본을 쳐보세요!
+                학습지를 찰칵 찍어서 올리거나,<br/>아래 텍스트 박스에 직접 대본을 쳐보세요!
               </p>
               <input type="file" accept="image/*" ref={fileInputRef} onChange={handleImageUpload} className="hidden" />
               <button 
                 onClick={() => fileInputRef.current?.click()}
                 disabled={isAnalyzingImage}
-                className="w-full rounded-xl py-3 font-bold text-white shadow-md transition-opacity hover:opacity-90 disabled:opacity-50 mb-3"
+                className="w-full rounded-xl py-3.5 font-bold text-white shadow-md transition-opacity hover:opacity-90 disabled:opacity-50 mb-3"
                 style={{ backgroundColor: accent }}
               >
                 {isAnalyzingImage ? "AI가 마법을 부리는 중... ✨" : "📷 학습지 사진 찍어서 자동 입력"}
@@ -333,45 +342,53 @@ export function ScriptTrainer({ accent, profileName }: ScriptTrainerProps) {
           )}
 
           {/* 2. 대본 편집 및 연습 영역 */}
-          <div className="flex flex-col gap-3 rounded-3xl border border-border bg-card p-5 shadow-sm">
-            <div className="flex items-center justify-between mb-1">
-              <span className="text-sm font-bold text-foreground flex items-center gap-1.5">
+          <div className="flex flex-col gap-3 rounded-3xl border border-border bg-card p-4 sm:p-5 shadow-sm animate-in slide-in-from-bottom-4">
+            
+            {/* 💡 헤더 및 컨트롤 버튼 영역 개선 */}
+            <div className="flex flex-wrap items-center justify-between mb-1 gap-2">
+              <span className="text-sm font-bold text-foreground flex items-center gap-1.5 shrink-0">
                 <Sparkles className="size-4" style={{ color: accent }}/> {script ? "대본 수정 및 연습" : "직접 대본 입력"}
               </span>
-              <div className="flex gap-1.5">
+              
+              <div className="flex flex-wrap gap-1.5 shrink-0">
+                <button onClick={() => setActiveTab("archive")} className="flex items-center gap-1 text-xs font-bold px-2.5 py-1.5 rounded-full bg-blue-50 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 hover:bg-blue-100 transition-colors">
+                  <FolderOpen className="size-3" /> 불러오기
+                </button>
                 {script && (
-                  <button onClick={saveCurrentScript} className="flex items-center gap-1 text-xs font-bold px-3 py-1.5 rounded-full bg-green-50 text-green-600 hover:bg-green-100 transition-colors">
-                    <Save className="size-3" /> 보관함 저장
+                  <button onClick={saveCurrentScript} className="flex items-center gap-1 text-xs font-bold px-2.5 py-1.5 rounded-full bg-green-50 dark:bg-green-900/30 text-green-600 dark:text-green-400 hover:bg-green-100 transition-colors">
+                    <Save className="size-3" /> 저장
                   </button>
                 )}
                 {script && (
-                  <button onClick={() => { if(confirm("대본을 지울까요?")) setScript("") }} className="flex items-center text-xs font-bold px-3 py-1.5 rounded-full bg-muted text-muted-foreground hover:bg-red-50 hover:text-red-500 transition-colors">
+                  <button onClick={() => { if(confirm("대본을 지울까요?")) setScript("") }} className="flex items-center text-xs font-bold px-2.5 py-1.5 rounded-full bg-muted text-muted-foreground hover:bg-red-50 hover:text-red-500 transition-colors">
                     지우기
                   </button>
                 )}
               </div>
             </div>
             
+            {/* 💡 자동 크기 조절 텍스트 창 */}
             <textarea
+              ref={textareaRef}
               value={script}
               onChange={(e) => setScript(e.target.value)}
-              className="w-full min-h-[160px] resize-none rounded-xl border-2 border-muted bg-background p-4 text-[16px] font-medium leading-relaxed text-foreground outline-none focus:border-transparent focus:ring-2 transition-all shadow-inner placeholder:text-muted-foreground/50"
+              className="w-full min-h-[120px] resize-none overflow-hidden rounded-xl border-2 border-muted bg-background p-4 text-[16px] sm:text-[17px] font-medium leading-relaxed text-foreground outline-none focus:border-transparent focus:ring-2 transition-shadow shadow-inner placeholder:text-muted-foreground/50"
               style={{ '--tw-ring-color': accent } as any}
-              placeholder="여기를 터치해서 대본을 직접 쓰거나 수정할 수 있습니다! ✍️"
+              placeholder="여기를 터치해서 대본을 직접 쓰거나 자유롭게 수정할 수 있습니다! ✍️"
             />
 
             {script && (
               <div className="mt-2 flex flex-col gap-4 animate-in slide-in-from-bottom-2">
                 
-                {/* 💡 Azure 목소리 선택 & 듣기 버튼 */}
-                <div className="flex items-center gap-2">
+                {/* Azure 목소리 선택 & 듣기 버튼 */}
+                <div className="flex flex-col sm:flex-row items-stretch gap-2">
                   <select
                     value={ttsVoice}
                     onChange={(e) => {
                       setTtsVoice(e.target.value)
                       localStorage.setItem("script_tts_voice", e.target.value)
                     }}
-                    className="flex-1 rounded-xl bg-muted border border-border px-3 py-3 text-sm font-bold text-muted-foreground outline-none transition-colors"
+                    className="sm:flex-1 rounded-xl bg-muted border border-border px-3 py-3.5 text-sm font-bold text-muted-foreground outline-none transition-colors cursor-pointer"
                   >
                     {TTS_VOICES.map((voice) => (
                       <option key={voice.id} value={voice.id}>{voice.label}</option>
@@ -381,21 +398,23 @@ export function ScriptTrainer({ accent, profileName }: ScriptTrainerProps) {
                   <button 
                     onClick={playAzureTTS}
                     disabled={isPlayingTTS}
-                    className="flex flex-1 items-center justify-center gap-2 font-bold px-3 py-3 rounded-xl shadow-sm text-white transition-all hover:opacity-90 active:scale-95 disabled:opacity-50"
-                    style={{ backgroundColor: accent }}
+                    className="flex sm:flex-1 items-center justify-center gap-2 font-bold px-4 py-3.5 rounded-xl shadow-md text-white transition-all hover:opacity-90 active:scale-95 disabled:opacity-50"
+                    style={{ backgroundColor: accent, textShadow: "0 1px 2px rgba(0,0,0,0.15)" }}
                   >
                     {isPlayingTTS ? <Loader2 className="size-4 animate-spin" /> : <Play className="size-4" fill="currentColor" />}
-                    {isPlayingTTS ? "읽는 중..." : "AI 원어민 듣기"}
+                    {isPlayingTTS ? "아나운서가 읽는 중..." : "AI 원어민 듣기"}
                   </button>
                 </div>
 
+                {/* 💡 다크모드 하얀 버튼 버그 완전 해결! (bg-foreground 제거, 텍스트 그림자 추가) */}
                 <button
                   onClick={startAssessment}
-                  disabled={isRecording || isPlayingTTS}
-                  className={cn("flex w-full items-center justify-center gap-2 rounded-2xl py-3.5 text-[15px] font-black text-white shadow-md transition-all active:scale-[0.98]",
+                  disabled={isRecording || isPlayingTTS || isAnalyzingImage}
+                  className={cn("flex w-full items-center justify-center gap-2 rounded-2xl py-4 text-[15px] font-black text-white shadow-md transition-all active:scale-[0.98]",
                     isRecording && !isMicReady ? "bg-amber-500 opacity-90" : 
-                    isRecording && isMicReady ? "bg-red-500 animate-pulse" : "bg-foreground"
+                    isRecording && isMicReady ? "bg-red-500 animate-pulse" : ""
                   )}
+                  style={!isRecording ? { backgroundColor: accent, textShadow: "0 1px 2px rgba(0,0,0,0.2)" } : undefined}
                 >
                   {isRecording && !isMicReady && <Loader2 className="size-4 animate-spin" />}
                   {isRecording && isMicReady && <Mic className="size-4 animate-bounce" />}
@@ -482,14 +501,15 @@ export function ScriptTrainer({ accent, profileName }: ScriptTrainerProps) {
                     <Trash2 className="size-4" />
                   </button>
                 </div>
-                <p className="text-xs text-muted-foreground line-clamp-2 leading-relaxed bg-muted/40 p-2 rounded-lg italic">
+                <p className="text-[13px] text-muted-foreground line-clamp-3 leading-relaxed bg-muted/40 p-2.5 rounded-lg italic">
                   {item.script}
                 </p>
                 <button
                   onClick={() => loadScript(item.script)}
-                  className="mt-1 w-full py-2.5 rounded-xl font-bold text-sm bg-foreground text-background shadow-sm hover:opacity-90 active:scale-[0.98] transition-all"
+                  className="mt-1 w-full py-3 rounded-xl font-bold text-[13px] text-white shadow-md hover:opacity-90 active:scale-[0.98] transition-all flex items-center justify-center gap-1.5"
+                  style={{ backgroundColor: accent, textShadow: "0 1px 2px rgba(0,0,0,0.2)" }}
                 >
-                  이 대본으로 연습하기 ➔
+                  <Edit3 className="size-4" /> 이 대본으로 연습하기
                 </button>
               </div>
             ))
