@@ -441,8 +441,8 @@ export async function extractSpeechScriptWithGemini(base64Image: string, mimeTyp
     const apiKey = process.env.GEMINI_API_KEY?.trim();
     if (!apiKey) return { success: false, error: "API 키가 등록되지 않았습니다." };
 
-    // 시각적 분석이 뛰어나고 속도가 빠른 1.5 Flash 모델 사용
-    const endpoint = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey}`;
+    // 시각적 분석이 뛰어나고 속도가 빠른 3.5 Flash lite.모델 사용
+    const endpoint = `https://generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash-lite:generateContent?key=${apiKey}`;
     
     const promptText = `
 이 이미지는 초등학생의 영어 학습지(워크시트)입니다. 
