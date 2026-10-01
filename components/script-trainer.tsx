@@ -1,7 +1,7 @@
 "use client"
 
 import React, { useState, useRef, useEffect } from "react"
-import { Mic, Upload, Play, Sparkles, Loader2, Save, FolderOpen, Trash2, Edit3 } from "lucide-react"
+import { Mic, Upload, Play, Sparkles, Loader2, Save, FolderOpen, Trash2, Edit3, Square } from "lucide-react"
 import { extractSpeechScriptWithGemini, generateSpeakingCoachFeedback } from "@/app/actions/words"
 import { cn } from "@/lib/utils"
 
@@ -31,9 +31,19 @@ export function ScriptTrainer({ accent, profileName }: ScriptTrainerProps) {
   const [ttsVoice, setTtsVoice] = useState<string>("en-US-AnaNeural")
   
   const [isAnalyzingImage, setIsAnalyzingImage] = useState(false)
+  
+  // TTS 재생 상태 및 참조
+  const [isPlayingTTS, setIsPlayingTTS] = useState(false)
+  const audioRef = useRef<HTMLAudioElement | null>(null)
+  const ttsSessionId = useRef<number>(0)
+  
+  // 마이크 연속 인식 및 채점 상태 관리
   const [isRecording, setIsRecording] = useState(false)
   const [isMicReady, setIsMicReady] = useState(false)
-  const [isPlayingTTS, setIsPlayingTTS] = useState(false)
+  const [isProcessingResult, setIsProcessingResult] = useState(false)
+  const [recognizerInstance, setRecognizerInstance] = useState<any>(null)
+  const assessmentDataRef = useRef({ totalScore: 0, totalAcc: 0, totalFluency: 0, totalComp: 0, totalProsody: 0, chunks: 0, allWords: [] as any[] })
+
   const [pronResult, setPronResult] = useState<any>(null)
   const [aiCoachMsg, setAiCoachMsg] = useState<string | null>(null)
   const [isCoachLoading, setIsCoachLoading] = useState(false)
@@ -41,16 +51,21 @@ export function ScriptTrainer({ accent, profileName }: ScriptTrainerProps) {
   const fileInputRef = useRef<HTMLInputElement>(null)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
 
-  // 💾 컴포넌트 로드 시 저장된 대본과 설정 불러오기
   useEffect(() => {
     const saved = localStorage.getItem(`saved_scripts_${profileName}`)
     if (saved) setSavedScripts(JSON.parse(saved))
-    
     const savedVoice = localStorage.getItem("script_tts_voice")
     if (savedVoice) setTtsVoice(savedVoice)
-  }, [profileName])
+    
+    // 컴포넌트 종료 시 켜져있는 마이크 및 오디오 끄기
+    return () => {
+      if (recognizerInstance) {
+        try { recognizerInstance.close() } catch(e) {}
+      }
+      stopTTS()
+    }
+  }, [profileName, recognizerInstance])
 
-  // 📝 텍스트 창 크기 자동 조절 (스크롤 없애기)
   useEffect(() => {
     if (textareaRef.current) {
       textareaRef.current.style.height = "auto"
@@ -58,7 +73,6 @@ export function ScriptTrainer({ accent, profileName }: ScriptTrainerProps) {
     }
   }, [script])
 
-  // 💾 대본 보관함에 저장하기
   const saveCurrentScript = () => {
     if (!script.trim()) return alert("저장할 대본 내용이 없습니다.")
     const title = prompt("이 대본의 제목을 입력하세요 (예: 학원 발표 숙제)")
@@ -77,7 +91,6 @@ export function ScriptTrainer({ accent, profileName }: ScriptTrainerProps) {
     alert(`[${title}] 대본이 보관함에 저장되었습니다! 📁`)
   }
 
-  // 🗑️ 대본 삭제
   const deleteScript = (id: string) => {
     if (!confirm("이 대본을 삭제할까요?")) return
     const updated = savedScripts.filter(s => s.id !== id)
@@ -85,7 +98,6 @@ export function ScriptTrainer({ accent, profileName }: ScriptTrainerProps) {
     localStorage.setItem(`saved_scripts_${profileName}`, JSON.stringify(updated))
   }
 
-  // 📂 보관함에서 대본 불러오기
   const loadScript = (targetScript: string) => {
     setScript(targetScript)
     setPronResult(null)
@@ -93,7 +105,6 @@ export function ScriptTrainer({ accent, profileName }: ScriptTrainerProps) {
     setActiveTab("practice")
   }
 
-  // 브라우저 단에서 이미지 압축 (Vercel 용량 초과 에러 방지)
   const compressImage = (file: File): Promise<string> => {
     return new Promise((resolve, reject) => {
       const reader = new FileReader()
@@ -122,11 +133,9 @@ export function ScriptTrainer({ accent, profileName }: ScriptTrainerProps) {
     })
   }
 
-  // 📸 이미지 업로드 및 AI 대본 변환
   const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
     if (!file) return
-
     setIsAnalyzingImage(true)
     setScript("")
     setPronResult(null)
@@ -135,7 +144,6 @@ export function ScriptTrainer({ accent, profileName }: ScriptTrainerProps) {
     try {
       const base64String = await compressImage(file)
       const res = await extractSpeechScriptWithGemini(base64String, "image/jpeg")
-
       if (res.success && res.script) {
         setScript(res.script)
       } else {
@@ -149,14 +157,34 @@ export function ScriptTrainer({ accent, profileName }: ScriptTrainerProps) {
     }
   }
 
-  // 🎧 고음질 Azure 원어민 낭독 듣기 (TTS)
+  // 💡 [핵심] TTS 즉시 멈춤 기능
+  const stopTTS = () => {
+    ttsSessionId.current += 1 // 진행 중인 AI 통신 무효화
+    if (audioRef.current) {
+      audioRef.current.pause()
+      audioRef.current.currentTime = 0
+      audioRef.current = null
+    }
+    if (typeof window !== "undefined" && "speechSynthesis" in window) {
+      window.speechSynthesis.cancel()
+    }
+    setIsPlayingTTS(false)
+  }
+
+  // 🎧 고음질 Azure 원어민 낭독 듣기 (재생 & 중지 통합)
   const playAzureTTS = async () => {
-    if (!script.trim() || isPlayingTTS) return
+    if (!script.trim()) return
+
+    // 💡 이미 재생 중이라면 중지
+    if (isPlayingTTS) {
+      stopTTS()
+      return
+    }
 
     try {
-      if (typeof window !== "undefined" && "speechSynthesis" in window) {
-        window.speechSynthesis.cancel()
-      }
+      stopTTS() // 시작 전 안전하게 초기화
+      setIsPlayingTTS(true)
+      const currentSession = ttsSessionId.current
 
       const sdk = await import("microsoft-cognitiveservices-speech-sdk")
       const key = process.env.NEXT_PUBLIC_AZURE_SPEECH_KEY
@@ -164,17 +192,15 @@ export function ScriptTrainer({ accent, profileName }: ScriptTrainerProps) {
 
       if (!key || !region) {
         alert("Azure TTS 설정이 없습니다.")
+        setIsPlayingTTS(false)
         return
       }
 
-      setIsPlayingTTS(true)
       const speechConfig = sdk.SpeechConfig.fromSubscription(key, region)
       speechConfig.speechSynthesisOutputFormat = sdk.SpeechSynthesisOutputFormat.Riff24Khz16BitMonoPcm
-
       const synthesizer = new sdk.SpeechSynthesizer(speechConfig, null)
       const safeText = script.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;")
       
-      // 쉐도잉하기 좋게 약간 천천히(-10%) 읽도록 설정
       const ssml = `
         <speak version="1.0" xmlns="http://www.w3.org/2001/10/synthesis" xml:lang="en-US">
           <voice name="${ttsVoice}">
@@ -186,12 +212,18 @@ export function ScriptTrainer({ accent, profileName }: ScriptTrainerProps) {
       synthesizer.speakSsmlAsync(
         ssml,
         (result) => {
+          // 콜백이 돌아왔는데 이미 중지 버튼을 누른 상태라면 취소
+          if (ttsSessionId.current !== currentSession) {
+            synthesizer.close()
+            return
+          }
+
           if (result.reason === sdk.ResultReason.SynthesizingAudioCompleted) {
             const blob = new Blob([result.audioData], { type: "audio/wav" })
             const url = URL.createObjectURL(blob)
-            const audio = new Audio(url)
-            audio.onended = () => setIsPlayingTTS(false)
-            audio.play().catch(() => setIsPlayingTTS(false))
+            audioRef.current = new Audio(url)
+            audioRef.current.onended = () => setIsPlayingTTS(false)
+            audioRef.current.play().catch(() => setIsPlayingTTS(false))
           } else {
             setIsPlayingTTS(false)
           }
@@ -199,7 +231,7 @@ export function ScriptTrainer({ accent, profileName }: ScriptTrainerProps) {
         },
         (err) => {
           console.error(err)
-          setIsPlayingTTS(false)
+          if (ttsSessionId.current === currentSession) setIsPlayingTTS(false)
           synthesizer.close()
         }
       )
@@ -209,14 +241,15 @@ export function ScriptTrainer({ accent, profileName }: ScriptTrainerProps) {
     }
   }
 
-  // 🗣️ Azure 음성 평가 (긴 호흡)
-  const startAssessment = async () => {
+  // 발표 시작하기 (무제한 대기)
+  const startContinuousAssessment = async () => {
     if (!script.trim()) return
 
     setIsRecording(true)
     setIsMicReady(false)
     setPronResult(null)
     setAiCoachMsg(null)
+    assessmentDataRef.current = { totalScore: 0, totalAcc: 0, totalFluency: 0, totalComp: 0, totalProsody: 0, chunks: 0, allWords: [] }
 
     try {
       const sdk = await import("microsoft-cognitiveservices-speech-sdk")
@@ -227,7 +260,6 @@ export function ScriptTrainer({ accent, profileName }: ScriptTrainerProps) {
 
       const speechConfig = sdk.SpeechConfig.fromSubscription(key, region)
       speechConfig.speechRecognitionLanguage = "en-US"
-      speechConfig.setProperty(sdk.PropertyId.SpeechServiceConnection_EndSilenceTimeoutMs, "3000")
 
       const audioConfig = sdk.AudioConfig.fromDefaultMicrophoneInput()
       const pronConfig = new sdk.PronunciationAssessmentConfig(
@@ -243,65 +275,86 @@ export function ScriptTrainer({ accent, profileName }: ScriptTrainerProps) {
 
       recognizer.sessionStarted = () => setIsMicReady(true)
 
-      recognizer.recognizeOnceAsync(
-        async (result) => {
-          if (result.reason === sdk.ResultReason.RecognizedSpeech) {
-            const pron = sdk.PronunciationAssessmentResult.fromResult(result)
-            const finalResult = {
-              score: pron.pronunciationScore,
-              accuracy: pron.accuracyScore,
-              fluency: pron.fluencyScore,
-              completeness: pron.completenessScore,
-              prosody: pron.prosodyScore || pron.pronunciationScore
-            }
-            setPronResult(finalResult)
+      recognizer.recognized = (s, e) => {
+        if (e.result.reason === sdk.ResultReason.RecognizedSpeech) {
+          const pron = sdk.PronunciationAssessmentResult.fromResult(e.result)
+          const data = assessmentDataRef.current
+          data.totalScore += pron.pronunciationScore
+          data.totalAcc += pron.accuracyScore
+          data.totalFluency += pron.fluencyScore
+          data.totalComp += pron.completenessScore
+          data.totalProsody += pron.prosodyScore || pron.pronunciationScore
+          data.chunks++
 
-            setIsCoachLoading(true)
-            const wordsDetail = pron.detailResult?.Words || []
-            const mappedWords = wordsDetail.map((w: any) => ({
-              text: w.Word,
-              score: w.PronunciationAssessment.AccuracyScore,
-              errorType: w.PronunciationAssessment.ErrorType,
-              phonemes: w.Phonemes?.map((p: any) => ({
-                phoneme: p.Phoneme,
-                score: p.PronunciationAssessment.AccuracyScore
-              })) || []
-            }))
-
-            const coachRes = await generateSpeakingCoachFeedback({
-              sentence: script,
-              childName: profileName,
-              pronResult: finalResult,
-              wordScores: mappedWords
-            })
-            setIsCoachLoading(false)
-
-            if (coachRes.success && coachRes.feedback) {
-              setAiCoachMsg(coachRes.feedback)
-            }
-          } else {
-             alert("목소리가 끊겼거나 너무 작았어요. 다시 한번 씩씩하게 읽어볼까요?")
-          }
-          recognizer.close()
-          setIsRecording(false)
-        },
-        (err) => {
-          console.error(err)
-          alert("마이크 연결에 문제가 발생했습니다.")
-          recognizer.close()
-          setIsRecording(false)
+          const wordsDetail = pron.detailResult?.Words || []
+          const mappedWords = wordsDetail.map((w: any) => ({
+            text: w.Word,
+            score: w.PronunciationAssessment.AccuracyScore,
+            errorType: w.PronunciationAssessment.ErrorType,
+            phonemes: w.Phonemes?.map((p: any) => ({
+              phoneme: p.Phoneme,
+              score: p.PronunciationAssessment.AccuracyScore
+            })) || []
+          }))
+          data.allWords = [...data.allWords, ...mappedWords]
         }
-      )
+      }
+
+      recognizer.startContinuousRecognitionAsync()
+      setRecognizerInstance(recognizer)
+
     } catch (error) {
       console.error(error)
       setIsRecording(false)
     }
   }
 
+  // 발표 끝내기 (수동 종료 및 최종 채점)
+  const stopContinuousAssessment = () => {
+    if (!recognizerInstance) return
+    
+    setIsRecording(false)
+    setIsProcessingResult(true) 
+
+    recognizerInstance.stopContinuousRecognitionAsync(async () => {
+      recognizerInstance.close()
+      setRecognizerInstance(null)
+
+      const data = assessmentDataRef.current
+      if (data.chunks > 0) {
+        const finalResult = {
+          score: data.totalScore / data.chunks,
+          accuracy: data.totalAcc / data.chunks,
+          fluency: data.totalFluency / data.chunks,
+          completeness: data.totalComp / data.chunks,
+          prosody: data.totalProsody / data.chunks
+        }
+        setPronResult(finalResult)
+        
+        setIsCoachLoading(true)
+        const coachRes = await generateSpeakingCoachFeedback({
+          sentence: script,
+          childName: profileName,
+          pronResult: finalResult,
+          wordScores: data.allWords
+        })
+        setIsCoachLoading(false)
+        setIsProcessingResult(false)
+
+        if (coachRes.success && coachRes.feedback) {
+          setAiCoachMsg(coachRes.feedback)
+        }
+      } else {
+        setIsProcessingResult(false)
+        alert("인식된 목소리가 없어요. 마이크를 켜고 씩씩하게 다시 읽어볼까요?")
+      }
+    })
+  }
+
   return (
     <div className="flex flex-col gap-5 w-full animate-in fade-in zoom-in-95 duration-300">
       
-      {/* 상단 탭 (새로 연습 vs 보관함) */}
+      {/* 상단 탭 */}
       <div className="flex bg-muted rounded-xl p-1">
         <button 
           onClick={() => setActiveTab("practice")}
@@ -319,7 +372,7 @@ export function ScriptTrainer({ accent, profileName }: ScriptTrainerProps) {
 
       {activeTab === "practice" && (
         <>
-          {/* 1. 학습지 사진 업로드 (대본이 없을 때만 크게 표시) */}
+          {/* 학습지 사진 업로드 */}
           {!script && (
             <div className="flex flex-col items-center justify-center rounded-3xl border-2 border-dashed border-border bg-card p-6 text-center shadow-sm animate-in zoom-in-95">
               <div className="mb-4 flex size-14 items-center justify-center rounded-2xl shadow-sm text-white" style={{ backgroundColor: accent }}>
@@ -341,10 +394,9 @@ export function ScriptTrainer({ accent, profileName }: ScriptTrainerProps) {
             </div>
           )}
 
-          {/* 2. 대본 편집 및 연습 영역 */}
+          {/* 대본 편집 및 연습 영역 */}
           <div className="flex flex-col gap-3 rounded-3xl border border-border bg-card p-4 sm:p-5 shadow-sm animate-in slide-in-from-bottom-4">
             
-            {/* 💡 헤더 및 컨트롤 버튼 영역 개선 */}
             <div className="flex flex-wrap items-center justify-between mb-1 gap-2">
               <span className="text-sm font-bold text-foreground flex items-center gap-1.5 shrink-0">
                 <Sparkles className="size-4" style={{ color: accent }}/> {script ? "대본 수정 및 연습" : "직접 대본 입력"}
@@ -360,14 +412,13 @@ export function ScriptTrainer({ accent, profileName }: ScriptTrainerProps) {
                   </button>
                 )}
                 {script && (
-                  <button onClick={() => { if(confirm("대본을 지울까요?")) setScript("") }} className="flex items-center text-xs font-bold px-2.5 py-1.5 rounded-full bg-muted text-muted-foreground hover:bg-red-50 hover:text-red-500 transition-colors">
+                  <button onClick={() => { if(confirm("대본을 지울까요?")) { stopTTS(); setScript(""); } }} className="flex items-center text-xs font-bold px-2.5 py-1.5 rounded-full bg-muted text-muted-foreground hover:bg-red-50 hover:text-red-500 transition-colors">
                     지우기
                   </button>
                 )}
               </div>
             </div>
             
-            {/* 💡 자동 크기 조절 텍스트 창 */}
             <textarea
               ref={textareaRef}
               value={script}
@@ -388,7 +439,8 @@ export function ScriptTrainer({ accent, profileName }: ScriptTrainerProps) {
                       setTtsVoice(e.target.value)
                       localStorage.setItem("script_tts_voice", e.target.value)
                     }}
-                    className="sm:flex-1 rounded-xl bg-muted border border-border px-3 py-3.5 text-sm font-bold text-muted-foreground outline-none transition-colors cursor-pointer"
+                    disabled={isPlayingTTS}
+                    className="sm:flex-1 rounded-xl bg-muted border border-border px-3 py-3.5 text-sm font-bold text-foreground outline-none transition-colors cursor-pointer disabled:opacity-50"
                   >
                     {TTS_VOICES.map((voice) => (
                       <option key={voice.id} value={voice.id}>{voice.label}</option>
@@ -397,31 +449,33 @@ export function ScriptTrainer({ accent, profileName }: ScriptTrainerProps) {
 
                   <button 
                     onClick={playAzureTTS}
-                    disabled={isPlayingTTS}
-                    className="flex sm:flex-1 items-center justify-center gap-2 font-bold px-4 py-3.5 rounded-xl shadow-md text-white transition-all hover:opacity-90 active:scale-95 disabled:opacity-50"
-                    style={{ backgroundColor: accent, textShadow: "0 1px 2px rgba(0,0,0,0.15)" }}
+                    disabled={isRecording || isProcessingResult || isAnalyzingImage}
+                    className={cn("flex sm:flex-1 items-center justify-center gap-2 font-bold px-4 py-3.5 rounded-xl shadow-md text-white transition-all hover:opacity-90 active:scale-95 disabled:opacity-50",
+                      isPlayingTTS ? "bg-slate-600 dark:bg-slate-500" : ""
+                    )}
+                    style={!isPlayingTTS ? { backgroundColor: accent, textShadow: "0 1px 2px rgba(0,0,0,0.15)" } : { textShadow: "0 1px 2px rgba(0,0,0,0.15)" }}
                   >
-                    {isPlayingTTS ? <Loader2 className="size-4 animate-spin" /> : <Play className="size-4" fill="currentColor" />}
-                    {isPlayingTTS ? "아나운서가 읽는 중..." : "AI 원어민 듣기"}
+                    {isPlayingTTS ? <Square className="size-4" fill="currentColor" /> : <Play className="size-4" fill="currentColor" />}
+                    {isPlayingTTS ? "듣기 멈춤" : "AI 원어민 듣기"}
                   </button>
                 </div>
 
-                {/* 💡 다크모드 하얀 버튼 버그 완전 해결! (bg-foreground 제거, 텍스트 그림자 추가) */}
                 <button
-                  onClick={startAssessment}
-                  disabled={isRecording || isPlayingTTS || isAnalyzingImage}
+                  onClick={isRecording && isMicReady ? stopContinuousAssessment : startContinuousAssessment}
+                  disabled={(isRecording && !isMicReady) || isPlayingTTS || isAnalyzingImage || isProcessingResult}
                   className={cn("flex w-full items-center justify-center gap-2 rounded-2xl py-4 text-[15px] font-black text-white shadow-md transition-all active:scale-[0.98]",
                     isRecording && !isMicReady ? "bg-amber-500 opacity-90" : 
-                    isRecording && isMicReady ? "bg-red-500 animate-pulse" : ""
+                    isRecording && isMicReady ? "bg-red-500 animate-pulse" : 
+                    isProcessingResult ? "bg-indigo-500 opacity-90" : ""
                   )}
-                  style={!isRecording ? { backgroundColor: accent, textShadow: "0 1px 2px rgba(0,0,0,0.2)" } : undefined}
+                  style={(!isRecording && !isProcessingResult) ? { backgroundColor: accent, textShadow: "0 1px 2px rgba(0,0,0,0.2)" } : undefined}
                 >
-                  {isRecording && !isMicReady && <Loader2 className="size-4 animate-spin" />}
-                  {isRecording && isMicReady && <Mic className="size-4 animate-bounce" />}
-                  {!isRecording && <Mic className="size-4" />}
+                  {(isRecording && !isMicReady) || isProcessingResult ? <Loader2 className="size-4 animate-spin" /> : 
+                   isRecording && isMicReady ? <Square className="size-4" fill="currentColor" /> : <Mic className="size-4" />}
                   
                   {isRecording && !isMicReady ? "마이크 연결 중..." : 
-                   isRecording && isMicReady ? "🔴 대본을 보고 쭉 읽어주세요!" : 
+                   isRecording && isMicReady ? "다 읽었으면 여기를 눌러 완료하세요! ◼️" : 
+                   isProcessingResult ? "결과를 집계하고 있어요..." :
                    (pronResult ? "다시 발표하기" : "발표 시작하기!")}
                 </button>
 
@@ -478,7 +532,7 @@ export function ScriptTrainer({ accent, profileName }: ScriptTrainerProps) {
         </>
       )}
 
-      {/* 3. 보관함 탭 화면 */}
+      {/* 보관함 탭 화면 */}
       {activeTab === "archive" && (
         <div className="flex flex-col gap-3 animate-in slide-in-from-right-4">
           {savedScripts.length === 0 ? (
