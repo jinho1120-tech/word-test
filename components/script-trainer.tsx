@@ -1,7 +1,7 @@
 "use client"
 
-import React, { useState, useRef, useEffect } from "react"
-import { Mic, Upload, Play, Sparkles, Loader2, Save, FolderOpen, Trash2, Edit3, Square } from "lucide-react"
+import React, { useState, useRef, useEffect, useMemo } from "react"
+import { Mic, Upload, Play, Sparkles, Loader2, Save, FolderOpen, Trash2, Edit3, Square, Brain } from "lucide-react"
 import { extractSpeechScriptWithGemini, generateSpeakingCoachFeedback } from "@/app/actions/words"
 import { cn } from "@/lib/utils"
 
@@ -30,14 +30,15 @@ export function ScriptTrainer({ accent, profileName }: ScriptTrainerProps) {
   const [savedScripts, setSavedScripts] = useState<SavedScript[]>([])
   const [ttsVoice, setTtsVoice] = useState<string>("en-US-AnaNeural")
   
+  // 💡 암기 레벨 상태 (0: 전체, 1: 30%, 2: 70%, 3: 첫글자)
+  const [memoLevel, setMemoLevel] = useState<number>(0)
+  
   const [isAnalyzingImage, setIsAnalyzingImage] = useState(false)
   
-  // TTS 재생 상태 및 참조
   const [isPlayingTTS, setIsPlayingTTS] = useState(false)
   const audioRef = useRef<HTMLAudioElement | null>(null)
   const ttsSessionId = useRef<number>(0)
   
-  // 마이크 연속 인식 및 채점 상태 관리
   const [isRecording, setIsRecording] = useState(false)
   const [isMicReady, setIsMicReady] = useState(false)
   const [isProcessingResult, setIsProcessingResult] = useState(false)
@@ -57,7 +58,6 @@ export function ScriptTrainer({ accent, profileName }: ScriptTrainerProps) {
     const savedVoice = localStorage.getItem("script_tts_voice")
     if (savedVoice) setTtsVoice(savedVoice)
     
-    // 컴포넌트 종료 시 켜져있는 마이크 및 오디오 끄기
     return () => {
       if (recognizerInstance) {
         try { recognizerInstance.close() } catch(e) {}
@@ -67,11 +67,11 @@ export function ScriptTrainer({ accent, profileName }: ScriptTrainerProps) {
   }, [profileName, recognizerInstance])
 
   useEffect(() => {
-    if (textareaRef.current) {
+    if (memoLevel === 0 && textareaRef.current) {
       textareaRef.current.style.height = "auto"
       textareaRef.current.style.height = textareaRef.current.scrollHeight + "px"
     }
-  }, [script])
+  }, [script, memoLevel])
 
   const saveCurrentScript = () => {
     if (!script.trim()) return alert("저장할 대본 내용이 없습니다.")
@@ -102,6 +102,7 @@ export function ScriptTrainer({ accent, profileName }: ScriptTrainerProps) {
     setScript(targetScript)
     setPronResult(null)
     setAiCoachMsg(null)
+    setMemoLevel(0)
     setActiveTab("practice")
   }
 
@@ -140,6 +141,7 @@ export function ScriptTrainer({ accent, profileName }: ScriptTrainerProps) {
     setScript("")
     setPronResult(null)
     setAiCoachMsg(null)
+    setMemoLevel(0)
 
     try {
       const base64String = await compressImage(file)
@@ -157,9 +159,8 @@ export function ScriptTrainer({ accent, profileName }: ScriptTrainerProps) {
     }
   }
 
-  // 💡 [핵심] TTS 즉시 멈춤 기능
   const stopTTS = () => {
-    ttsSessionId.current += 1 // 진행 중인 AI 통신 무효화
+    ttsSessionId.current += 1 
     if (audioRef.current) {
       audioRef.current.pause()
       audioRef.current.currentTime = 0
@@ -171,18 +172,16 @@ export function ScriptTrainer({ accent, profileName }: ScriptTrainerProps) {
     setIsPlayingTTS(false)
   }
 
-  // 🎧 고음질 Azure 원어민 낭독 듣기 (재생 & 중지 통합)
   const playAzureTTS = async () => {
     if (!script.trim()) return
 
-    // 💡 이미 재생 중이라면 중지
     if (isPlayingTTS) {
       stopTTS()
       return
     }
 
     try {
-      stopTTS() // 시작 전 안전하게 초기화
+      stopTTS() 
       setIsPlayingTTS(true)
       const currentSession = ttsSessionId.current
 
@@ -212,7 +211,6 @@ export function ScriptTrainer({ accent, profileName }: ScriptTrainerProps) {
       synthesizer.speakSsmlAsync(
         ssml,
         (result) => {
-          // 콜백이 돌아왔는데 이미 중지 버튼을 누른 상태라면 취소
           if (ttsSessionId.current !== currentSession) {
             synthesizer.close()
             return
@@ -241,7 +239,6 @@ export function ScriptTrainer({ accent, profileName }: ScriptTrainerProps) {
     }
   }
 
-  // 발표 시작하기 (무제한 대기)
   const startContinuousAssessment = async () => {
     if (!script.trim()) return
 
@@ -309,7 +306,6 @@ export function ScriptTrainer({ accent, profileName }: ScriptTrainerProps) {
     }
   }
 
-  // 발표 끝내기 (수동 종료 및 최종 채점)
   const stopContinuousAssessment = () => {
     if (!recognizerInstance) return
     
@@ -350,6 +346,45 @@ export function ScriptTrainer({ accent, profileName }: ScriptTrainerProps) {
       }
     })
   }
+
+  // 💡 [핵심] 암기 레벨에 따라 단어를 가려주는 마법의 함수
+  const maskedScript = useMemo(() => {
+    if (memoLevel === 0 || !script) return script
+
+    return script.split(/(\s+)/).map((word, index) => {
+      if (!word.trim()) return word // 띄어쓰기는 그대로 유지
+      
+      const cleanWord = word.replace(/[^a-zA-Z]/g, '')
+      if (cleanWord.length <= 1 && memoLevel !== 3) return word // 너무 짧은 단어는 유지
+
+      // 위치(index)를 기반으로 고정된 패턴 생성 (화면이 깜빡여도 빈칸 위치 고정)
+      const rand = Math.abs(Math.sin(index * 123.456)) 
+      let mask = false
+
+      if (memoLevel === 1 && rand < 0.3) mask = true // 30% 숨김
+      else if (memoLevel === 2 && rand < 0.7) mask = true // 70% 숨김
+
+      if (memoLevel === 3) {
+        // 첫 글자만 남기고 싹 다 숨기기 (알파벳만 _로 변경)
+        let firstFound = false;
+        return word.split('').map(char => {
+          if (/[a-zA-Z]/.test(char)) {
+            if (!firstFound) {
+              firstFound = true;
+              return char;
+            }
+            return '_';
+          }
+          return char;
+        }).join('')
+      }
+
+      if (mask) {
+        return word.replace(/[a-zA-Z]/g, '_')
+      }
+      return word
+    }).join('')
+  }, [script, memoLevel])
 
   return (
     <div className="flex flex-col gap-5 w-full animate-in fade-in zoom-in-95 duration-300">
@@ -397,9 +432,9 @@ export function ScriptTrainer({ accent, profileName }: ScriptTrainerProps) {
           {/* 대본 편집 및 연습 영역 */}
           <div className="flex flex-col gap-3 rounded-3xl border border-border bg-card p-4 sm:p-5 shadow-sm animate-in slide-in-from-bottom-4">
             
-            <div className="flex flex-wrap items-center justify-between mb-1 gap-2">
+            <div className="flex flex-wrap items-center justify-between mb-2 gap-2">
               <span className="text-sm font-bold text-foreground flex items-center gap-1.5 shrink-0">
-                <Sparkles className="size-4" style={{ color: accent }}/> {script ? "대본 수정 및 연습" : "직접 대본 입력"}
+                <Brain className="size-4" style={{ color: accent }}/> {script ? "대본 암기 훈련" : "직접 대본 입력"}
               </span>
               
               <div className="flex flex-wrap gap-1.5 shrink-0">
@@ -412,21 +447,54 @@ export function ScriptTrainer({ accent, profileName }: ScriptTrainerProps) {
                   </button>
                 )}
                 {script && (
-                  <button onClick={() => { if(confirm("대본을 지울까요?")) { stopTTS(); setScript(""); } }} className="flex items-center text-xs font-bold px-2.5 py-1.5 rounded-full bg-muted text-muted-foreground hover:bg-red-50 hover:text-red-500 transition-colors">
+                  <button onClick={() => { if(confirm("대본을 지울까요?")) { stopTTS(); setScript(""); setMemoLevel(0); } }} className="flex items-center text-xs font-bold px-2.5 py-1.5 rounded-full bg-muted text-muted-foreground hover:bg-red-50 hover:text-red-500 transition-colors">
                     지우기
                   </button>
                 )}
               </div>
             </div>
+
+            {/* 💡 암기 레벨 컨트롤러 */}
+            {script && (
+              <div className="flex bg-muted/50 p-1 rounded-xl mb-1 border border-border/50">
+                {[
+                  { id: 0, label: "Lv.1\n전체보기" },
+                  { id: 1, label: "Lv.2\n빈칸 30%" },
+                  { id: 2, label: "Lv.3\n빈칸 70%" },
+                  { id: 3, label: "Lv.4\n첫 글자만" },
+                ].map(lvl => (
+                  <button
+                    key={lvl.id}
+                    onClick={() => setMemoLevel(lvl.id)}
+                    className={cn(
+                      "flex-1 text-[11px] sm:text-[12px] font-bold py-1.5 sm:py-2 rounded-lg transition-all whitespace-pre-wrap leading-tight", 
+                      memoLevel === lvl.id ? "bg-card text-foreground shadow-sm border border-border/50" : "text-muted-foreground hover:bg-muted"
+                    )}
+                    style={memoLevel === lvl.id ? { color: accent } : undefined}
+                  >
+                    {lvl.label}
+                  </button>
+                ))}
+              </div>
+            )}
             
-            <textarea
-              ref={textareaRef}
-              value={script}
-              onChange={(e) => setScript(e.target.value)}
-              className="w-full min-h-[120px] resize-none overflow-hidden rounded-xl border-2 border-muted bg-background p-4 text-[16px] sm:text-[17px] font-medium leading-relaxed text-foreground outline-none focus:border-transparent focus:ring-2 transition-shadow shadow-inner placeholder:text-muted-foreground/50"
-              style={{ '--tw-ring-color': accent } as any}
-              placeholder="여기를 터치해서 대본을 직접 쓰거나 자유롭게 수정할 수 있습니다! ✍️"
-            />
+            {/* 💡 레벨 0일 때는 수정 가능한 textarea, 레벨 1 이상일 때는 가려진 텍스트(div) 표시 */}
+            {memoLevel === 0 ? (
+              <textarea
+                ref={textareaRef}
+                value={script}
+                onChange={(e) => setScript(e.target.value)}
+                className="w-full min-h-[120px] resize-none overflow-hidden rounded-xl border-2 border-muted bg-background p-4 text-[16px] sm:text-[17px] font-medium leading-relaxed text-foreground outline-none focus:border-transparent focus:ring-2 transition-shadow shadow-inner placeholder:text-muted-foreground/50"
+                style={{ '--tw-ring-color': accent } as any}
+                placeholder="여기를 터치해서 대본을 직접 쓰거나 자유롭게 수정할 수 있습니다! ✍️"
+              />
+            ) : (
+              <div 
+                className="w-full min-h-[120px] rounded-xl border-2 border-transparent bg-muted/30 p-4 text-[16px] sm:text-[17px] font-medium leading-relaxed text-foreground shadow-inner whitespace-pre-wrap select-none"
+              >
+                {maskedScript}
+              </div>
+            )}
 
             {script && (
               <div className="mt-2 flex flex-col gap-4 animate-in slide-in-from-bottom-2">
