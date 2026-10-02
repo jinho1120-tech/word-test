@@ -227,7 +227,6 @@ export async function generateContextQuiz(words: { word: string, meaning: string
     let promptText = "";
 
     if (quizType === "speaking") {
-      // 💡 [클로드 피드백 반영] 하이픈, 끊어읽기, 대명사 대문자 처리 규칙 수정
       promptText = `
       너는 한국의 초등학생을 위한 친절하고 다정한 영어 선생님이야.
       다음 제공된 영어 단어들을 사용해서, 아이들이 쉐도잉(Shadowing) 훈련을 할 수 있는 쉽고 자연스러운 영어 예문을 딱 1개씩 만들어줘.
@@ -299,7 +298,6 @@ export async function generateContextQuiz(words: { word: string, meaning: string
       `.trim();
     }
 
-    // 💡 [클로드 피드백 반영] 가이드 규칙의 정확도를 위해 temperature를 0.3으로 낮춤 (speaking일 때)
     const temp = quizType === "speaking" ? 0.3 : 0.9;
 
     const response = await fetch(endpoint, {
@@ -333,11 +331,13 @@ export async function generateContextQuiz(words: { word: string, meaning: string
   }
 }
 
+// 💡 [업그레이드] 아이가 실제로 뱉은 말(actualSpoken)을 받아서 비교해주는 코칭
 export async function generateSpeakingCoachFeedback(data: {
   sentence: string;
   childName: string;
   pronResult: { score: number; accuracy: number; fluency: number; completeness: number; prosody: number };
   wordScores: { text: string; score: number; errorType?: string; phonemes: { phoneme: string; score: number }[] }[];
+  actualSpoken?: string;
 }) {
   try {
     const apiKey = process.env.GEMINI_API_KEY?.trim();
@@ -349,7 +349,7 @@ export async function generateSpeakingCoachFeedback(data: {
       .filter(w => w.score < 80 || w.errorType === "Omission" || w.phonemes.some(p => p.score < 70))
       .map(w => {
         const badPhonemes = w.phonemes.filter(p => p.score < 70).map(p => p.phoneme).join(", ");
-        return `- 단어: "${w.text}" (점수: ${Math.round(w.score)}점, 상태: ${w.errorType || "발음미흡"}${badPhonemes ? `, 미흡한 발음기호: [${badPhonemes}]` : ""})`;
+        return `- 단어: "${w.text}" (상태: ${w.errorType || "발음미흡"}${badPhonemes ? `, 미흡한 발음기호: [${badPhonemes}]` : ""})`;
       })
       .join("\n");
 
@@ -357,42 +357,39 @@ export async function generateSpeakingCoachFeedback(data: {
 
     let wordRule = "";
     if (lowAccuracyWords.trim()) {
-      wordRule = "3. [주의가 필요한 단어] 중 1개의 발음 팁(입모양 등)을 쉽게 알려줘.";
+      wordRule = "4. [주의가 필요한 단어] 중 1개의 발음 팁(입모양 등)을 쉽게 알려줘.";
     } else {
-      wordRule = "3. 모든 단어의 발음이 훌륭하므로, 특정 단어의 발음을 고치라는 지적이나 팁은 **절대로** 쓰지 마!";
+      wordRule = "4. 단어의 발음이 모두 훌륭하므로, 특정 단어의 발음을 고치라는 지적이나 팁은 절대로 쓰지 마!";
     }
 
     let prosodyRule = "";
-    let perfectExample = "";
-
     if (needsProsodyTip) {
-      prosodyRule = `4. **[핵심 억양/리듬 팁]** 유창성이나 억양 점수가 낮으므로 화면의 스피커(원어민 목소리)를 듣고 '멜로디와 리듬'을 흉내내도록 유도해줘.`;
-      perfectExample = `"예온아, 87점 정말 잘했어! 👏 ${lowAccuracyWords.trim() ? "'careful'은 입술을 살짝 깨물며 발음해보고, " : ""}스피커 버튼을 눌러서 원어민 선생님의 멜로디를 노래하듯 똑같이 흉내내볼까? 🎶"`;
+      prosodyRule = `5. 유창성이나 억양 점수가 낮으므로 화면의 스피커(원어민 목소리)를 듣고 '멜로디와 리듬'을 흉내내도록 짧게 유도해줘.`;
     } else {
-      prosodyRule = `4. **[핵심 억양/리듬 팁]** 유창성과 억양 점수가 이미 훌륭해! **따라서 리듬, 멜로디, 억양, 스피커 버튼 흉내내기에 대한 조언은 절대로 포함하지 마.** 오직 단어 발음 팁 하나만 주고 아주 깔끔하게 끝내.`;
-      perfectExample = `"예온아, 완벽해! 👏 발음부터 억양까지 원어민 같아, 정말 대단해! ✨"`;
+      prosodyRule = `5. 유창성과 억양 점수가 이미 훌륭하므로 억양/리듬에 대한 지적이나 팁은 생략해.`;
     }
 
     const promptText = `
 너는 한국의 초등학생('${data.childName}')을 다정하게 지도하는 1:1 영어 선생님이야.
-아이가 방금 읽은 문장의 평가 데이터를 바탕으로, 보완할 점을 **핵심만 아주 짧고 간결하게** 작성해줘.
+아이가 방금 발표한 문장의 평가 데이터를 바탕으로, 보완할 점을 **핵심만 아주 짧고 간결하게** 작성해줘.
 
-[원문]
+[원래 읽어야 할 정답 문장]
 "${data.sentence}"
 
+[아이가 실제로 마이크에 말한 문장]
+"${data.actualSpoken || data.sentence}"
+
 [평가 데이터]
-- 종합점수: ${Math.round(data.pronResult.score)}점 (정확도: ${Math.round(data.pronResult.accuracy)}, 유창성: ${Math.round(data.pronResult.fluency)}, 억양: ${Math.round(data.pronResult.prosody)})
+- 종합점수: ${Math.round(data.pronResult.score)}점
 ${lowAccuracyWords ? `\n[주의가 필요한 단어들]\n${lowAccuracyWords}` : "\n[모든 단어 발음 훌륭함]"}
 
 [작성 규칙 (매우 중요)]
-1. 반드시 1~2문장(최대 3줄 이내)으로 아주 짧고 명확하게 작성할 것! (불필요한 부연 설명 금지)
+1. 반드시 1~3문장 이내로 아주 짧고 명확하게 작성할 것! (불필요한 부연 설명 금지)
 2. 첫 시작은 아이 이름(${data.childName})을 부르며 점수나 잘한 점을 짧게 칭찬해줘.
+3. [암기 피드백]: 만약 [정답 문장]과 [실제로 말한 문장]이 다르다면(단어를 빼먹었거나 다른 단어로 말했다면), "원래는 '~'인데, '~'라고 말했네? 다음엔 정확하게 외워서 말해보자!"라고 다정하게 짚어줘. (만약 완벽하게 똑같이 말했다면 "문장도 완벽하게 외웠어!"라고 폭풍 칭찬해줘.)
 ${wordRule}
 ${prosodyRule}
-5. 다정하고 친근한 이모지를 사용해.
-
-[완벽한 대답 예시]
-${perfectExample}
+6. 다정하고 친근한 이모지를 사용해.
     `.trim();
 
     const response = await fetch(endpoint, {
@@ -502,7 +499,6 @@ ${script}
   }
 }
 
-// 💡 [보안] 클라이언트(브라우저)에 API 키를 노출하지 않고 안전하게 일회용 토큰 발급
 export async function getAzureSpeechToken() {
   try {
     const key = process.env.AZURE_SPEECH_KEY || process.env.NEXT_PUBLIC_AZURE_SPEECH_KEY;
