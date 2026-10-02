@@ -416,7 +416,6 @@ export function ScriptTrainer({ accent, profileName }: ScriptTrainerProps) {
       setActualSpokenText(actualSpoken);
 
       if (isDictationMode) {
-        // 💡 [암기 모드]: 코칭 호출 없이 즉시 점수만 표시!
         if (!actualSpoken.trim()) {
           setIsProcessingResult(false)
           setUserAudioUrl(null)
@@ -444,18 +443,17 @@ export function ScriptTrainer({ accent, profileName }: ScriptTrainerProps) {
         };
         setPronResult(finalResult);
 
-        if (finalResult.score >= 80) {
+        // 💡 75점으로 합격 기준 완화
+        if (finalResult.score >= 75) {
           const colors = [accent, '#fbbf24'];
           confetti({ particleCount: 50, angle: 60, spread: 55, origin: { x: 0 }, colors });
           confetti({ particleCount: 50, angle: 120, spread: 55, origin: { x: 1 }, colors });
         }
         
-        // 💡 AI 코칭 생략! (에러 방지 & 속도 극대화)
         setAiCoachMsg(null); 
         setIsProcessingResult(false);
 
       } else {
-        // 💡 [발음 모드]: 기존처럼 발음/억양 점수 계산 + AI 코칭 제공
         if (data.chunks > 0) {
           const finalResult = {
             score: data.totalScore / data.chunks,
@@ -478,7 +476,7 @@ export function ScriptTrainer({ accent, profileName }: ScriptTrainerProps) {
             childName: profileName,
             pronResult: finalResult,
             wordScores: data.allWords,
-            actualSpoken: "" // 발음 모드에서는 암기 피드백 불필요
+            actualSpoken: "" 
           })
           setIsCoachLoading(false)
           setIsProcessingResult(false)
@@ -534,6 +532,9 @@ export function ScriptTrainer({ accent, profileName }: ScriptTrainerProps) {
       return word
     }).join('')
   }, [script, memoLevel, maskSeed])
+
+  // 💡 모드별 합격 기준 컷
+  const passScore = (trainingMode === "interpret" || (trainingMode === "step" && isComboMemorizePhase)) ? 75 : 80;
 
   return (
     <div className="flex flex-col gap-5 w-full animate-in fade-in zoom-in-95 duration-300">
@@ -678,7 +679,8 @@ export function ScriptTrainer({ accent, profileName }: ScriptTrainerProps) {
                   {isRecording && !isMicReady ? "마이크 연결 중..." : isRecording && isMicReady ? "다 읽었으면 여기를 눌러 완료하세요! ◼" : isProcessingResult ? "결과를 집계하고 있어요..." : (pronResult ? "다시 발표하기" : "발표 시작하기!")}
                 </button>
 
-                {pronResult && pronResult.score >= 80 && trainingMode !== "full" && (
+                {/* 💡 합격 기준 passScore(75 또는 80)를 적용하여 분기 처리 */}
+                {pronResult && pronResult.score >= passScore && trainingMode !== "full" && (
                   <div className="mt-1 w-full animate-in slide-in-from-bottom-2">
                     {(trainingMode === "step" && !isComboMemorizePhase) ? (
                       <button onClick={handleComboNext} className="w-full py-4 bg-amber-500 text-white font-black rounded-2xl shadow-md hover:bg-amber-600 transition-colors flex items-center justify-center gap-2">
@@ -701,9 +703,10 @@ export function ScriptTrainer({ accent, profileName }: ScriptTrainerProps) {
                               setUserAudioUrl(null);
                               setActualSpokenText(null);
                             }}
-                            className="w-full py-3.5 bg-foreground text-background font-bold rounded-2xl shadow-sm hover:opacity-90 transition-all flex items-center justify-center gap-2"
+                            className="w-full py-3 bg-foreground text-background text-sm font-bold rounded-2xl shadow-sm hover:opacity-90 transition-all flex items-center justify-center gap-1.5 px-2"
                           >
-                            🔥 마지막 도전! 영어 없이 [동시통역]으로 전체 정복!
+                            {/* 💡 텍스트 줄바꿈 방지: 크기를 줄이고 한 줄로 표현 */}
+                            🔥 마지막 도전! 영어 없이 [동시통역] 모드 정복!
                           </button>
                         )}
 
@@ -747,7 +750,7 @@ export function ScriptTrainer({ accent, profileName }: ScriptTrainerProps) {
                     
                     <p className="text-[15px] font-black text-foreground mb-4 text-center">
                       {(trainingMode === "interpret" || (trainingMode === "step" && isComboMemorizePhase))
-                        ? (pronResult.score >= 90 ? "✨ 완벽하게 암기했어요!" : pronResult.score >= 80 ? "👏 거의 다 외웠어요!" : pronResult.score >= 60 ? "👍 좋아요! 단어를 조금 더 떠올려 볼까요?" : "💪 긴장했나요? 천천히 다시 외워봐요!")
+                        ? (pronResult.score >= 90 ? "✨ 완벽하게 암기했어요!" : pronResult.score >= 75 ? "👏 거의 다 외웠어요!" : pronResult.score >= 60 ? "👍 좋아요! 단어를 조금 더 떠올려 볼까요?" : "💪 긴장했나요? 천천히 다시 외워봐요!")
                         : (pronResult.score >= 90 ? "✨ 아나운서 같아요! 완벽한 발표입니다!" : pronResult.score >= 80 ? "👏 아주 훌륭한 발표였어요!" : pronResult.score >= 60 ? "👍 좋아요! 자신감 있게 한 번만 더 연습해볼까요?" : "💪 긴장했나요? 심호흡하고 천천히 다시 해봐요!")
                       }
                     </p>
@@ -756,7 +759,6 @@ export function ScriptTrainer({ accent, profileName }: ScriptTrainerProps) {
                       <button onClick={playUserAudio} className="w-full mb-4 flex items-center justify-center gap-2 rounded-xl py-3 font-bold text-[13px] shadow-sm transition-transform hover:opacity-80 active:scale-95 animate-in fade-in border border-transparent" style={{ color: accent, backgroundColor: accent + '1A', borderColor: accent + '33' }}><Headphones className="size-5" /> 내 {trainingMode === "full" ? "전체 발표" : "문장"} 다시 듣기</button>
                     )}
                     
-                    {/* 💡 발음 평가 모드일 때만 AI 코칭을 띄워줌 */}
                     {!(trainingMode === "interpret" || (trainingMode === "step" && isComboMemorizePhase)) && (isCoachLoading || aiCoachMsg) && (
                       <div className="w-full rounded-xl p-3.5 border shadow-inner text-center" style={{ backgroundColor: accent + '1A', borderColor: accent + '33' }}>
                          <p className="text-[11px] font-bold mb-1.5 flex items-center justify-center gap-1.5" style={{ color: accent }}><Sparkles className="size-3.5 animate-spin" /> AI 선생님의 코칭</p>
