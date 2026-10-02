@@ -36,6 +36,9 @@ export function ScriptTrainer({ accent, profileName }: ScriptTrainerProps) {
   
   const [isComboMemorizePhase, setIsComboMemorizePhase] = useState<boolean>(false)
   
+  // 💡 메타인지 훈련: 스스로 칠하는 형광펜 상태 추가
+  const [selfHighlights, setSelfHighlights] = useState<Set<number>>(new Set())
+  
   const [maskSeed, setMaskSeed] = useState<number>(Math.random())
   const [stepIndex, setStepIndex] = useState(0)
   const [koTranslations, setKoTranslations] = useState<string[]>([])
@@ -88,11 +91,11 @@ export function ScriptTrainer({ accent, profileName }: ScriptTrainerProps) {
   }, [profileName, recognizerInstance])
 
   useEffect(() => {
-    if (trainingMode === "full" && memoLevel === 0 && textareaRef.current) {
+    if (trainingMode === "full" && memoLevel === 0 && textareaRef.current && !pronResult && !isRecording && !isProcessingResult) {
       textareaRef.current.style.height = "auto"
       textareaRef.current.style.height = textareaRef.current.scrollHeight + "px"
     }
-  }, [script, memoLevel, trainingMode])
+  }, [script, memoLevel, trainingMode, pronResult, isRecording, isProcessingResult])
 
   useEffect(() => {
     setKoTranslations([])
@@ -102,6 +105,7 @@ export function ScriptTrainer({ accent, profileName }: ScriptTrainerProps) {
     setActualSpokenText(null)
     setIsComboMemorizePhase(false)
     setMaskSeed(Math.random())
+    setSelfHighlights(new Set()) // 스크립트 바뀌면 형광펜 초기화
   }, [script])
 
   const saveCurrentScript = () => {
@@ -137,6 +141,7 @@ export function ScriptTrainer({ accent, profileName }: ScriptTrainerProps) {
     setUserAudioUrl(null)
     setActualSpokenText(null)
     setIsComboMemorizePhase(false)
+    setSelfHighlights(new Set())
     setActiveTab("practice")
   }
 
@@ -148,6 +153,7 @@ export function ScriptTrainer({ accent, profileName }: ScriptTrainerProps) {
     setUserAudioUrl(null)
     setActualSpokenText(null)
     setAiCoachMsg(null)
+    setSelfHighlights(new Set())
     stopTTS()
 
     if ((mode === "step" || mode === "interpret") && koTranslations.length === 0) {
@@ -197,6 +203,7 @@ export function ScriptTrainer({ accent, profileName }: ScriptTrainerProps) {
     setUserAudioUrl(null)
     setActualSpokenText(null)
     setIsComboMemorizePhase(false)
+    setSelfHighlights(new Set())
 
     try {
       const base64String = await compressImage(file)
@@ -297,6 +304,7 @@ export function ScriptTrainer({ accent, profileName }: ScriptTrainerProps) {
     setAiCoachMsg(null)
     setUserAudioUrl(null)
     setActualSpokenText(null)
+    setSelfHighlights(new Set()) // 새로운 녹음 시 형광펜 초기화
     audioChunksRef.current = []
     assessmentDataRef.current = { totalScore: 0, totalAcc: 0, totalFluency: 0, totalComp: 0, totalProsody: 0, chunks: 0, allWords: [], recognizedTexts: [] }
 
@@ -443,7 +451,6 @@ export function ScriptTrainer({ accent, profileName }: ScriptTrainerProps) {
         };
         setPronResult(finalResult);
 
-        // 💡 75점으로 합격 기준 완화
         if (finalResult.score >= 75) {
           const colors = [accent, '#fbbf24'];
           confetti({ particleCount: 50, angle: 60, spread: 55, origin: { x: 0 }, colors });
@@ -496,6 +503,7 @@ export function ScriptTrainer({ accent, profileName }: ScriptTrainerProps) {
     setUserAudioUrl(null); 
     setActualSpokenText(null); 
     setAiCoachMsg(null);
+    setSelfHighlights(new Set());
     
     if (!isComboMemorizePhase) {
       setIsComboMemorizePhase(true);
@@ -503,6 +511,16 @@ export function ScriptTrainer({ accent, profileName }: ScriptTrainerProps) {
       setIsComboMemorizePhase(false);
       setStepIndex(i => i + 1);
     }
+  }
+
+  // 💡 형광펜 토글 함수
+  const toggleHighlight = (index: number) => {
+    setSelfHighlights(prev => {
+      const next = new Set(prev)
+      if (next.has(index)) next.delete(index)
+      else next.add(index)
+      return next
+    })
   }
 
   const maskedScript = useMemo(() => {
@@ -533,7 +551,6 @@ export function ScriptTrainer({ accent, profileName }: ScriptTrainerProps) {
     }).join('')
   }, [script, memoLevel, maskSeed])
 
-  // 💡 모드별 합격 기준 컷
   const passScore = (trainingMode === "interpret" || (trainingMode === "step" && isComboMemorizePhase)) ? 75 : 80;
 
   return (
@@ -572,7 +589,7 @@ export function ScriptTrainer({ accent, profileName }: ScriptTrainerProps) {
               <div className="flex flex-wrap gap-1.5 shrink-0">
                 <button onClick={() => setActiveTab("archive")} className="flex items-center gap-1 text-xs font-bold px-2.5 py-1.5 rounded-full bg-blue-50 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 hover:bg-blue-100 transition-colors"><FolderOpen className="size-3" /> 불러오기</button>
                 {script && <button onClick={saveCurrentScript} className="flex items-center gap-1 text-xs font-bold px-2.5 py-1.5 rounded-full bg-green-50 dark:bg-green-900/30 text-green-600 dark:text-green-400 hover:bg-green-100 transition-colors"><Save className="size-3" /> 저장</button>}
-                {script && <button onClick={() => { if(confirm("대본을 지울까요?")) { stopTTS(); setScript(""); setMemoLevel(0); setUserAudioUrl(null); setActualSpokenText(null); setIsComboMemorizePhase(false); } }} className="flex items-center text-xs font-bold px-2.5 py-1.5 rounded-full bg-muted text-muted-foreground hover:bg-red-50 hover:text-red-500 transition-colors">지우기</button>}
+                {script && <button onClick={() => { if(confirm("대본을 지울까요?")) { stopTTS(); setScript(""); setMemoLevel(0); setUserAudioUrl(null); setActualSpokenText(null); setIsComboMemorizePhase(false); setSelfHighlights(new Set()); } }} className="flex items-center text-xs font-bold px-2.5 py-1.5 rounded-full bg-muted text-muted-foreground hover:bg-red-50 hover:text-red-500 transition-colors">지우기</button>}
               </div>
             </div>
 
@@ -598,14 +615,43 @@ export function ScriptTrainer({ accent, profileName }: ScriptTrainerProps) {
                 )}
                 
                 {memoLevel === 0 ? (
-                  <div className="relative w-full">
-                    <textarea ref={textareaRef} value={script} onChange={(e) => setScript(e.target.value)} className="w-full min-h-[120px] resize-none overflow-hidden rounded-xl border-2 border-muted bg-background p-4 text-[16px] sm:text-[17px] font-medium leading-relaxed text-foreground outline-none focus:border-transparent focus:ring-2 transition-shadow shadow-inner placeholder:text-muted-foreground/50" style={{ '--tw-ring-color': accent } as any} placeholder="여기를 터치해서 대본을 직접 쓰거나 수정할 수 있습니다! ✍️" />
-                    {script && (
-                      <p className="absolute bottom-3 right-4 text-[10px] font-bold text-muted-foreground/70 bg-background/80 px-2 py-0.5 rounded-full pointer-events-none">
-                        👀 진짜 암기를 하려면 Lv.2 이상에 도전하세요!
-                      </p>
-                    )}
-                  </div>
+                  // 💡 [핵심] 결과가 없고 녹음 중이 아닐 때는 편집 가능한 textarea
+                  (!pronResult && !isRecording && !isProcessingResult) ? (
+                    <div className="relative w-full">
+                      <textarea ref={textareaRef} value={script} onChange={(e) => setScript(e.target.value)} className="w-full min-h-[120px] resize-none overflow-hidden rounded-xl border-2 border-muted bg-background p-4 text-[16px] sm:text-[17px] font-medium leading-relaxed text-foreground outline-none focus:border-transparent focus:ring-2 transition-shadow shadow-inner placeholder:text-muted-foreground/50" style={{ '--tw-ring-color': accent } as any} placeholder="여기를 터치해서 대본을 직접 쓰거나 수정할 수 있습니다! ✍️" />
+                      {script && (
+                        <p className="absolute bottom-3 right-4 text-[10px] font-bold text-muted-foreground/70 bg-background/80 px-2 py-0.5 rounded-full pointer-events-none">
+                          👀 진짜 암기를 하려면 Lv.2 이상에 도전하세요!
+                        </p>
+                      )}
+                    </div>
+                  ) : (
+                    // 💡 [핵심] 결과가 나왔을 때는 '스스로 긋는 형광펜(셀프 교정 모드)' 뷰어로 변환!
+                    <div className="w-full min-h-[120px] rounded-xl border-2 border-transparent bg-muted/30 p-4 text-[16px] sm:text-[17px] font-medium leading-relaxed text-foreground shadow-inner whitespace-pre-wrap select-none relative animate-in fade-in">
+                      {pronResult && (
+                        <div className="absolute -top-3 left-4 text-[10px] font-black text-amber-600 bg-amber-100 px-3 py-1 rounded-full border border-amber-300 shadow-sm animate-pulse z-10 flex items-center gap-1.5">
+                          <Edit3 className="size-3" /> 내 소리를 들으며 틀린 단어를 터치(형광펜) 해보세요!
+                        </div>
+                      )}
+                      {script.split(/(\s+)/).map((word, index) => {
+                        if (!word.trim()) return <span key={index}>{word}</span>;
+                        const isHighlighted = selfHighlights.has(index);
+                        return (
+                          <span
+                            key={index}
+                            onClick={() => pronResult && toggleHighlight(index)}
+                            className={cn(
+                              "transition-colors duration-200",
+                              pronResult ? "cursor-pointer hover:opacity-60" : "",
+                              isHighlighted ? "bg-yellow-300 dark:bg-yellow-500/60 text-black dark:text-white rounded px-1 font-bold shadow-sm" : ""
+                            )}
+                          >
+                            {word}
+                          </span>
+                        )
+                      })}
+                    </div>
+                  )
                 ) : (
                   <div className="w-full min-h-[120px] rounded-xl border-2 border-transparent bg-muted/30 p-4 text-[16px] sm:text-[17px] font-medium leading-relaxed text-foreground shadow-inner whitespace-pre-wrap select-none">{maskedScript}</div>
                 )}
@@ -679,7 +725,6 @@ export function ScriptTrainer({ accent, profileName }: ScriptTrainerProps) {
                   {isRecording && !isMicReady ? "마이크 연결 중..." : isRecording && isMicReady ? "다 읽었으면 여기를 눌러 완료하세요! ◼" : isProcessingResult ? "결과를 집계하고 있어요..." : (pronResult ? "다시 발표하기" : "발표 시작하기!")}
                 </button>
 
-                {/* 💡 합격 기준 passScore(75 또는 80)를 적용하여 분기 처리 */}
                 {pronResult && pronResult.score >= passScore && trainingMode !== "full" && (
                   <div className="mt-1 w-full animate-in slide-in-from-bottom-2">
                     {(trainingMode === "step" && !isComboMemorizePhase) ? (
@@ -705,7 +750,6 @@ export function ScriptTrainer({ accent, profileName }: ScriptTrainerProps) {
                             }}
                             className="w-full py-3 bg-foreground text-background text-sm font-bold rounded-2xl shadow-sm hover:opacity-90 transition-all flex items-center justify-center gap-1.5 px-2"
                           >
-                            {/* 💡 텍스트 줄바꿈 방지: 크기를 줄이고 한 줄로 표현 */}
                             🔥 마지막 도전! 영어 없이 [동시통역] 모드 정복!
                           </button>
                         )}
