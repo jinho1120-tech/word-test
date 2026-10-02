@@ -15,7 +15,7 @@ function assertProfile(profile: string): asserts profile is Profile {
   }
 }
 
-export async function getWords(profile: string, date: string): Promise {
+export async function getWords(profile: string, date: string): Promise<WordEntry[]> {
   assertProfile(profile)
   return db
     .select()
@@ -24,7 +24,7 @@ export async function getWords(profile: string, date: string): Promise {
     .orderBy(asc(wordEntries.createdAt))
 }
 
-export async function getWrongWords(profile: string): Promise {
+export async function getWrongWords(profile: string): Promise<WordEntry[]> {
   assertProfile(profile)
   return db
     .select()
@@ -189,9 +189,9 @@ export async function getActiveDates(profile: string): Promise<{ date: string, s
     .from(wordEntries)
     .where(eq(wordEntries.profile, profile))
 
-  const dateMap = new Map>()
+  const dateMap = new Map<string, Set<string>>()
   results.forEach((r) => {
-    if (!dateMap.has(r.date)) dateMap.set(r.date, new Set())
+    if (!dateMap.has(r.date)) dateMap.set(r.date, new Set<string>())
     if (r.subject) dateMap.get(r.date)!.add(r.subject)
   })
 
@@ -201,7 +201,7 @@ export async function getActiveDates(profile: string): Promise<{ date: string, s
   }))
 }
 
-export async function getLatestActiveDate(profile: string): Promise {
+export async function getLatestActiveDate(profile: string): Promise<string | null> {
   assertProfile(profile)
   const result = await db
     .select({ date: wordEntries.assignmentDate })
@@ -243,7 +243,7 @@ export async function generateContextQuiz(words: { word: string, meaning: string
          - 정답 단어가 포함된 완성된 문장을 바탕으로, 아래 [LINGUISTIC ANNOTATION RULES]를 엄격히 적용해 강세와 하이픈을 넣은 가이드를 작성해.
 
       3. 테마 및 난이도:
-         - 문장은 초등학교 수준의 쉬운 단어로 구성하되, 테마 [\({randomTheme}]에 어울리는 재미있는 상황으로 구성해. (Seed:\){randomSeed})
+         - 문장은 초등학교 수준의 쉬운 단어로 구성하되, 테마 [${randomTheme}]에 어울리는 재미있는 상황으로 구성해. (Seed: ${randomSeed})
 
       [LINGUISTIC ANNOTATION RULES (guide 전용 규칙)]
       1. STRESS & SYLLABLE SPLITTING: 
@@ -281,7 +281,7 @@ export async function generateContextQuiz(words: { word: string, meaning: string
       [규칙]
       1. 대상 단어가 들어갈 자리는 세 개의 밑줄("___")로 비워둘 것.
       2. 문장은 초등학교 수준의 쉬운 단어로 구성하되, 절대 뻔한 교과서 예문(예: I like apples)을 반복하지 마.
-      3. 이번 예문의 배경 테마는 [\({randomTheme}]야. 이 테마에 어울리는 상황을 상상해서 매번 완전히 새로운 문장을 만들어줘! (Seed:\){randomSeed})
+      3. 이번 예문의 배경 테마는 [${randomTheme}]야. 이 테마에 어울리는 상황을 상상해서 매번 완전히 새로운 문장을 만들어줘! (Seed: ${randomSeed})
       4. clue(해설) 항목에는 문장 속 어떤 단어가 힌트가 되어서 이 정답이 나오게 되었는지 아이들 눈높이에서 친절하게 설명해 줄 것.
       
       결과는 반드시 아래 JSON 배열 형식으로만 대답할 것 (다른 설명 절대 금지).
@@ -349,7 +349,7 @@ export async function generateSpeakingCoachFeedback(data: {
       .filter(w => w.score < 80 || w.errorType === "Omission" || w.phonemes.some(p => p.score < 70))
       .map(w => {
         const badPhonemes = w.phonemes.filter(p => p.score < 70).map(p => p.phoneme).join(", ");
-        return `- 단어: "\({w.text}" (점수:\){Math.round(w.score)}점, 상태: \({w.errorType || "발음미흡"}\){badPhonemes ? `, 미흡한 발음기호: [${badPhonemes}]` : ""})`;
+        return `- 단어: "${w.text}" (점수: ${Math.round(w.score)}점, 상태: ${w.errorType || "발음미흡"}${badPhonemes ? `, 미흡한 발음기호: [${badPhonemes}]` : ""})`;
       })
       .join("\n");
 
@@ -381,8 +381,8 @@ export async function generateSpeakingCoachFeedback(data: {
 "${data.sentence}"
 
 [평가 데이터]
-- 종합점수: \({Math.round(data.pronResult.score)}점 (정확도:\){Math.round(data.pronResult.accuracy)}, 유창성: \({Math.round(data.pronResult.fluency)}, 억양:\){Math.round(data.pronResult.prosody)})
-\({lowAccuracyWords ? `\n[주의가 필요한 단어들]\n\){lowAccuracyWords}` : "\n[모든 단어 발음 훌륭함]"}
+- 종합점수: ${Math.round(data.pronResult.score)}점 (정확도: ${Math.round(data.pronResult.accuracy)}, 유창성: ${Math.round(data.pronResult.fluency)}, 억양: ${Math.round(data.pronResult.prosody)})
+${lowAccuracyWords ? `\n[주의가 필요한 단어들]\n${lowAccuracyWords}` : "\n[모든 단어 발음 훌륭함]"}
 
 [작성 규칙 (매우 중요)]
 1. 반드시 1~2문장(최대 3줄 이내)으로 아주 짧고 명확하게 작성할 것! (불필요한 부연 설명 금지)
