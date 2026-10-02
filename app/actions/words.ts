@@ -15,7 +15,7 @@ function assertProfile(profile: string): asserts profile is Profile {
   }
 }
 
-export async function getWords(profile: string, date: string): Promise<WordEntry[]> {
+export async function getWords(profile: string, date: string): Promise {
   assertProfile(profile)
   return db
     .select()
@@ -24,7 +24,7 @@ export async function getWords(profile: string, date: string): Promise<WordEntry
     .orderBy(asc(wordEntries.createdAt))
 }
 
-export async function getWrongWords(profile: string): Promise<WordEntry[]> {
+export async function getWrongWords(profile: string): Promise {
   assertProfile(profile)
   return db
     .select()
@@ -189,7 +189,7 @@ export async function getActiveDates(profile: string): Promise<{ date: string, s
     .from(wordEntries)
     .where(eq(wordEntries.profile, profile))
 
-  const dateMap = new Map<string, Set<string>>()
+  const dateMap = new Map>()
   results.forEach((r) => {
     if (!dateMap.has(r.date)) dateMap.set(r.date, new Set())
     if (r.subject) dateMap.get(r.date)!.add(r.subject)
@@ -201,7 +201,7 @@ export async function getActiveDates(profile: string): Promise<{ date: string, s
   }))
 }
 
-export async function getLatestActiveDate(profile: string): Promise<string | null> {
+export async function getLatestActiveDate(profile: string): Promise {
   assertProfile(profile)
   const result = await db
     .select({ date: wordEntries.assignmentDate })
@@ -244,7 +244,7 @@ export async function generateContextQuiz(words: { word: string, meaning: string
          - 예시: "my FUNny SHAD-ow / TRIED to RUN a-WAY / from ME."
 
       3. 테마 및 난이도:
-         - 문장은 초등학교 수준의 쉬운 단어로 구성하되, 테마 [${randomTheme}]에 어울리는 재미있는 상황으로 구성해. (Seed: ${randomSeed})
+         - 문장은 초등학교 수준의 쉬운 단어로 구성하되, 테마 [\({randomTheme}]에 어울리는 재미있는 상황으로 구성해. (Seed:\){randomSeed})
 
       [LINGUISTIC ANNOTATION RULES (guide 전용 규칙)]
       1. STRESS & SYLLABLE SPLITTING: Capitalize stressed syllables/words. Lowercase unstressed ones. For words with 2+ syllables, capitalize ONLY the primary-stressed syllable.
@@ -294,7 +294,7 @@ export async function generateContextQuiz(words: { word: string, meaning: string
       [규칙]
       1. 대상 단어가 들어갈 자리는 세 개의 밑줄("___")로 비워둘 것.
       2. 문장은 초등학교 수준의 쉬운 단어로 구성하되, 절대 뻔한 교과서 예문(예: I like apples)을 반복하지 마.
-      3. 이번 예문의 배경 테마는 [${randomTheme}]야. 이 테마에 어울리는 상황을 상상해서 매번 완전히 새로운 문장을 만들어줘! (Seed: ${randomSeed})
+      3. 이번 예문의 배경 테마는 [\({randomTheme}]야. 이 테마에 어울리는 상황을 상상해서 매번 완전히 새로운 문장을 만들어줘! (Seed:\){randomSeed})
       4. clue(해설) 항목에는 문장 속 어떤 단어가 힌트가 되어서 이 정답이 나오게 되었는지 아이들 눈높이에서 친절하게 설명해 줄 것.
       
       결과는 반드시 아래 JSON 배열 형식으로만 대답할 것 (다른 설명 절대 금지).
@@ -349,7 +349,6 @@ export async function generateContextQuiz(words: { word: string, meaning: string
   }
 }
 
-// 💡 단어가 완벽할 때 쓸데없는 단어를 지적하는 환각 방지!
 export async function generateSpeakingCoachFeedback(data: {
   sentence: string;
   childName: string;
@@ -366,13 +365,12 @@ export async function generateSpeakingCoachFeedback(data: {
       .filter(w => w.score < 80 || w.errorType === "Omission" || w.phonemes.some(p => p.score < 70))
       .map(w => {
         const badPhonemes = w.phonemes.filter(p => p.score < 70).map(p => p.phoneme).join(", ");
-        return `- 단어: "${w.text}" (점수: ${Math.round(w.score)}점, 상태: ${w.errorType || "발음미흡"}${badPhonemes ? `, 미흡한 발음기호: [${badPhonemes}]` : ""})`;
+        return `- 단어: "\({w.text}" (점수:\){Math.round(w.score)}점, 상태: \({w.errorType || "발음미흡"}\){badPhonemes ? `, 미흡한 발음기호: [${badPhonemes}]` : ""})`;
       })
       .join("\n");
 
     const needsProsodyTip = data.pronResult.fluency < 80 || data.pronResult.prosody < 75;
 
-    // 💡 핵심: 주의가 필요한 단어가 있는지 없는지에 따라 룰을 동적으로 변경
     let wordRule = "";
     if (lowAccuracyWords.trim()) {
       wordRule = "3. [주의가 필요한 단어] 중 1개의 발음 팁(입모양 등)을 쉽게 알려줘.";
@@ -400,8 +398,8 @@ export async function generateSpeakingCoachFeedback(data: {
 "${data.sentence}"
 
 [평가 데이터]
-- 종합점수: ${Math.round(data.pronResult.score)}점 (정확도: ${Math.round(data.pronResult.accuracy)}, 유창성: ${Math.round(data.pronResult.fluency)}, 억양: ${Math.round(data.pronResult.prosody)})
-${lowAccuracyWords ? `\n[주의가 필요한 단어들]\n${lowAccuracyWords}` : "\n[모든 단어 발음 훌륭함]"}
+- 종합점수: \({Math.round(data.pronResult.score)}점 (정확도:\){Math.round(data.pronResult.accuracy)}, 유창성: \({Math.round(data.pronResult.fluency)}, 억양:\){Math.round(data.pronResult.prosody)})
+\({lowAccuracyWords ? `\n[주의가 필요한 단어들]\n\){lowAccuracyWords}` : "\n[모든 단어 발음 훌륭함]"}
 
 [작성 규칙 (매우 중요)]
 1. 반드시 1~2문장(최대 3줄 이내)으로 아주 짧고 명확하게 작성할 것! (불필요한 부연 설명 금지)
@@ -435,13 +433,11 @@ ${perfectExample}
   }
 }
 
-// 💡 [새로 추가됨] 학습지 이미지를 분석해서 '완성된 발표 대본'으로 만들어주는 AI 스캐너
 export async function extractSpeechScriptWithGemini(base64Image: string, mimeType: string) {
   try {
     const apiKey = process.env.GEMINI_API_KEY?.trim();
     if (!apiKey) return { success: false, error: "API 키가 등록되지 않았습니다." };
 
-    // 시각적 분석이 뛰어나고 속도가 빠른 3.5 Flash lite.모델 사용
     const endpoint = `https://generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash-lite:generateContent?key=${apiKey}`;
     
     const promptText = `
@@ -464,7 +460,7 @@ Hi, everyone! I'm thinking of joining an after-school club. My top two choices a
       cache: "no-store",
       body: JSON.stringify({
         contents: [{ parts: [{ text: promptText }, { inline_data: { mime_type: mimeType, data: base64Image } }] }],
-        generationConfig: { temperature: 0.2 } // 정확도를 위해 온도를 낮춤
+        generationConfig: { temperature: 0.2 } 
       })
     });
 
@@ -486,7 +482,7 @@ Hi, everyone! I'm thinking of joining an after-school club. My top two choices a
     return { success: false, error: `서버 에러: ${e.message}` };
   }
 }
-// 💡 [새로 추가됨] 대본을 한 문장씩 한국어로 번역해주는 AI 동시통역 번역기
+
 export async function translateScriptWithGemini(script: string) {
   try {
     const apiKey = process.env.GEMINI_API_KEY?.trim();
@@ -519,10 +515,4 @@ ${script}
     const data = await response.json();
     
     const text = data.candidates?.[0]?.content?.parts?.[0]?.text || "[]";
-    const cleanText = text.replace(/```json/g, "").replace(/```/g, "").trim();
-
-    return { success: true, translations: JSON.parse(cleanText) };
-  } catch (e: any) {
-    return { success: false, error: `서버 에러: ${e.message}` };
-  }
-}
+    const cleanText = text.replace(/```json/g, "").replace(/
