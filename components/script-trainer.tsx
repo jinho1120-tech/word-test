@@ -309,7 +309,6 @@ export function ScriptTrainer({ accent, profileName }: ScriptTrainerProps) {
 
       const speechConfig = sdk.SpeechConfig.fromAuthorizationToken(tokenRes.token, tokenRes.region)
       speechConfig.speechRecognitionLanguage = "en-US"
-      // 💡 암기(동시통역) 모드일 때는 오직 받아쓰기를 위해 딜레이를 조금 길게 줍니다.
       if (trainingMode === "interpret") {
         speechConfig.setProperty(sdk.PropertyId.SpeechServiceConnection_EndSilenceTimeoutMs, "2000");
       }
@@ -317,8 +316,6 @@ export function ScriptTrainer({ accent, profileName }: ScriptTrainerProps) {
       const audioConfig = sdk.AudioConfig.fromDefaultMicrophoneInput()
       const recognizer = new sdk.SpeechRecognizer(speechConfig, audioConfig)
 
-      // 💡 [핵심 하이브리드 분기 처리]
-      // 동시통역 모드가 아닐 때만 '발음 평가 엔진(편향 발생)'을 강제 적용합니다.
       if (trainingMode !== "interpret") {
         const pronConfig = new sdk.PronunciationAssessmentConfig(
           targetText,
@@ -336,13 +333,25 @@ export function ScriptTrainer({ accent, profileName }: ScriptTrainerProps) {
         if (e.result.reason === sdk.ResultReason.RecognizedSpeech) {
           const data = assessmentDataRef.current
           
-          if (e.result.text) {
-            data.recognizedTexts.push(e.result.text);
-          }
-
-          // 발음 평가 엔진이 켜져 있을 때만 점수 집계
-          if (trainingMode !== "interpret") {
+          if (trainingMode === "interpret") {
+            // 동시통역(순수 STT) 모드: 들리는 텍스트를 그대로 저장
+            if (e.result.text) {
+              data.recognizedTexts.push(e.result.text);
+            }
+          } else {
+            // 발음 평가 모드: 억지로 끼워맞춘 e.result.text를 버리고,
+            // 상세 분석 데이터에서 '안 읽은 단어(Omission)'를 뺀 진짜 뱉은 말만 재구성!
             const pron = sdk.PronunciationAssessmentResult.fromResult(e.result)
+            const wordsDetail = pron.detailResult?.Words || []
+            
+            const actualWords = wordsDetail
+              .filter((w: any) => w.PronunciationAssessment.ErrorType !== "Omission")
+              .map((w: any) => w.Word)
+            
+            if (actualWords.length > 0) {
+              data.recognizedTexts.push(actualWords.join(" "))
+            }
+
             data.totalScore += pron.pronunciationScore
             data.totalAcc += pron.accuracyScore
             data.totalFluency += pron.fluencyScore
@@ -350,7 +359,6 @@ export function ScriptTrainer({ accent, profileName }: ScriptTrainerProps) {
             data.totalProsody += pron.prosodyScore || pron.pronunciationScore
             data.chunks++
 
-            const wordsDetail = pron.detailResult?.Words || []
             const mappedWords = wordsDetail.map((w: any) => ({
               text: w.Word,
               score: w.PronunciationAssessment.AccuracyScore,
@@ -398,7 +406,6 @@ export function ScriptTrainer({ accent, profileName }: ScriptTrainerProps) {
       const actualSpoken = data.recognizedTexts.join(" ");
       setActualSpokenText(actualSpoken);
 
-      // 💡 [동시통역 모드]: 순수 STT 텍스트와 정답을 비교하여 암기 일치율만 계산
       if (trainingMode === "interpret") {
         if (!actualSpoken.trim()) {
           setIsProcessingResult(false)
@@ -419,7 +426,7 @@ export function ScriptTrainer({ accent, profileName }: ScriptTrainerProps) {
         const accuracyScore = targetWords.length > 0 ? Math.round((matchCount / targetWords.length) * 100) : 0;
         
         const finalResult = {
-          score: accuracyScore, // 종합 점수를 '암기 일치율'로 활용
+          score: accuracyScore, 
           accuracy: accuracyScore,
           fluency: 0,
           completeness: 0,
@@ -438,7 +445,7 @@ export function ScriptTrainer({ accent, profileName }: ScriptTrainerProps) {
           sentence: targetText,
           childName: profileName,
           pronResult: finalResult,
-          wordScores: [], // 발음 상세 평가는 생략
+          wordScores: [], 
           actualSpoken: actualSpoken
         })
         setIsCoachLoading(false)
@@ -446,7 +453,6 @@ export function ScriptTrainer({ accent, profileName }: ScriptTrainerProps) {
         if (coachRes.success && coachRes.feedback) { setAiCoachMsg(coachRes.feedback) }
 
       } else {
-        // 💡 [일반 연습 모드]: 기존처럼 발음/억양 점수 계산
         if (data.chunks > 0) {
           const finalResult = {
             score: data.totalScore / data.chunks,
@@ -678,13 +684,12 @@ export function ScriptTrainer({ accent, profileName }: ScriptTrainerProps) {
                             <p className="text-[14px] sm:text-[15px] font-bold text-foreground leading-snug">{trainingMode === "full" ? script : (sentences[stepIndex] || "")}</p>
                          </div>
                          <div>
-                            <span className="inline-block px-2.5 py-0.5 rounded-md text-[11px] font-black bg-orange-500/10 text-orange-600 mb-1">🗣️ AI가 들은 소리</span>
+                            <span className="inline-block px-2.5 py-0.5 rounded-md text-[11px] font-black bg-orange-500/10 text-orange-600 mb-1">🗣️ 내가 한 말</span>
                             <p className="text-[14px] sm:text-[15px] font-bold text-muted-foreground leading-snug">{actualSpokenText || "(잘 안 들렸어요)"}</p>
                          </div>
                       </div>
                     )}
 
-                    {/* 💡 [하이브리드 모드 UI] 동시통역 모드일 때는 '암기 일치율'만 보여줍니다! */}
                     {trainingMode === "interpret" ? (
                       <div className="flex flex-col items-center justify-center py-5 bg-card rounded-xl border border-border shadow-sm mb-4 w-full max-w-sm">
                          <span className="text-xs text-muted-foreground font-bold mb-1">문장 암기 일치율</span>
