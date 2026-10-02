@@ -282,7 +282,6 @@ export function ScriptTrainer({ accent, profileName }: ScriptTrainerProps) {
   }
 
   const playUserAudio = () => {
-    // 💡 [핵심 UX 개선] 듣기 버튼을 누를 때 무조건 Lv.1(전체보기)로 자동 전환
     if (trainingMode === "full") {
       setMemoLevel(0)
     }
@@ -474,7 +473,6 @@ export function ScriptTrainer({ accent, profileName }: ScriptTrainerProps) {
           }
           setPronResult(finalResult)
           
-          // 💡 [핵심 UX 개선] 녹음 평가가 끝나면 바로 정답을 확인할 수 있게 전체보기(Lv.1)로 전환
           if (trainingMode === "full") {
             setMemoLevel(0)
           }
@@ -506,6 +504,7 @@ export function ScriptTrainer({ accent, profileName }: ScriptTrainerProps) {
     })
   }
 
+  // 💡 [버그 수정] 동시통역 모드에서는 콤보 2단계를 안 거치고 바로 다음 스텝으로 직행!
   const handleComboNext = () => {
     setPronResult(null); 
     setUserAudioUrl(null); 
@@ -513,11 +512,17 @@ export function ScriptTrainer({ accent, profileName }: ScriptTrainerProps) {
     setAiCoachMsg(null);
     setSelfHighlights(new Set());
     
-    if (!isComboMemorizePhase) {
-      setIsComboMemorizePhase(true);
-    } else {
-      setIsComboMemorizePhase(false);
+    if (trainingMode === "interpret") {
+      // 동시통역 모드는 바로 다음 스텝으로 넘어갑니다.
       setStepIndex(i => i + 1);
+    } else {
+      // 한문장 콤보 모드 로직 (1단계 -> 2단계 -> 다음 스텝)
+      if (!isComboMemorizePhase) {
+        setIsComboMemorizePhase(true);
+      } else {
+        setIsComboMemorizePhase(false);
+        setStepIndex(i => i + 1);
+      }
     }
   }
 
