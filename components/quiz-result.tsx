@@ -5,7 +5,8 @@ import { Trophy, Gift, MessageCircle, RotateCcw, Mic } from "lucide-react"
 import { cn } from "@/lib/utils"
 import type { QuizWord } from "./word-quiz"
 
-const DAD_PHONE = "01032854101"
+// 💡 하드코딩 제거: Vercel 환경변수에서 아빠 전화번호를 불러옵니다.
+const DAD_PHONE = process.env.NEXT_PUBLIC_DAD_PHONE || ""
 
 interface Props {
   score: number
@@ -147,6 +148,10 @@ export function QuizResult({
                   </span>
                   <button 
                     onClick={() => {
+                      if (!DAD_PHONE) {
+                        alert("환경변수(NEXT_PUBLIC_DAD_PHONE)에 아빠 전화번호가 설정되지 않았습니다!");
+                        return;
+                      }
                       const msg = drawnCoupon.includes("꽝!") 
                         ? `아빠! 나 영단어 만점 받았는데 뽑기에서 꽝 나왔어 ㅠㅠ\n\n🎯 ${drawnCoupon}` 
                         : `아빠! 나 영단어 만점 받아서 쿠폰 뽑았어! 빨리 약속 지켜줘!\n\n🎁 당첨된 쿠폰: ${drawnCoupon}`
