@@ -331,7 +331,6 @@ export async function generateContextQuiz(words: { word: string, meaning: string
   }
 }
 
-// 💡 [업그레이드] 아이가 실제로 뱉은 말(actualSpoken)을 받아서 비교해주는 코칭
 export async function generateSpeakingCoachFeedback(data: {
   sentence: string;
   childName: string;
@@ -355,6 +354,17 @@ export async function generateSpeakingCoachFeedback(data: {
 
     const needsProsodyTip = data.pronResult.fluency < 80 || data.pronResult.prosody < 75;
 
+    // 💡 [개선] actualSpoken의 유무에 따라 '암기' 피드백을 동적으로 넣을지 뺄지 결정
+    let memorizationRule = "";
+    let spokenContext = "";
+    
+    if (data.actualSpoken) {
+      spokenContext = `\n[아이가 실제로 마이크에 말한 문장]\n"${data.actualSpoken}"`;
+      memorizationRule = `3. [암기 피드백]: 만약 [정답 문장]과 [실제로 말한 문장]이 다르다면(단어를 빼먹었거나 다른 단어로 말했다면), "원래는 '~'인데, '~'라고 말했네? 다음엔 정확하게 외워서 말해보자!"라고 다정하게 짚어줘. (만약 똑같이 말했다면 "문장도 완벽하게 외웠어!"라고 칭찬해줘.)`;
+    } else {
+      memorizationRule = `3. 오직 발음과 유창성에 대해서만 칭찬과 피드백을 제공해. (절대 "외워서 말해보자"거나 "암기"와 관련된 단어를 쓰지 마!)`;
+    }
+
     let wordRule = "";
     if (lowAccuracyWords.trim()) {
       wordRule = "4. [주의가 필요한 단어] 중 1개의 발음 팁(입모양 등)을 쉽게 알려줘.";
@@ -374,10 +384,7 @@ export async function generateSpeakingCoachFeedback(data: {
 아이가 방금 발표한 문장의 평가 데이터를 바탕으로, 보완할 점을 **핵심만 아주 짧고 간결하게** 작성해줘.
 
 [원래 읽어야 할 정답 문장]
-"${data.sentence}"
-
-[아이가 실제로 마이크에 말한 문장]
-"${data.actualSpoken || data.sentence}"
+"${data.sentence}"${spokenContext}
 
 [평가 데이터]
 - 종합점수: ${Math.round(data.pronResult.score)}점
@@ -386,7 +393,7 @@ ${lowAccuracyWords ? `\n[주의가 필요한 단어들]\n${lowAccuracyWords}` : 
 [작성 규칙 (매우 중요)]
 1. 반드시 1~3문장 이내로 아주 짧고 명확하게 작성할 것! (불필요한 부연 설명 금지)
 2. 첫 시작은 아이 이름(${data.childName})을 부르며 점수나 잘한 점을 짧게 칭찬해줘.
-3. [암기 피드백]: 만약 [정답 문장]과 [실제로 말한 문장]이 다르다면(단어를 빼먹었거나 다른 단어로 말했다면), "원래는 '~'인데, '~'라고 말했네? 다음엔 정확하게 외워서 말해보자!"라고 다정하게 짚어줘. (만약 완벽하게 똑같이 말했다면 "문장도 완벽하게 외웠어!"라고 폭풍 칭찬해줘.)
+${memorizationRule}
 ${wordRule}
 ${prosodyRule}
 6. 다정하고 친근한 이모지를 사용해.
