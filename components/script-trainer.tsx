@@ -31,11 +31,14 @@ export function ScriptTrainer({ accent, profileName }: ScriptTrainerProps) {
   const [savedScripts, setSavedScripts] = useState<SavedScript[]>([])
   const [ttsVoice, setTtsVoice] = useState<string>("en-US-AnaNeural")
   
+  // 💡 훈련 모드: full(전체), step(한문장 콤보), interpret(동시통역 최종보스)
   const [trainingMode, setTrainingMode] = useState<"full" | "step" | "interpret">("full")
   const [memoLevel, setMemoLevel] = useState<number>(0)
   
-  const [maskSeed, setMaskSeed] = useState<number>(Math.random())
+  // 💡 콤보 모드 진행 상태 관리 (false: 영어 보고 읽기 / true: 한글 보고 안 보고 읽기)
+  const [isComboMemorizePhase, setIsComboMemorizePhase] = useState<boolean>(false)
   
+  const [maskSeed, setMaskSeed] = useState<number>(Math.random())
   const [stepIndex, setStepIndex] = useState(0)
   const [koTranslations, setKoTranslations] = useState<string[]>([])
   const [isTranslating, setIsTranslating] = useState(false)
@@ -99,6 +102,7 @@ export function ScriptTrainer({ accent, profileName }: ScriptTrainerProps) {
     setTrainingMode("full")
     setUserAudioUrl(null)
     setActualSpokenText(null)
+    setIsComboMemorizePhase(false)
     setMaskSeed(Math.random())
   }, [script])
 
@@ -134,24 +138,29 @@ export function ScriptTrainer({ accent, profileName }: ScriptTrainerProps) {
     setTrainingMode("full")
     setUserAudioUrl(null)
     setActualSpokenText(null)
+    setIsComboMemorizePhase(false)
     setActiveTab("practice")
   }
 
   const handleModeChange = async (mode: "full" | "step" | "interpret") => {
     setTrainingMode(mode)
+    setStepIndex(0) // 💡 탭 변경 시 무조건 처음부터 시작 (스텝 공유 방지)
+    setIsComboMemorizePhase(false) // 💡 콤보 페이즈 리셋
     setPronResult(null)
     setUserAudioUrl(null)
     setActualSpokenText(null)
+    setAiCoachMsg(null)
     stopTTS()
 
-    if (mode === "interpret" && koTranslations.length === 0) {
+    // 스텝/동시통역 모드일 때 번역이 없다면 불러오기
+    if ((mode === "step" || mode === "interpret") && koTranslations.length === 0) {
       setIsTranslating(true)
       const res = await translateScriptWithGemini(script)
       if (res.success && res.translations) {
         setKoTranslations(res.translations)
       } else {
         alert("번역을 불러오지 못했습니다. 다시 시도해주세요.")
-        setTrainingMode("step")
+        setTrainingMode("full")
       }
       setIsTranslating(false)
     }
@@ -190,6 +199,7 @@ export function ScriptTrainer({ accent, profileName }: ScriptTrainerProps) {
     setAiCoachMsg(null)
     setUserAudioUrl(null)
     setActualSpokenText(null)
+    setIsComboMemorizePhase(false)
 
     try {
       const base64String = await compressImage(file)
@@ -309,14 +319,19 @@ export function ScriptTrainer({ accent, profileName }: ScriptTrainerProps) {
 
       const speechConfig = sdk.SpeechConfig.fromAuthorizationToken(tokenRes.token, tokenRes.region)
       speechConfig.speechRecognitionLanguage = "en-US"
-      if (trainingMode === "interpret") {
+      
+      // 💡 [개편] 동시통역(최종보스) 이거나 콤보모드의 두번째 단계(암기)일 때는 받아쓰기용 딜레이
+      const isDictationMode = trainingMode === "interpret" || (trainingMode === "step" && isComboMemorizePhase);
+
+      if (isDictationMode) {
         speechConfig.setProperty(sdk.PropertyId.SpeechServiceConnection_EndSilenceTimeoutMs, "2000");
       }
 
       const audioConfig = sdk.AudioConfig.fromDefaultMicrophoneInput()
       const recognizer = new sdk.SpeechRecognizer(speechConfig, audioConfig)
 
-      if (trainingMode !== "interpret") {
+      // 순수 받아쓰기 모드가 아닐 때만 발음 평가 엔진 켜기
+      if (!isDictationMode) {
         const pronConfig = new sdk.PronunciationAssessmentConfig(
           targetText,
           sdk.PronunciationAssessmentGradingSystem.HundredMark,
@@ -333,14 +348,13 @@ export function ScriptTrainer({ accent, profileName }: ScriptTrainerProps) {
         if (e.result.reason === sdk.ResultReason.RecognizedSpeech) {
           const data = assessmentDataRef.current
           
-          if (trainingMode === "interpret") {
-            // 동시통역(순수 STT) 모드: 들리는 텍스트를 그대로 저장
+          if (isDictationMode) {
+            // 받아쓰기 모드
             if (e.result.text) {
               data.recognizedTexts.push(e.result.text);
             }
           } else {
-            // 발음 평가 모드: 억지로 끼워맞춘 e.result.text를 버리고,
-            // 상세 분석 데이터에서 '안 읽은 단어(Omission)'를 뺀 진짜 뱉은 말만 재구성!
+            // 발음 평가 모드
             const pron = sdk.PronunciationAssessmentResult.fromResult(e.result)
             const wordsDetail = pron.detailResult?.Words || []
             
@@ -398,6 +412,8 @@ export function ScriptTrainer({ accent, profileName }: ScriptTrainerProps) {
       mediaStreamRef.current.getTracks().forEach(track => track.stop())
     }
 
+    const isDictationMode = trainingMode === "interpret" || (trainingMode === "step" && isComboMemorizePhase);
+
     recognizerInstance.stopContinuousRecognitionAsync(async () => {
       recognizerInstance.close()
       setRecognizerInstance(null)
@@ -406,7 +422,8 @@ export function ScriptTrainer({ accent, profileName }: ScriptTrainerProps) {
       const actualSpoken = data.recognizedTexts.join(" ");
       setActualSpokenText(actualSpoken);
 
-      if (trainingMode === "interpret") {
+      if (isDictationMode) {
+        // 💡 [동시통역 & 콤보 2단계 모드]: 암기 일치율 계산
         if (!actualSpoken.trim()) {
           setIsProcessingResult(false)
           setUserAudioUrl(null)
@@ -453,6 +470,7 @@ export function ScriptTrainer({ accent, profileName }: ScriptTrainerProps) {
         if (coachRes.success && coachRes.feedback) { setAiCoachMsg(coachRes.feedback) }
 
       } else {
+        // 💡 [일반 & 콤보 1단계 모드]: 발음/억양 점수 계산
         if (data.chunks > 0) {
           const finalResult = {
             score: data.totalScore / data.chunks,
@@ -488,6 +506,22 @@ export function ScriptTrainer({ accent, profileName }: ScriptTrainerProps) {
         }
       }
     })
+  }
+
+  // 💡 콤보 모드 완료 처리 함수
+  const handleComboNext = () => {
+    setPronResult(null); 
+    setUserAudioUrl(null); 
+    setActualSpokenText(null); 
+    
+    if (!isComboMemorizePhase) {
+      // 1단계(보고 읽기) 완료 -> 2단계(안 보고 읽기)로 전환
+      setIsComboMemorizePhase(true);
+    } else {
+      // 2단계(안 보고 읽기) 완료 -> 다음 문장으로!
+      setIsComboMemorizePhase(false);
+      setStepIndex(i => i + 1);
+    }
   }
 
   const maskedScript = useMemo(() => {
@@ -554,14 +588,14 @@ export function ScriptTrainer({ accent, profileName }: ScriptTrainerProps) {
               <div className="flex flex-wrap gap-1.5 shrink-0">
                 <button onClick={() => setActiveTab("archive")} className="flex items-center gap-1 text-xs font-bold px-2.5 py-1.5 rounded-full bg-blue-50 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 hover:bg-blue-100 transition-colors"><FolderOpen className="size-3" /> 불러오기</button>
                 {script && <button onClick={saveCurrentScript} className="flex items-center gap-1 text-xs font-bold px-2.5 py-1.5 rounded-full bg-green-50 dark:bg-green-900/30 text-green-600 dark:text-green-400 hover:bg-green-100 transition-colors"><Save className="size-3" /> 저장</button>}
-                {script && <button onClick={() => { if(confirm("대본을 지울까요?")) { stopTTS(); setScript(""); setMemoLevel(0); setUserAudioUrl(null); setActualSpokenText(null); } }} className="flex items-center text-xs font-bold px-2.5 py-1.5 rounded-full bg-muted text-muted-foreground hover:bg-red-50 hover:text-red-500 transition-colors">지우기</button>}
+                {script && <button onClick={() => { if(confirm("대본을 지울까요?")) { stopTTS(); setScript(""); setMemoLevel(0); setUserAudioUrl(null); setActualSpokenText(null); setIsComboMemorizePhase(false); } }} className="flex items-center text-xs font-bold px-2.5 py-1.5 rounded-full bg-muted text-muted-foreground hover:bg-red-50 hover:text-red-500 transition-colors">지우기</button>}
               </div>
             </div>
 
             {script && (
               <div className="flex bg-muted/50 p-1 rounded-xl mb-1 border border-border/50">
                 <button onClick={() => handleModeChange("full")} className={cn("flex-1 text-[12px] sm:text-[13px] font-bold py-2 rounded-lg transition-all", trainingMode === "full" ? "bg-card text-foreground shadow-sm border border-border/50" : "text-muted-foreground hover:bg-muted")}>📝 전체 대본</button>
-                <button onClick={() => handleModeChange("step")} className={cn("flex-1 text-[12px] sm:text-[13px] font-bold py-2 rounded-lg transition-all", trainingMode === "step" ? "bg-card text-foreground shadow-sm border border-border/50" : "text-muted-foreground hover:bg-muted")}>🎯 한 문장씩</button>
+                <button onClick={() => handleModeChange("step")} className={cn("flex-1 text-[12px] sm:text-[13px] font-bold py-2 rounded-lg transition-all", trainingMode === "step" ? "bg-card text-foreground shadow-sm border border-border/50" : "text-muted-foreground hover:bg-muted")}>🎯 한문장 콤보</button>
                 <button onClick={() => handleModeChange("interpret")} className={cn("flex-1 text-[12px] sm:text-[13px] font-bold py-2 rounded-lg transition-all", trainingMode === "interpret" ? "bg-card text-foreground shadow-sm border border-border/50" : "text-muted-foreground hover:bg-muted")}>🇰🇷 동시통역</button>
               </div>
             )}
@@ -593,33 +627,56 @@ export function ScriptTrainer({ accent, profileName }: ScriptTrainerProps) {
                 )}
               </>
             ) : (
+              // 한 문장씩 콤보 모드 & 동시통역 모드 통합 UI
               <div className="flex flex-col items-center justify-center py-8 px-4 sm:px-6 bg-card border-2 border-muted rounded-2xl shadow-sm relative overflow-hidden animate-in zoom-in-95 duration-200">
-                <div className="absolute top-3 left-3 text-[11px] font-black text-muted-foreground bg-muted px-2.5 py-1 rounded-md">
-                  STEP {stepIndex + 1} <span className="opacity-50">/ {sentences.length}</span>
+                <div className="absolute top-3 left-3 flex gap-2">
+                  <div className="text-[11px] font-black text-muted-foreground bg-muted px-2.5 py-1 rounded-md">
+                    STEP {stepIndex + 1} <span className="opacity-50">/ {sentences.length}</span>
+                  </div>
+                  {trainingMode === "step" && (
+                    <div className={cn("text-[11px] font-black px-2.5 py-1 rounded-md transition-colors", isComboMemorizePhase ? "bg-amber-100 text-amber-700" : "bg-blue-100 text-blue-700")}>
+                      {isComboMemorizePhase ? "🔒 안보고 외우기" : "👀 보고 읽기"}
+                    </div>
+                  )}
+                  {trainingMode === "interpret" && (
+                    <div className="text-[11px] font-black px-2.5 py-1 rounded-md bg-purple-100 text-purple-700">
+                      🏆 최종 보스 모드
+                    </div>
+                  )}
                 </div>
                 
-                <div className="mt-5 mb-4 min-h-[80px] flex items-center justify-center w-full">
-                  {trainingMode === "step" && (
+                <div className="mt-5 mb-4 min-h-[80px] flex flex-col items-center justify-center w-full gap-3">
+                  
+                  {/* 💡 영어가 보이는 조건: 콤보 모드의 1단계일 때만 */}
+                  {trainingMode === "step" && !isComboMemorizePhase && (
                     <h3 className="text-xl sm:text-2xl font-black text-foreground text-center leading-relaxed text-balance">
                       {sentences[stepIndex]}
                     </h3>
                   )}
-                  {trainingMode === "interpret" && (
+
+                  {/* 💡 한글이 보이는 조건: 콤보 모드 2단계이거나, 동시통역 모드일 때 */}
+                  {(trainingMode === "interpret" || (trainingMode === "step" && isComboMemorizePhase)) && (
                     isTranslating ? (
                       <div className="flex flex-col items-center gap-2">
                         <Loader2 className="size-6 animate-spin text-muted-foreground" />
                         <p className="text-xs font-bold text-muted-foreground">AI가 한글로 번역 중...</p>
                       </div>
                     ) : (
-                      <h3 className="text-xl sm:text-2xl font-black text-blue-600 dark:text-blue-400 text-center leading-relaxed text-balance">
-                        {koTranslations[stepIndex] || "번역을 불러올 수 없습니다."}
-                      </h3>
+                      <div className="flex flex-col items-center animate-in zoom-in-95">
+                        {trainingMode === "step" && isComboMemorizePhase && (
+                          <span className="text-xs font-bold text-amber-500 mb-2">방금 읽은 문장을 안 보고 말해보세요!</span>
+                        )}
+                        <h3 className="text-xl sm:text-2xl font-black text-blue-600 dark:text-blue-400 text-center leading-relaxed text-balance">
+                          {koTranslations[stepIndex] || "번역을 불러올 수 없습니다."}
+                        </h3>
+                      </div>
                     )
                   )}
+
                 </div>
                 
                 <div className="w-full h-1.5 bg-muted rounded-full overflow-hidden absolute bottom-0 left-0">
-                   <div className="h-full bg-green-500 transition-all duration-500" style={{ width: `${((stepIndex + 1) / sentences.length) * 100}%` }} />
+                   <div className="h-full transition-all duration-500" style={{ width: `${((stepIndex + 1) / sentences.length) * 100}%`, backgroundColor: trainingMode === "interpret" ? "#a855f7" : "#22c55e" }} />
                 </div>
               </div>
             )}
@@ -643,30 +700,38 @@ export function ScriptTrainer({ accent, profileName }: ScriptTrainerProps) {
 
                 {pronResult && pronResult.score >= 80 && trainingMode !== "full" && (
                   <div className="mt-1 w-full animate-in slide-in-from-bottom-2">
-                    {stepIndex < sentences.length - 1 ? (
-                      <button onClick={() => { setStepIndex(i => i + 1); setPronResult(null); setUserAudioUrl(null); setActualSpokenText(null); }} className="w-full py-4 bg-green-500 text-white font-black rounded-2xl shadow-md hover:bg-green-600 transition-colors flex items-center justify-center gap-2">
-                        🎉 통과! 다음 문장으로 ➔
+                    {/* 💡 콤보 모드 진행 처리에 따라 분기 */}
+                    {(trainingMode === "step" && !isComboMemorizePhase) ? (
+                      // 1단계 통과 -> 2단계 시작 버튼
+                      <button onClick={handleComboNext} className="w-full py-4 bg-amber-500 text-white font-black rounded-2xl shadow-md hover:bg-amber-600 transition-colors flex items-center justify-center gap-2">
+                        🔒 훌륭해요! 이제 안 보고 외워서 도전 ➔
+                      </button>
+                    ) : stepIndex < sentences.length - 1 ? (
+                      // 최종 완료가 아닌 평범한 다음 스텝
+                      <button onClick={handleComboNext} className="w-full py-4 bg-green-500 text-white font-black rounded-2xl shadow-md hover:bg-green-600 transition-colors flex items-center justify-center gap-2">
+                        🎉 완벽하게 외웠어요! 다음 문장으로 ➔
                       </button>
                     ) : (
+                      // 찐막(모든 스텝 완료)
                       <div className="flex flex-col gap-2.5">
                         <div className="w-full py-4 bg-indigo-500 text-white font-black rounded-2xl shadow-md text-center">🏆 모든 문장 클리어! 완벽하게 외웠어요!</div>
                         
-                        <button 
-                          onClick={() => {
-                            setTrainingMode("full");
-                            setMemoLevel(2);
-                            setStepIndex(0);
-                            setPronResult(null);
-                            setUserAudioUrl(null);
-                            setActualSpokenText(null);
-                            setMaskSeed(Math.random());
-                          }}
-                          className="w-full py-3.5 bg-foreground text-background font-bold rounded-2xl shadow-sm hover:opacity-90 transition-all flex items-center justify-center gap-2"
-                        >
-                          🔥 실전처럼 70% 가리고 전체 이어서 발표하기!
-                        </button>
+                        {trainingMode === "step" && (
+                          <button 
+                            onClick={() => {
+                              setTrainingMode("interpret"); // 최고 난이도로 자동 세팅
+                              setStepIndex(0);
+                              setPronResult(null);
+                              setUserAudioUrl(null);
+                              setActualSpokenText(null);
+                            }}
+                            className="w-full py-3.5 bg-foreground text-background font-bold rounded-2xl shadow-sm hover:opacity-90 transition-all flex items-center justify-center gap-2"
+                          >
+                            🔥 마지막 도전! 영어 없이 [동시통역]으로 전체 정복!
+                          </button>
+                        )}
 
-                        <button onClick={() => { setStepIndex(0); setPronResult(null); setUserAudioUrl(null); setActualSpokenText(null); }} className="w-full py-3 bg-background border-2 border-border text-foreground font-bold rounded-2xl shadow-sm hover:bg-muted transition-colors flex items-center justify-center gap-2">
+                        <button onClick={() => { setStepIndex(0); setPronResult(null); setUserAudioUrl(null); setActualSpokenText(null); setIsComboMemorizePhase(false); }} className="w-full py-3 bg-background border-2 border-border text-foreground font-bold rounded-2xl shadow-sm hover:bg-muted transition-colors flex items-center justify-center gap-2">
                           <RotateCcw className="size-4" /> 처음부터 다시 도전하기
                         </button>
                       </div>
@@ -677,11 +742,11 @@ export function ScriptTrainer({ accent, profileName }: ScriptTrainerProps) {
                 {pronResult && (
                   <div className="flex flex-col items-center animate-in zoom-in-95 duration-300 bg-muted/20 p-4 rounded-2xl border border-border/50">
                     
-                    {actualSpokenText && (trainingMode === "step" || trainingMode === "interpret") && (
+                    {actualSpokenText && (trainingMode === "interpret" || (trainingMode === "step" && isComboMemorizePhase)) && (
                       <div className="w-full mb-5 bg-card border border-border/70 rounded-xl p-3.5 shadow-sm text-left animate-in slide-in-from-bottom-2">
                          <div className="mb-3">
                             <span className="inline-block px-2.5 py-0.5 rounded-md text-[11px] font-black bg-blue-500/10 text-blue-600 mb-1">🎯 원래 문장</span>
-                            <p className="text-[14px] sm:text-[15px] font-bold text-foreground leading-snug">{trainingMode === "full" ? script : (sentences[stepIndex] || "")}</p>
+                            <p className="text-[14px] sm:text-[15px] font-bold text-foreground leading-snug">{sentences[stepIndex] || ""}</p>
                          </div>
                          <div>
                             <span className="inline-block px-2.5 py-0.5 rounded-md text-[11px] font-black bg-orange-500/10 text-orange-600 mb-1">🗣️ 내가 한 말</span>
@@ -690,7 +755,8 @@ export function ScriptTrainer({ accent, profileName }: ScriptTrainerProps) {
                       </div>
                     )}
 
-                    {trainingMode === "interpret" ? (
+                    {/* 💡 [하이브리드 모드 UI] 암기 페이즈일 때는 일치율만 보여줌 */}
+                    {(trainingMode === "interpret" || (trainingMode === "step" && isComboMemorizePhase)) ? (
                       <div className="flex flex-col items-center justify-center py-5 bg-card rounded-xl border border-border shadow-sm mb-4 w-full max-w-sm">
                          <span className="text-xs text-muted-foreground font-bold mb-1">문장 암기 일치율</span>
                          <span className="text-5xl font-black text-blue-500">{pronResult.score}%</span>
@@ -705,7 +771,7 @@ export function ScriptTrainer({ accent, profileName }: ScriptTrainerProps) {
                     )}
                     
                     <p className="text-[15px] font-black text-foreground mb-4 text-center">
-                      {trainingMode === "interpret" 
+                      {(trainingMode === "interpret" || (trainingMode === "step" && isComboMemorizePhase))
                         ? (pronResult.score >= 90 ? "✨ 완벽하게 암기했어요!" : pronResult.score >= 80 ? "👏 거의 다 외웠어요!" : pronResult.score >= 60 ? "👍 좋아요! 단어를 조금 더 떠올려 볼까요?" : "💪 긴장했나요? 천천히 다시 외워봐요!")
                         : (pronResult.score >= 90 ? "✨ 아나운서 같아요! 완벽한 발표입니다!" : pronResult.score >= 80 ? "👏 아주 훌륭한 발표였어요!" : pronResult.score >= 60 ? "👍 좋아요! 자신감 있게 한 번만 더 연습해볼까요?" : "💪 긴장했나요? 심호흡하고 천천히 다시 해봐요!")
                       }
