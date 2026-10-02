@@ -15,7 +15,7 @@ function assertProfile(profile: string): asserts profile is Profile {
   }
 }
 
-export async function getWords(profile: string, date: string): Promise<WordEntry[]> {
+export async function getWords(profile: string, date: string): Promise {
   assertProfile(profile)
   return db
     .select()
@@ -24,7 +24,7 @@ export async function getWords(profile: string, date: string): Promise<WordEntry
     .orderBy(asc(wordEntries.createdAt))
 }
 
-export async function getWrongWords(profile: string): Promise<WordEntry[]> {
+export async function getWrongWords(profile: string): Promise {
   assertProfile(profile)
   return db
     .select()
@@ -181,7 +181,6 @@ export async function scanImageWithGemini(base64Image: string, mimeType: string)
   }
 }
 
-// 💡 여기서 에러가 났었습니다! <string, Set<string>> 부분이 잘 보존되어 있는지 확인하세요!
 export async function getActiveDates(profile: string): Promise<{ date: string, subjects: string[] }[]> {
   assertProfile(profile)
   
@@ -190,9 +189,9 @@ export async function getActiveDates(profile: string): Promise<{ date: string, s
     .from(wordEntries)
     .where(eq(wordEntries.profile, profile))
 
-  const dateMap = new Map<string, Set<string>>()
+  const dateMap = new Map>()
   results.forEach((r) => {
-    if (!dateMap.has(r.date)) dateMap.set(r.date, new Set<string>())
+    if (!dateMap.has(r.date)) dateMap.set(r.date, new Set())
     if (r.subject) dateMap.get(r.date)!.add(r.subject)
   })
 
@@ -202,7 +201,7 @@ export async function getActiveDates(profile: string): Promise<{ date: string, s
   }))
 }
 
-export async function getLatestActiveDate(profile: string): Promise<string | null> {
+export async function getLatestActiveDate(profile: string): Promise {
   assertProfile(profile)
   const result = await db
     .select({ date: wordEntries.assignmentDate })
@@ -228,6 +227,7 @@ export async function generateContextQuiz(words: { word: string, meaning: string
     let promptText = "";
 
     if (quizType === "speaking") {
+      // 💡 [클로드 피드백 반영] 하이픈, 끊어읽기, 대명사 대문자 처리 규칙 수정
       promptText = `
       너는 한국의 초등학생을 위한 친절하고 다정한 영어 선생님이야.
       다음 제공된 영어 단어들을 사용해서, 아이들이 쉐도잉(Shadowing) 훈련을 할 수 있는 쉽고 자연스러운 영어 예문을 딱 1개씩 만들어줘.
@@ -238,29 +238,27 @@ export async function generateContextQuiz(words: { word: string, meaning: string
          - 문장 첫 글자는 무조건 대문자로 시작하고, 표준 스펠링 및 대소문자 규칙을 완벽하게 지켜!
          - 절대로 sentence 항목에 대문자 강세 표시(예: SHAD-ow, RUN)나 음절 구분 하이픈(a-way)을 넣지 마!
          - 오직 의미 단위 청크 구분을 위한 빗금("/") 기호만 포함해.
-         - 예시: "My funny shadow / tried to run away / from me."
 
       2. guide (하단 리듬 가이드):
          - 정답 단어가 포함된 완성된 문장을 바탕으로, 아래 [LINGUISTIC ANNOTATION RULES]를 엄격히 적용해 강세와 하이픈을 넣은 가이드를 작성해.
-         - 예시: "my FUNny SHAD-ow / TRIED to RUN a-WAY / from ME."
 
       3. 테마 및 난이도:
-         - 문장은 초등학교 수준의 쉬운 단어로 구성하되, 테마 [${randomTheme}]에 어울리는 재미있는 상황으로 구성해. (Seed: ${randomSeed})
+         - 문장은 초등학교 수준의 쉬운 단어로 구성하되, 테마 [\({randomTheme}]에 어울리는 재미있는 상황으로 구성해. (Seed:\){randomSeed})
 
       [LINGUISTIC ANNOTATION RULES (guide 전용 규칙)]
-      1. STRESS & SYLLABLE SPLITTING: Capitalize stressed syllables/words. Lowercase unstressed ones. For words with 2+ syllables, capitalize ONLY the primary-stressed syllable.
-      - Stress (capitalize) content words: nouns, main/lexical verbs, adjectives, adverbs, demonstratives, question words, negatives.
-      - Do NOT stress (lowercase) function words: articles, prepositions, pronouns, conjunctions, infinitive "to", the verb "be", and AFFIRMATIVE auxiliary/modal verbs.
-      - EXCEPTION 1: negative auxiliary contractions (isn't, doesn't, can't, etc.) ARE stressed.
-      - EXCEPTION 2 (stranded at clause end): a preposition or infinitive "to" left with no object/verb following it takes its full form and is stressed.
-      - EXCEPTION 3 (verb standing alone): an auxiliary/modal verb with no main verb following it is stressed.
-      - EXCEPTION 4: Articles ("a", "an", "the") must ALWAYS be lowercase.
-      - [CRITICAL HYPHENATION RULE]: If a word sounds like it stretches or has a trailing sound, heavily use hyphens to separate the strong and weak parts phonetically (e.g., hands -> HAN-ds, looked -> LOOK-ed, after -> AF-ter). 
+      1. STRESS & SYLLABLE SPLITTING: 
+      - 강세를 받는 단어/음절만 대문자로, 나머지는 소문자로 써.
+      - 2음절 이상 단어는 가장 강하게 발음되는 한 음절만 대문자로 써.
+      - 명사, 본동사, 형용사, 부사, 지시대명사, 의문사, 부정어는 강세를 받음 (대문자).
+      - 관사, 전치사, 인칭대명사(I, We, He, She, They 등 무조건 포함), 접속사, to부정사의 to, be동사, 긍정 조동사는 강세를 받지 않음 (소문자).
+      - 예외: 부정 조동사 축약형(isn't, doesn't 등)이나 문장 끝에 홀로 남은 전치사/조동사는 대문자.
+      - [CRITICAL HYPHENATION RULE]: 2음절 이상의 긴 단어가 늘어지게 발음될 때만 하이픈으로 음절을 구분해 (예: after -> AF-ter, body -> BO-dy). "hands"나 "looked"처럼 -s, -ed가 붙어도 1음절로 발음되는 단어는 절대로 하이픈으로 쪼개지 마! (hands -> HANDS, looked -> LOOKED)
 
       2. PAUSE (의미 단위 끊어 읽기 규칙 - sentence와 guide 공통 적용):
-      - 초등학생이 호흡하기 좋은 2~3개의 자연스러운 의미 덩어리(Thought Group)로 잘라줘.
-      - "Mom says /", "He thinks /", "I know /" 처럼 전달동사 바로 뒤는 무조건 끊어줄 것!
-      - 주어구와 동사를 어색하게 가르지 말고, [전달절 / 주어구 / 동사+부사구] 또는 [주어+동사 / 전치사구] 구조를 엄격히 지킬 것.
+      - 초등학생이 호흡하기 좋은 자연스러운 의미 덩어리(Thought Group)로 잘라줘.
+      - 5단어 이하의 짧은 문장은 굳이 자르지 않아도 돼.
+      - "Mom says /", "He thinks /", "I know /" 처럼 전달동사 바로 뒤는 끊어주는 게 좋아.
+      - 주어와 동사를 억지로 가르지 마.
 
       결과는 반드시 아래 JSON 배열 형식으로만 대답할 것.
       [
@@ -268,7 +266,7 @@ export async function generateContextQuiz(words: { word: string, meaning: string
           "word": "shadow", 
           "sentence": "My funny shadow / tried to run away / from me.", 
           "translation": "내 재미있는 그림자가 나에게서 도망치려고 했어요.",
-          "guide": "my FUNny SHAD-ow / TRIED to RUN a-WAY / from ME."
+          "guide": "my FUNny SHAD-ow / TRIED to RUN a-WAY / from me."
         }
       ]
 
@@ -283,7 +281,7 @@ export async function generateContextQuiz(words: { word: string, meaning: string
       [규칙]
       1. 대상 단어가 들어갈 자리는 세 개의 밑줄("___")로 비워둘 것.
       2. 문장은 초등학교 수준의 쉬운 단어로 구성하되, 절대 뻔한 교과서 예문(예: I like apples)을 반복하지 마.
-      3. 이번 예문의 배경 테마는 [${randomTheme}]야. 이 테마에 어울리는 상황을 상상해서 매번 완전히 새로운 문장을 만들어줘! (Seed: ${randomSeed})
+      3. 이번 예문의 배경 테마는 [\({randomTheme}]야. 이 테마에 어울리는 상황을 상상해서 매번 완전히 새로운 문장을 만들어줘! (Seed:\){randomSeed})
       4. clue(해설) 항목에는 문장 속 어떤 단어가 힌트가 되어서 이 정답이 나오게 되었는지 아이들 눈높이에서 친절하게 설명해 줄 것.
       
       결과는 반드시 아래 JSON 배열 형식으로만 대답할 것 (다른 설명 절대 금지).
@@ -301,13 +299,16 @@ export async function generateContextQuiz(words: { word: string, meaning: string
       `.trim();
     }
 
+    // 💡 [클로드 피드백 반영] 가이드 규칙의 정확도를 위해 temperature를 0.3으로 낮춤 (speaking일 때)
+    const temp = quizType === "speaking" ? 0.3 : 0.9;
+
     const response = await fetch(endpoint, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       cache: "no-store",
       body: JSON.stringify({
         contents: [{ parts: [{ text: promptText }] }],
-        generationConfig: { temperature: 0.9 }
+        generationConfig: { temperature: temp }
       })
     });
 
@@ -348,7 +349,7 @@ export async function generateSpeakingCoachFeedback(data: {
       .filter(w => w.score < 80 || w.errorType === "Omission" || w.phonemes.some(p => p.score < 70))
       .map(w => {
         const badPhonemes = w.phonemes.filter(p => p.score < 70).map(p => p.phoneme).join(", ");
-        return `- 단어: "${w.text}" (점수: ${Math.round(w.score)}점, 상태: ${w.errorType || "발음미흡"}${badPhonemes ? `, 미흡한 발음기호: [${badPhonemes}]` : ""})`;
+        return `- 단어: "\({w.text}" (점수:\){Math.round(w.score)}점, 상태: \({w.errorType || "발음미흡"}\){badPhonemes ? `, 미흡한 발음기호: [${badPhonemes}]` : ""})`;
       })
       .join("\n");
 
@@ -380,8 +381,8 @@ export async function generateSpeakingCoachFeedback(data: {
 "${data.sentence}"
 
 [평가 데이터]
-- 종합점수: ${Math.round(data.pronResult.score)}점 (정확도: ${Math.round(data.pronResult.accuracy)}, 유창성: ${Math.round(data.pronResult.fluency)}, 억양: ${Math.round(data.pronResult.prosody)})
-${lowAccuracyWords ? `\n[주의가 필요한 단어들]\n${lowAccuracyWords}` : "\n[모든 단어 발음 훌륭함]"}
+- 종합점수: \({Math.round(data.pronResult.score)}점 (정확도:\){Math.round(data.pronResult.accuracy)}, 유창성: \({Math.round(data.pronResult.fluency)}, 억양:\){Math.round(data.pronResult.prosody)})
+\({lowAccuracyWords ? `\n[주의가 필요한 단어들]\n\){lowAccuracyWords}` : "\n[모든 단어 발음 훌륭함]"}
 
 [작성 규칙 (매우 중요)]
 1. 반드시 1~2문장(최대 3줄 이내)으로 아주 짧고 명확하게 작성할 것! (불필요한 부연 설명 금지)
@@ -501,6 +502,7 @@ ${script}
   }
 }
 
+// 💡 [보안] 클라이언트(브라우저)에 API 키를 노출하지 않고 안전하게 일회용 토큰 발급
 export async function getAzureSpeechToken() {
   try {
     const key = process.env.AZURE_SPEECH_KEY || process.env.NEXT_PUBLIC_AZURE_SPEECH_KEY;
