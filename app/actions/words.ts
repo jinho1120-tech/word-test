@@ -354,13 +354,23 @@ export async function generateSpeakingCoachFeedback(data: {
 
     const needsProsodyTip = data.pronResult.fluency < 80 || data.pronResult.prosody < 75;
 
-    // 💡 [개선] actualSpoken의 유무에 따라 '암기' 피드백을 동적으로 넣을지 뺄지 결정
+    // 💡 [개선] 쉼표, 마침표, 대소문자 때문에 틀렸다고 오해하지 않도록 정규식으로 전처리한 값을 비교
+    const cleanSentence = data.sentence.replace(/[^a-zA-Z0-9\s]/g, '').toLowerCase().trim();
+    const cleanActualSpoken = data.actualSpoken ? data.actualSpoken.replace(/[^a-zA-Z0-9\s]/g, '').toLowerCase().trim() : "";
+    
     let memorizationRule = "";
     let spokenContext = "";
     
     if (data.actualSpoken) {
       spokenContext = `\n[아이가 실제로 마이크에 말한 문장]\n"${data.actualSpoken}"`;
-      memorizationRule = `3. [암기 피드백]: 만약 [정답 문장]과 [실제로 말한 문장]이 다르다면(단어를 빼먹었거나 다른 단어로 말했다면), "원래는 '~'인데, '~'라고 말했네? 다음엔 정확하게 외워서 말해보자!"라고 다정하게 짚어줘. (만약 똑같이 말했다면 "문장도 완벽하게 외웠어!"라고 칭찬해줘.)`;
+      
+      if (cleanSentence !== cleanActualSpoken) {
+        // 순수 텍스트끼리 다를 때만 "틀렸다"고 피드백
+        memorizationRule = `3. [암기 피드백]: [정답 문장]과 [실제로 말한 문장]의 단어가 다르거나 빠진 부분이 있어. "원래는 '~'인데, '~'라고 말했네? 다음엔 정확하게 외워서 말해보자!"라고 다정하게 짚어줘. (단, 쉼표나 마침표 같은 문장 부호 차이는 절대로 지적하지 마!)`;
+      } else {
+        // 대소문자, 기호만 다르고 글자가 같으면 완벽하게 읽은 것!
+        memorizationRule = `3. [암기 피드백]: 문장을 글자 하나 틀리지 않고 완벽하게 외워서 말했어! "문장도 완벽하게 다 외워서 말했네! 진짜 최고야!"라고 폭풍 칭찬해줘. (쉼표나 마침표, 대소문자 차이는 절대 지적 금지)`;
+      }
     } else {
       memorizationRule = `3. 오직 발음과 유창성에 대해서만 칭찬과 피드백을 제공해. (절대 "외워서 말해보자"거나 "암기"와 관련된 단어를 쓰지 마!)`;
     }
