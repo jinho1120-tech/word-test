@@ -35,8 +35,6 @@ export function ScriptTrainer({ accent, profileName }: ScriptTrainerProps) {
   const [memoLevel, setMemoLevel] = useState<number>(0)
   
   const [isComboMemorizePhase, setIsComboMemorizePhase] = useState<boolean>(false)
-  
-  // 💡 메타인지 훈련: 스스로 칠하는 형광펜 상태 추가
   const [selfHighlights, setSelfHighlights] = useState<Set<number>>(new Set())
   
   const [maskSeed, setMaskSeed] = useState<number>(Math.random())
@@ -105,7 +103,7 @@ export function ScriptTrainer({ accent, profileName }: ScriptTrainerProps) {
     setActualSpokenText(null)
     setIsComboMemorizePhase(false)
     setMaskSeed(Math.random())
-    setSelfHighlights(new Set()) // 스크립트 바뀌면 형광펜 초기화
+    setSelfHighlights(new Set())
   }, [script])
 
   const saveCurrentScript = () => {
@@ -284,6 +282,11 @@ export function ScriptTrainer({ accent, profileName }: ScriptTrainerProps) {
   }
 
   const playUserAudio = () => {
+    // 💡 [핵심 UX 개선] 듣기 버튼을 누를 때 무조건 Lv.1(전체보기)로 자동 전환
+    if (trainingMode === "full") {
+      setMemoLevel(0)
+    }
+    
     if (!userAudioUrl) return
     if (userAudioRef.current) {
       userAudioRef.current.pause()
@@ -304,7 +307,7 @@ export function ScriptTrainer({ accent, profileName }: ScriptTrainerProps) {
     setAiCoachMsg(null)
     setUserAudioUrl(null)
     setActualSpokenText(null)
-    setSelfHighlights(new Set()) // 새로운 녹음 시 형광펜 초기화
+    setSelfHighlights(new Set()) 
     audioChunksRef.current = []
     assessmentDataRef.current = { totalScore: 0, totalAcc: 0, totalFluency: 0, totalComp: 0, totalProsody: 0, chunks: 0, allWords: [], recognizedTexts: [] }
 
@@ -471,6 +474,11 @@ export function ScriptTrainer({ accent, profileName }: ScriptTrainerProps) {
           }
           setPronResult(finalResult)
           
+          // 💡 [핵심 UX 개선] 녹음 평가가 끝나면 바로 정답을 확인할 수 있게 전체보기(Lv.1)로 전환
+          if (trainingMode === "full") {
+            setMemoLevel(0)
+          }
+          
           if (finalResult.score >= 80 && trainingMode !== "full") {
             const colors = [accent, '#fbbf24'];
             confetti({ particleCount: 50, angle: 60, spread: 55, origin: { x: 0 }, colors });
@@ -513,7 +521,6 @@ export function ScriptTrainer({ accent, profileName }: ScriptTrainerProps) {
     }
   }
 
-  // 💡 형광펜 토글 함수
   const toggleHighlight = (index: number) => {
     setSelfHighlights(prev => {
       const next = new Set(prev)
@@ -615,7 +622,6 @@ export function ScriptTrainer({ accent, profileName }: ScriptTrainerProps) {
                 )}
                 
                 {memoLevel === 0 ? (
-                  // 💡 [핵심] 결과가 없고 녹음 중이 아닐 때는 편집 가능한 textarea
                   (!pronResult && !isRecording && !isProcessingResult) ? (
                     <div className="relative w-full">
                       <textarea ref={textareaRef} value={script} onChange={(e) => setScript(e.target.value)} className="w-full min-h-[120px] resize-none overflow-hidden rounded-xl border-2 border-muted bg-background p-4 text-[16px] sm:text-[17px] font-medium leading-relaxed text-foreground outline-none focus:border-transparent focus:ring-2 transition-shadow shadow-inner placeholder:text-muted-foreground/50" style={{ '--tw-ring-color': accent } as any} placeholder="여기를 터치해서 대본을 직접 쓰거나 수정할 수 있습니다! ✍️" />
@@ -626,7 +632,6 @@ export function ScriptTrainer({ accent, profileName }: ScriptTrainerProps) {
                       )}
                     </div>
                   ) : (
-                    // 💡 [핵심] 결과가 나왔을 때는 '스스로 긋는 형광펜(셀프 교정 모드)' 뷰어로 변환!
                     <div className="w-full min-h-[120px] rounded-xl border-2 border-transparent bg-muted/30 p-4 text-[16px] sm:text-[17px] font-medium leading-relaxed text-foreground shadow-inner whitespace-pre-wrap select-none relative animate-in fade-in">
                       {pronResult && (
                         <div className="absolute -top-3 left-4 text-[10px] font-black text-amber-600 bg-amber-100 px-3 py-1 rounded-full border border-amber-300 shadow-sm animate-pulse z-10 flex items-center gap-1.5">
