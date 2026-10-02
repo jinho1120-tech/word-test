@@ -59,7 +59,6 @@ export function ScriptTrainer({ accent, profileName }: ScriptTrainerProps) {
   const assessmentDataRef = useRef({ totalScore: 0, totalAcc: 0, totalFluency: 0, totalComp: 0, totalProsody: 0, chunks: 0, allWords: [] as any[], recognizedTexts: [] as string[] })
 
   const [userAudioUrl, setUserAudioUrl] = useState<string | null>(null)
-  // 💡 내가 뱉은 말을 화면에 띄우기 위한 상태
   const [actualSpokenText, setActualSpokenText] = useState<string | null>(null)
   
   const mediaStreamRef = useRef<MediaStream | null>(null)
@@ -310,46 +309,56 @@ export function ScriptTrainer({ accent, profileName }: ScriptTrainerProps) {
 
       const speechConfig = sdk.SpeechConfig.fromAuthorizationToken(tokenRes.token, tokenRes.region)
       speechConfig.speechRecognitionLanguage = "en-US"
+      // 💡 암기(동시통역) 모드일 때는 오직 받아쓰기를 위해 딜레이를 조금 길게 줍니다.
+      if (trainingMode === "interpret") {
+        speechConfig.setProperty(sdk.PropertyId.SpeechServiceConnection_EndSilenceTimeoutMs, "2000");
+      }
 
       const audioConfig = sdk.AudioConfig.fromDefaultMicrophoneInput()
-      const pronConfig = new sdk.PronunciationAssessmentConfig(
-        targetText,
-        sdk.PronunciationAssessmentGradingSystem.HundredMark,
-        sdk.PronunciationAssessmentGranularity.Phoneme,
-        true
-      )
-      pronConfig.enableProsodyAssessment = true
-
       const recognizer = new sdk.SpeechRecognizer(speechConfig, audioConfig)
-      pronConfig.applyTo(recognizer)
+
+      // 💡 [핵심 하이브리드 분기 처리]
+      // 동시통역 모드가 아닐 때만 '발음 평가 엔진(편향 발생)'을 강제 적용합니다.
+      if (trainingMode !== "interpret") {
+        const pronConfig = new sdk.PronunciationAssessmentConfig(
+          targetText,
+          sdk.PronunciationAssessmentGradingSystem.HundredMark,
+          sdk.PronunciationAssessmentGranularity.Phoneme,
+          true
+        )
+        pronConfig.enableProsodyAssessment = true
+        pronConfig.applyTo(recognizer)
+      }
 
       recognizer.sessionStarted = () => setIsMicReady(true)
 
       recognizer.recognized = (s, e) => {
         if (e.result.reason === sdk.ResultReason.RecognizedSpeech) {
-          const pron = sdk.PronunciationAssessmentResult.fromResult(e.result)
           const data = assessmentDataRef.current
           
-          // 💡 아이가 뱉은 말 기록하기
           if (e.result.text) {
             data.recognizedTexts.push(e.result.text);
           }
 
-          data.totalScore += pron.pronunciationScore
-          data.totalAcc += pron.accuracyScore
-          data.totalFluency += pron.fluencyScore
-          data.totalComp += pron.completenessScore
-          data.totalProsody += pron.prosodyScore || pron.pronunciationScore
-          data.chunks++
+          // 발음 평가 엔진이 켜져 있을 때만 점수 집계
+          if (trainingMode !== "interpret") {
+            const pron = sdk.PronunciationAssessmentResult.fromResult(e.result)
+            data.totalScore += pron.pronunciationScore
+            data.totalAcc += pron.accuracyScore
+            data.totalFluency += pron.fluencyScore
+            data.totalComp += pron.completenessScore
+            data.totalProsody += pron.prosodyScore || pron.pronunciationScore
+            data.chunks++
 
-          const wordsDetail = pron.detailResult?.Words || []
-          const mappedWords = wordsDetail.map((w: any) => ({
-            text: w.Word,
-            score: w.PronunciationAssessment.AccuracyScore,
-            errorType: w.PronunciationAssessment.ErrorType,
-            phonemes: w.Phonemes?.map((p: any) => ({ phoneme: p.Phoneme, score: p.PronunciationAssessment.AccuracyScore })) || []
-          }))
-          data.allWords = [...data.allWords, ...mappedWords]
+            const wordsDetail = pron.detailResult?.Words || []
+            const mappedWords = wordsDetail.map((w: any) => ({
+              text: w.Word,
+              score: w.PronunciationAssessment.AccuracyScore,
+              errorType: w.PronunciationAssessment.ErrorType,
+              phonemes: w.Phonemes?.map((p: any) => ({ phoneme: p.Phoneme, score: p.PronunciationAssessment.AccuracyScore })) || []
+            }))
+            data.allWords = [...data.allWords, ...mappedWords]
+          }
         }
       }
 
@@ -386,21 +395,39 @@ export function ScriptTrainer({ accent, profileName }: ScriptTrainerProps) {
       setRecognizerInstance(null)
 
       const data = assessmentDataRef.current
-      if (data.chunks > 0) {
-        const finalResult = {
-          score: data.totalScore / data.chunks,
-          accuracy: data.totalAcc / data.chunks,
-          fluency: data.totalFluency / data.chunks,
-          completeness: data.totalComp / data.chunks,
-          prosody: data.totalProsody / data.chunks
-        }
-        setPronResult(finalResult)
+      const actualSpoken = data.recognizedTexts.join(" ");
+      setActualSpokenText(actualSpoken);
 
-        // 💡 화면 출력을 위해 조합된 말 저장
-        const actualSpoken = data.recognizedTexts.join(" ");
-        setActualSpokenText(actualSpoken);
+      // 💡 [동시통역 모드]: 순수 STT 텍스트와 정답을 비교하여 암기 일치율만 계산
+      if (trainingMode === "interpret") {
+        if (!actualSpoken.trim()) {
+          setIsProcessingResult(false)
+          setUserAudioUrl(null)
+          return alert("인식된 목소리가 없어요. 마이크를 켜고 씩씩하게 다시 말해볼까요?")
+        }
+
+        const targetWords = targetText.toLowerCase().replace(/[^a-z0-9]/g, ' ').split(/\s+/).filter(Boolean);
+        const spokenWords = actualSpoken.toLowerCase().replace(/[^a-z0-9]/g, ' ').split(/\s+/).filter(Boolean);
+
+        let matchCount = 0;
+        const tempTarget = [...targetWords];
+        spokenWords.forEach(sw => {
+            const idx = tempTarget.indexOf(sw);
+            if (idx !== -1) { matchCount++; tempTarget.splice(idx, 1); }
+        });
+
+        const accuracyScore = targetWords.length > 0 ? Math.round((matchCount / targetWords.length) * 100) : 0;
         
-        if (finalResult.score >= 80 && trainingMode !== "full") {
+        const finalResult = {
+          score: accuracyScore, // 종합 점수를 '암기 일치율'로 활용
+          accuracy: accuracyScore,
+          fluency: 0,
+          completeness: 0,
+          prosody: 0
+        };
+        setPronResult(finalResult);
+
+        if (finalResult.score >= 80) {
           const colors = [accent, '#fbbf24'];
           confetti({ particleCount: 50, angle: 60, spread: 55, origin: { x: 0 }, colors });
           confetti({ particleCount: 50, angle: 120, spread: 55, origin: { x: 1 }, colors });
@@ -411,17 +438,48 @@ export function ScriptTrainer({ accent, profileName }: ScriptTrainerProps) {
           sentence: targetText,
           childName: profileName,
           pronResult: finalResult,
-          wordScores: data.allWords,
-          actualSpoken: actualSpoken // 💡 코칭 엔진에도 전달!
+          wordScores: [], // 발음 상세 평가는 생략
+          actualSpoken: actualSpoken
         })
         setIsCoachLoading(false)
         setIsProcessingResult(false)
-
         if (coachRes.success && coachRes.feedback) { setAiCoachMsg(coachRes.feedback) }
+
       } else {
-        setIsProcessingResult(false)
-        setUserAudioUrl(null)
-        alert("인식된 목소리가 없어요. 마이크를 켜고 씩씩하게 다시 읽어볼까요?")
+        // 💡 [일반 연습 모드]: 기존처럼 발음/억양 점수 계산
+        if (data.chunks > 0) {
+          const finalResult = {
+            score: data.totalScore / data.chunks,
+            accuracy: data.totalAcc / data.chunks,
+            fluency: data.totalFluency / data.chunks,
+            completeness: data.totalComp / data.chunks,
+            prosody: data.totalProsody / data.chunks
+          }
+          setPronResult(finalResult)
+          
+          if (finalResult.score >= 80 && trainingMode !== "full") {
+            const colors = [accent, '#fbbf24'];
+            confetti({ particleCount: 50, angle: 60, spread: 55, origin: { x: 0 }, colors });
+            confetti({ particleCount: 50, angle: 120, spread: 55, origin: { x: 1 }, colors });
+          }
+          
+          setIsCoachLoading(true)
+          const coachRes = await generateSpeakingCoachFeedback({
+            sentence: targetText,
+            childName: profileName,
+            pronResult: finalResult,
+            wordScores: data.allWords,
+            actualSpoken: actualSpoken
+          })
+          setIsCoachLoading(false)
+          setIsProcessingResult(false)
+
+          if (coachRes.success && coachRes.feedback) { setAiCoachMsg(coachRes.feedback) }
+        } else {
+          setIsProcessingResult(false)
+          setUserAudioUrl(null)
+          alert("인식된 목소리가 없어요. 마이크를 켜고 씩씩하게 다시 읽어볼까요?")
+        }
       }
     })
   }
@@ -613,7 +671,6 @@ export function ScriptTrainer({ accent, profileName }: ScriptTrainerProps) {
                 {pronResult && (
                   <div className="flex flex-col items-center animate-in zoom-in-95 duration-300 bg-muted/20 p-4 rounded-2xl border border-border/50">
                     
-                    {/* 💡 사용자가 암기해서 어떻게 뱉었는지 시각적으로 보여주는 박스 추가 */}
                     {actualSpokenText && (trainingMode === "step" || trainingMode === "interpret") && (
                       <div className="w-full mb-5 bg-card border border-border/70 rounded-xl p-3.5 shadow-sm text-left animate-in slide-in-from-bottom-2">
                          <div className="mb-3">
@@ -621,20 +678,33 @@ export function ScriptTrainer({ accent, profileName }: ScriptTrainerProps) {
                             <p className="text-[14px] sm:text-[15px] font-bold text-foreground leading-snug">{trainingMode === "full" ? script : (sentences[stepIndex] || "")}</p>
                          </div>
                          <div>
-                            <span className="inline-block px-2.5 py-0.5 rounded-md text-[11px] font-black bg-orange-500/10 text-orange-600 mb-1">🗣️ 내가 한 말</span>
-                            <p className="text-[14px] sm:text-[15px] font-bold text-muted-foreground leading-snug">{actualSpokenText || "(말씀하신 내용이 명확하지 않아요)"}</p>
+                            <span className="inline-block px-2.5 py-0.5 rounded-md text-[11px] font-black bg-orange-500/10 text-orange-600 mb-1">🗣️ AI가 들은 소리</span>
+                            <p className="text-[14px] sm:text-[15px] font-bold text-muted-foreground leading-snug">{actualSpokenText || "(잘 안 들렸어요)"}</p>
                          </div>
                       </div>
                     )}
 
-                    <div className="grid grid-cols-4 gap-2 w-full mb-4">
-                       <div className="flex flex-col items-center justify-center py-2 bg-card rounded-xl border border-border shadow-sm"><span className="text-[10px] text-muted-foreground font-bold mb-0.5">정확도</span><span className="text-lg font-black text-blue-500">{Math.round(pronResult.accuracy)}</span></div>
-                       <div className="flex flex-col items-center justify-center py-2 bg-card rounded-xl border border-border shadow-sm"><span className="text-[10px] text-muted-foreground font-bold mb-0.5">유창성</span><span className="text-lg font-black text-indigo-500">{Math.round(pronResult.fluency)}</span></div>
-                       <div className="flex flex-col items-center justify-center py-2 bg-card rounded-xl border border-border shadow-sm"><span className="text-[10px] text-muted-foreground font-bold mb-0.5">완전성</span><span className="text-lg font-black text-amber-500">{Math.round(pronResult.completeness)}</span></div>
-                       <div className="flex flex-col items-center justify-center py-2 bg-card rounded-xl border border-border shadow-sm"><span className="text-[10px] text-muted-foreground font-bold mb-0.5">억양</span><span className="text-lg font-black text-purple-500">{Math.round(pronResult.prosody)}</span></div>
-                    </div>
+                    {/* 💡 [하이브리드 모드 UI] 동시통역 모드일 때는 '암기 일치율'만 보여줍니다! */}
+                    {trainingMode === "interpret" ? (
+                      <div className="flex flex-col items-center justify-center py-5 bg-card rounded-xl border border-border shadow-sm mb-4 w-full max-w-sm">
+                         <span className="text-xs text-muted-foreground font-bold mb-1">문장 암기 일치율</span>
+                         <span className="text-5xl font-black text-blue-500">{pronResult.score}%</span>
+                      </div>
+                    ) : (
+                      <div className="grid grid-cols-4 gap-2 w-full mb-4">
+                         <div className="flex flex-col items-center justify-center py-2 bg-card rounded-xl border border-border shadow-sm"><span className="text-[10px] text-muted-foreground font-bold mb-0.5">정확도</span><span className="text-lg font-black text-blue-500">{Math.round(pronResult.accuracy)}</span></div>
+                         <div className="flex flex-col items-center justify-center py-2 bg-card rounded-xl border border-border shadow-sm"><span className="text-[10px] text-muted-foreground font-bold mb-0.5">유창성</span><span className="text-lg font-black text-indigo-500">{Math.round(pronResult.fluency)}</span></div>
+                         <div className="flex flex-col items-center justify-center py-2 bg-card rounded-xl border border-border shadow-sm"><span className="text-[10px] text-muted-foreground font-bold mb-0.5">완전성</span><span className="text-lg font-black text-amber-500">{Math.round(pronResult.completeness)}</span></div>
+                         <div className="flex flex-col items-center justify-center py-2 bg-card rounded-xl border border-border shadow-sm"><span className="text-[10px] text-muted-foreground font-bold mb-0.5">억양</span><span className="text-lg font-black text-purple-500">{Math.round(pronResult.prosody)}</span></div>
+                      </div>
+                    )}
                     
-                    <p className="text-[15px] font-black text-foreground mb-4 text-center">{pronResult.score >= 90 ? "✨ 아나운서 같아요! 완벽한 발표입니다!" : pronResult.score >= 80 ? "👏 아주 훌륭한 발표였어요!" : pronResult.score >= 60 ? "👍 좋아요! 자신감 있게 한 번만 더 연습해볼까요?" : "💪 긴장했나요? 심호흡하고 천천히 다시 해봐요!"}</p>
+                    <p className="text-[15px] font-black text-foreground mb-4 text-center">
+                      {trainingMode === "interpret" 
+                        ? (pronResult.score >= 90 ? "✨ 완벽하게 암기했어요!" : pronResult.score >= 80 ? "👏 거의 다 외웠어요!" : pronResult.score >= 60 ? "👍 좋아요! 단어를 조금 더 떠올려 볼까요?" : "💪 긴장했나요? 천천히 다시 외워봐요!")
+                        : (pronResult.score >= 90 ? "✨ 아나운서 같아요! 완벽한 발표입니다!" : pronResult.score >= 80 ? "👏 아주 훌륭한 발표였어요!" : pronResult.score >= 60 ? "👍 좋아요! 자신감 있게 한 번만 더 연습해볼까요?" : "💪 긴장했나요? 심호흡하고 천천히 다시 해봐요!")
+                      }
+                    </p>
                     
                     {userAudioUrl && (
                       <button onClick={playUserAudio} className="w-full mb-4 flex items-center justify-center gap-2 rounded-xl py-3 font-bold text-[13px] shadow-sm transition-transform hover:opacity-80 active:scale-95 animate-in fade-in border border-transparent" style={{ color: accent, backgroundColor: accent + '1A', borderColor: accent + '33' }}><Headphones className="size-5" /> 내 {trainingMode === "full" ? "전체 발표" : "문장"} 다시 듣기</button>
@@ -642,7 +712,7 @@ export function ScriptTrainer({ accent, profileName }: ScriptTrainerProps) {
                     
                     {(isCoachLoading || aiCoachMsg) && (
                       <div className="w-full rounded-xl p-3.5 border shadow-inner text-center" style={{ backgroundColor: accent + '1A', borderColor: accent + '33' }}>
-                         <p className="text-[11px] font-bold mb-1.5 flex items-center justify-center gap-1.5" style={{ color: accent }}><Sparkles className="size-3.5 animate-spin" /> AI 원어민 선생님의 코칭</p>
+                         <p className="text-[11px] font-bold mb-1.5 flex items-center justify-center gap-1.5" style={{ color: accent }}><Sparkles className="size-3.5 animate-spin" /> AI 선생님의 코칭</p>
                          {isCoachLoading ? <p className="text-xs font-semibold text-muted-foreground animate-pulse py-1">로봇 선생님이 {profileName}이의 발표를 꼼꼼히 듣고 있어요...</p> : <p className="text-[13px] font-bold text-foreground leading-relaxed">{aiCoachMsg}</p>}
                       </div>
                     )}
