@@ -1,10 +1,8 @@
 "use client"
 
 import React, { useState, useRef, useEffect, useMemo } from "react"
-// 💡 RefreshCw 아이콘 추가
 import { Mic, Upload, Play, Sparkles, Loader2, Save, FolderOpen, Trash2, Edit3, Square, Brain, Headphones, RotateCcw, RefreshCw } from "lucide-react"
 import confetti from "canvas-confetti"
-// 💡 getAzureSpeechToken 불러오기 추가
 import { extractSpeechScriptWithGemini, generateSpeakingCoachFeedback, translateScriptWithGemini, getAzureSpeechToken } from "@/app/actions/words"
 import { cn } from "@/lib/utils"
 
@@ -36,7 +34,6 @@ export function ScriptTrainer({ accent, profileName }: ScriptTrainerProps) {
   const [trainingMode, setTrainingMode] = useState<"full" | "step" | "interpret">("full")
   const [memoLevel, setMemoLevel] = useState<number>(0)
   
-  // 💡 빈칸 위치를 랜덤하게 섞기 위한 시드값 상태 추가
   const [maskSeed, setMaskSeed] = useState<number>(Math.random())
   
   const [stepIndex, setStepIndex] = useState(0)
@@ -59,9 +56,12 @@ export function ScriptTrainer({ accent, profileName }: ScriptTrainerProps) {
   const [isMicReady, setIsMicReady] = useState(false)
   const [isProcessingResult, setIsProcessingResult] = useState(false)
   const [recognizerInstance, setRecognizerInstance] = useState<any>(null)
-  const assessmentDataRef = useRef({ totalScore: 0, totalAcc: 0, totalFluency: 0, totalComp: 0, totalProsody: 0, chunks: 0, allWords: [] as any[] })
+  const assessmentDataRef = useRef({ totalScore: 0, totalAcc: 0, totalFluency: 0, totalComp: 0, totalProsody: 0, chunks: 0, allWords: [] as any[], recognizedTexts: [] as string[] })
 
   const [userAudioUrl, setUserAudioUrl] = useState<string | null>(null)
+  // 💡 내가 뱉은 말을 화면에 띄우기 위한 상태
+  const [actualSpokenText, setActualSpokenText] = useState<string | null>(null)
+  
   const mediaStreamRef = useRef<MediaStream | null>(null)
   const mediaRecorderRef = useRef<MediaRecorder | null>(null)
   const audioChunksRef = useRef<Blob[]>([])
@@ -99,7 +99,8 @@ export function ScriptTrainer({ accent, profileName }: ScriptTrainerProps) {
     setStepIndex(0)
     setTrainingMode("full")
     setUserAudioUrl(null)
-    setMaskSeed(Math.random()) // 대본이 바뀌면 빈칸 새로 섞기
+    setActualSpokenText(null)
+    setMaskSeed(Math.random())
   }, [script])
 
   const saveCurrentScript = () => {
@@ -133,6 +134,7 @@ export function ScriptTrainer({ accent, profileName }: ScriptTrainerProps) {
     setMemoLevel(0)
     setTrainingMode("full")
     setUserAudioUrl(null)
+    setActualSpokenText(null)
     setActiveTab("practice")
   }
 
@@ -140,6 +142,7 @@ export function ScriptTrainer({ accent, profileName }: ScriptTrainerProps) {
     setTrainingMode(mode)
     setPronResult(null)
     setUserAudioUrl(null)
+    setActualSpokenText(null)
     stopTTS()
 
     if (mode === "interpret" && koTranslations.length === 0) {
@@ -187,13 +190,13 @@ export function ScriptTrainer({ accent, profileName }: ScriptTrainerProps) {
     setPronResult(null)
     setAiCoachMsg(null)
     setUserAudioUrl(null)
+    setActualSpokenText(null)
 
     try {
       const base64String = await compressImage(file)
       const res = await extractSpeechScriptWithGemini(base64String, "image/jpeg")
       if (res.success && res.script) {
         setScript(res.script)
-        // 💡 피드백 반영: AI 추출 결과를 맹신하지 않도록 확인 문구 추가
         setTimeout(() => alert("AI가 대본을 입력했어요! 오타나 틀린 글자가 없는지 꼭 확인해주세요 👀"), 300)
       } else {
         alert("대본을 읽어오는 데 실패했어요.\n(이유: " + res.error + ")")
@@ -232,7 +235,6 @@ export function ScriptTrainer({ accent, profileName }: ScriptTrainerProps) {
 
       const sdk = await import("microsoft-cognitiveservices-speech-sdk")
       
-      // 💡 [보안 강화] 서버에서 토큰을 발급받아 통신
       const tokenRes = await getAzureSpeechToken()
       if (!tokenRes.success || !tokenRes.token || !tokenRes.region) { 
         alert("Azure 통신 토큰 발급에 실패했습니다."); 
@@ -288,8 +290,9 @@ export function ScriptTrainer({ accent, profileName }: ScriptTrainerProps) {
     setPronResult(null)
     setAiCoachMsg(null)
     setUserAudioUrl(null)
+    setActualSpokenText(null)
     audioChunksRef.current = []
-    assessmentDataRef.current = { totalScore: 0, totalAcc: 0, totalFluency: 0, totalComp: 0, totalProsody: 0, chunks: 0, allWords: [] }
+    assessmentDataRef.current = { totalScore: 0, totalAcc: 0, totalFluency: 0, totalComp: 0, totalProsody: 0, chunks: 0, allWords: [], recognizedTexts: [] }
 
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ 
@@ -301,7 +304,6 @@ export function ScriptTrainer({ accent, profileName }: ScriptTrainerProps) {
       mr.start()
       mediaRecorderRef.current = mr
 
-      // 💡 [보안 강화] 서버에서 발급받은 토큰으로 채점 엔진 연결
       const sdk = await import("microsoft-cognitiveservices-speech-sdk")
       const tokenRes = await getAzureSpeechToken()
       if (!tokenRes.success || !tokenRes.token || !tokenRes.region) throw new Error("Azure Token Missing")
@@ -327,6 +329,12 @@ export function ScriptTrainer({ accent, profileName }: ScriptTrainerProps) {
         if (e.result.reason === sdk.ResultReason.RecognizedSpeech) {
           const pron = sdk.PronunciationAssessmentResult.fromResult(e.result)
           const data = assessmentDataRef.current
+          
+          // 💡 아이가 뱉은 말 기록하기
+          if (e.result.text) {
+            data.recognizedTexts.push(e.result.text);
+          }
+
           data.totalScore += pron.pronunciationScore
           data.totalAcc += pron.accuracyScore
           data.totalFluency += pron.fluencyScore
@@ -387,6 +395,10 @@ export function ScriptTrainer({ accent, profileName }: ScriptTrainerProps) {
           prosody: data.totalProsody / data.chunks
         }
         setPronResult(finalResult)
+
+        // 💡 화면 출력을 위해 조합된 말 저장
+        const actualSpoken = data.recognizedTexts.join(" ");
+        setActualSpokenText(actualSpoken);
         
         if (finalResult.score >= 80 && trainingMode !== "full") {
           const colors = [accent, '#fbbf24'];
@@ -399,7 +411,8 @@ export function ScriptTrainer({ accent, profileName }: ScriptTrainerProps) {
           sentence: targetText,
           childName: profileName,
           pronResult: finalResult,
-          wordScores: data.allWords
+          wordScores: data.allWords,
+          actualSpoken: actualSpoken // 💡 코칭 엔진에도 전달!
         })
         setIsCoachLoading(false)
         setIsProcessingResult(false)
@@ -413,7 +426,6 @@ export function ScriptTrainer({ accent, profileName }: ScriptTrainerProps) {
     })
   }
 
-  // 💡 [피드백 반영] maskSeed를 연산에 추가하여 매번 빈칸 위치가 바뀌도록 개선
   const maskedScript = useMemo(() => {
     if (memoLevel === 0 || !script) return script
     return script.split(/(\s+)/).map((word, index) => {
@@ -478,7 +490,7 @@ export function ScriptTrainer({ accent, profileName }: ScriptTrainerProps) {
               <div className="flex flex-wrap gap-1.5 shrink-0">
                 <button onClick={() => setActiveTab("archive")} className="flex items-center gap-1 text-xs font-bold px-2.5 py-1.5 rounded-full bg-blue-50 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 hover:bg-blue-100 transition-colors"><FolderOpen className="size-3" /> 불러오기</button>
                 {script && <button onClick={saveCurrentScript} className="flex items-center gap-1 text-xs font-bold px-2.5 py-1.5 rounded-full bg-green-50 dark:bg-green-900/30 text-green-600 dark:text-green-400 hover:bg-green-100 transition-colors"><Save className="size-3" /> 저장</button>}
-                {script && <button onClick={() => { if(confirm("대본을 지울까요?")) { stopTTS(); setScript(""); setMemoLevel(0); setUserAudioUrl(null); } }} className="flex items-center text-xs font-bold px-2.5 py-1.5 rounded-full bg-muted text-muted-foreground hover:bg-red-50 hover:text-red-500 transition-colors">지우기</button>}
+                {script && <button onClick={() => { if(confirm("대본을 지울까요?")) { stopTTS(); setScript(""); setMemoLevel(0); setUserAudioUrl(null); setActualSpokenText(null); } }} className="flex items-center text-xs font-bold px-2.5 py-1.5 rounded-full bg-muted text-muted-foreground hover:bg-red-50 hover:text-red-500 transition-colors">지우기</button>}
               </div>
             </div>
 
@@ -497,7 +509,6 @@ export function ScriptTrainer({ accent, profileName }: ScriptTrainerProps) {
                     {[{ id: 0, label: "Lv.1\n전체보기" }, { id: 1, label: "Lv.2\n빈칸 30%" }, { id: 2, label: "Lv.3\n빈칸 70%" }, { id: 3, label: "Lv.4\n첫 글자만" }].map(lvl => (
                       <button key={lvl.id} onClick={() => setMemoLevel(lvl.id)} className={cn("flex-1 text-[11px] sm:text-[12px] font-bold py-1.5 rounded-md transition-all whitespace-pre-wrap leading-tight", memoLevel === lvl.id ? "bg-background shadow-sm border border-border/50" : "text-muted-foreground")} style={memoLevel === lvl.id ? { color: accent } : undefined}>{lvl.label}</button>
                     ))}
-                    {/* 💡 피드백 반영: 빈칸을 누를 때마다 랜덤하게 다시 섞기 */}
                     <button onClick={() => setMaskSeed(Math.random())} disabled={memoLevel === 0} className="p-2 ml-1 text-muted-foreground hover:text-foreground hover:bg-muted rounded-md transition-colors disabled:opacity-30" title="빈칸 위치 다시 섞기">
                       <RefreshCw className="size-4" />
                     </button>
@@ -507,7 +518,6 @@ export function ScriptTrainer({ accent, profileName }: ScriptTrainerProps) {
                 {memoLevel === 0 ? (
                   <div className="relative w-full">
                     <textarea ref={textareaRef} value={script} onChange={(e) => setScript(e.target.value)} className="w-full min-h-[120px] resize-none overflow-hidden rounded-xl border-2 border-muted bg-background p-4 text-[16px] sm:text-[17px] font-medium leading-relaxed text-foreground outline-none focus:border-transparent focus:ring-2 transition-shadow shadow-inner placeholder:text-muted-foreground/50" style={{ '--tw-ring-color': accent } as any} placeholder="여기를 터치해서 대본을 직접 쓰거나 수정할 수 있습니다! ✍️" />
-                    {/* 💡 피드백 반영: Lv1에서는 보고 읽지 않도록 부드러운 넛지 추가 */}
                     {script && (
                       <p className="absolute bottom-3 right-4 text-[10px] font-bold text-muted-foreground/70 bg-background/80 px-2 py-0.5 rounded-full pointer-events-none">
                         👀 진짜 암기를 하려면 Lv.2 이상에 도전하세요!
@@ -570,21 +580,21 @@ export function ScriptTrainer({ accent, profileName }: ScriptTrainerProps) {
                 {pronResult && pronResult.score >= 80 && trainingMode !== "full" && (
                   <div className="mt-1 w-full animate-in slide-in-from-bottom-2">
                     {stepIndex < sentences.length - 1 ? (
-                      <button onClick={() => { setStepIndex(i => i + 1); setPronResult(null); setUserAudioUrl(null); }} className="w-full py-4 bg-green-500 text-white font-black rounded-2xl shadow-md hover:bg-green-600 transition-colors flex items-center justify-center gap-2">
+                      <button onClick={() => { setStepIndex(i => i + 1); setPronResult(null); setUserAudioUrl(null); setActualSpokenText(null); }} className="w-full py-4 bg-green-500 text-white font-black rounded-2xl shadow-md hover:bg-green-600 transition-colors flex items-center justify-center gap-2">
                         🎉 통과! 다음 문장으로 ➔
                       </button>
                     ) : (
                       <div className="flex flex-col gap-2.5">
                         <div className="w-full py-4 bg-indigo-500 text-white font-black rounded-2xl shadow-md text-center">🏆 모든 문장 클리어! 완벽하게 외웠어요!</div>
                         
-                        {/* 💡 피드백 반영: 도장깨기 클리어 시, 실전 모드로 자연스럽게 유도 */}
                         <button 
                           onClick={() => {
                             setTrainingMode("full");
-                            setMemoLevel(2); // 빈칸 70% 모드로 설정
+                            setMemoLevel(2);
                             setStepIndex(0);
                             setPronResult(null);
                             setUserAudioUrl(null);
+                            setActualSpokenText(null);
                             setMaskSeed(Math.random());
                           }}
                           className="w-full py-3.5 bg-foreground text-background font-bold rounded-2xl shadow-sm hover:opacity-90 transition-all flex items-center justify-center gap-2"
@@ -592,7 +602,7 @@ export function ScriptTrainer({ accent, profileName }: ScriptTrainerProps) {
                           🔥 실전처럼 70% 가리고 전체 이어서 발표하기!
                         </button>
 
-                        <button onClick={() => { setStepIndex(0); setPronResult(null); setUserAudioUrl(null); }} className="w-full py-3 bg-background border-2 border-border text-foreground font-bold rounded-2xl shadow-sm hover:bg-muted transition-colors flex items-center justify-center gap-2">
+                        <button onClick={() => { setStepIndex(0); setPronResult(null); setUserAudioUrl(null); setActualSpokenText(null); }} className="w-full py-3 bg-background border-2 border-border text-foreground font-bold rounded-2xl shadow-sm hover:bg-muted transition-colors flex items-center justify-center gap-2">
                           <RotateCcw className="size-4" /> 처음부터 다시 도전하기
                         </button>
                       </div>
@@ -602,16 +612,34 @@ export function ScriptTrainer({ accent, profileName }: ScriptTrainerProps) {
 
                 {pronResult && (
                   <div className="flex flex-col items-center animate-in zoom-in-95 duration-300 bg-muted/20 p-4 rounded-2xl border border-border/50">
+                    
+                    {/* 💡 사용자가 암기해서 어떻게 뱉었는지 시각적으로 보여주는 박스 추가 */}
+                    {actualSpokenText && (trainingMode === "step" || trainingMode === "interpret") && (
+                      <div className="w-full mb-5 bg-card border border-border/70 rounded-xl p-3.5 shadow-sm text-left animate-in slide-in-from-bottom-2">
+                         <div className="mb-3">
+                            <span className="inline-block px-2.5 py-0.5 rounded-md text-[11px] font-black bg-blue-500/10 text-blue-600 mb-1">🎯 원래 문장</span>
+                            <p className="text-[14px] sm:text-[15px] font-bold text-foreground leading-snug">{trainingMode === "full" ? script : (sentences[stepIndex] || "")}</p>
+                         </div>
+                         <div>
+                            <span className="inline-block px-2.5 py-0.5 rounded-md text-[11px] font-black bg-orange-500/10 text-orange-600 mb-1">🗣️ 내가 한 말</span>
+                            <p className="text-[14px] sm:text-[15px] font-bold text-muted-foreground leading-snug">{actualSpokenText || "(말씀하신 내용이 명확하지 않아요)"}</p>
+                         </div>
+                      </div>
+                    )}
+
                     <div className="grid grid-cols-4 gap-2 w-full mb-4">
                        <div className="flex flex-col items-center justify-center py-2 bg-card rounded-xl border border-border shadow-sm"><span className="text-[10px] text-muted-foreground font-bold mb-0.5">정확도</span><span className="text-lg font-black text-blue-500">{Math.round(pronResult.accuracy)}</span></div>
                        <div className="flex flex-col items-center justify-center py-2 bg-card rounded-xl border border-border shadow-sm"><span className="text-[10px] text-muted-foreground font-bold mb-0.5">유창성</span><span className="text-lg font-black text-indigo-500">{Math.round(pronResult.fluency)}</span></div>
                        <div className="flex flex-col items-center justify-center py-2 bg-card rounded-xl border border-border shadow-sm"><span className="text-[10px] text-muted-foreground font-bold mb-0.5">완전성</span><span className="text-lg font-black text-amber-500">{Math.round(pronResult.completeness)}</span></div>
                        <div className="flex flex-col items-center justify-center py-2 bg-card rounded-xl border border-border shadow-sm"><span className="text-[10px] text-muted-foreground font-bold mb-0.5">억양</span><span className="text-lg font-black text-purple-500">{Math.round(pronResult.prosody)}</span></div>
                     </div>
+                    
                     <p className="text-[15px] font-black text-foreground mb-4 text-center">{pronResult.score >= 90 ? "✨ 아나운서 같아요! 완벽한 발표입니다!" : pronResult.score >= 80 ? "👏 아주 훌륭한 발표였어요!" : pronResult.score >= 60 ? "👍 좋아요! 자신감 있게 한 번만 더 연습해볼까요?" : "💪 긴장했나요? 심호흡하고 천천히 다시 해봐요!"}</p>
+                    
                     {userAudioUrl && (
                       <button onClick={playUserAudio} className="w-full mb-4 flex items-center justify-center gap-2 rounded-xl py-3 font-bold text-[13px] shadow-sm transition-transform hover:opacity-80 active:scale-95 animate-in fade-in border border-transparent" style={{ color: accent, backgroundColor: accent + '1A', borderColor: accent + '33' }}><Headphones className="size-5" /> 내 {trainingMode === "full" ? "전체 발표" : "문장"} 다시 듣기</button>
                     )}
+                    
                     {(isCoachLoading || aiCoachMsg) && (
                       <div className="w-full rounded-xl p-3.5 border shadow-inner text-center" style={{ backgroundColor: accent + '1A', borderColor: accent + '33' }}>
                          <p className="text-[11px] font-bold mb-1.5 flex items-center justify-center gap-1.5" style={{ color: accent }}><Sparkles className="size-3.5 animate-spin" /> AI 원어민 선생님의 코칭</p>
