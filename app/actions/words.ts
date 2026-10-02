@@ -515,4 +515,37 @@ ${script}
     const data = await response.json();
     
     const text = data.candidates?.[0]?.content?.parts?.[0]?.text || "[]";
-    const cleanText = text.replace(/```json/g, "").replace(/
+    const cleanText = text.replace(/```json/g, "").replace(/```/g, "").trim();
+
+    return { success: true, translations: JSON.parse(cleanText) };
+  } catch (e: any) {
+    return { success: false, error: `서버 에러: ${e.message}` };
+  }
+}
+
+// 💡 [새로 추가됨] 클라이언트(브라우저)에 API 키를 노출하지 않고 안전하게 일회용 토큰 발급
+export async function getAzureSpeechToken() {
+  try {
+    // 환경변수에서 키 가져오기 (향후 환경변수 이름을 NEXT_PUBLIC_ 없이 AZURE_SPEECH_KEY 로 변경하시는 것을 권장합니다)
+    const key = process.env.AZURE_SPEECH_KEY || process.env.NEXT_PUBLIC_AZURE_SPEECH_KEY;
+    const region = process.env.AZURE_SPEECH_REGION || process.env.NEXT_PUBLIC_AZURE_SPEECH_REGION;
+
+    if (!key || !region) return { success: false, error: "Azure 설정이 없습니다." };
+
+    const response = await fetch(`https://${region}.api.cognitive.microsoft.com/sts/v1.0/issueToken`, {
+      method: "POST",
+      headers: {
+        "Ocp-Apim-Subscription-Key": key,
+        "Content-Type": "application/x-www-form-urlencoded"
+      },
+      cache: "no-store"
+    });
+
+    if (!response.ok) return { success: false, error: "토큰 발급 실패" };
+    const token = await response.text();
+    
+    return { success: true, token, region };
+  } catch (e: any) {
+    return { success: false, error: `서버 에러: ${e.message}` };
+  }
+}
