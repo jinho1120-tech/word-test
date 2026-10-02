@@ -3,15 +3,14 @@
 import React, { useMemo, useRef, useState, useEffect } from "react"
 import { Lightbulb, Check, X, ArrowRight, Volume2, Sparkles, BrainCircuit, Mic, Loader2, Headphones } from "lucide-react"
 import { cn } from "@/lib/utils"
-// 💡 클로드 피드백 반영: 토큰 발급 함수(getAzureSpeechToken) 불러오기
 import { recordQuizResult, generateContextQuiz, generateSpeakingCoachFeedback, getAzureSpeechToken } from "@/app/actions/words"
 import confetti from "canvas-confetti"
 
 import { QuizStart } from "./quiz-start"
 import { QuizResult } from "./quiz-result"
 
-// 💡 추후 환경변수(NEXT_PUBLIC_DAD_PHONE)로 빼는 것을 권장합니다.
-const DAD_PHONE = "01032854101" 
+// 💡 하드코딩 제거: Vercel 환경변수에서 아빠 전화번호를 불러옵니다.
+const DAD_PHONE = process.env.NEXT_PUBLIC_DAD_PHONE || ""
 
 const TTS_VOICES = [
   { id: "en-US-AnaNeural", label: "👧 Ana (아동)" },
@@ -178,7 +177,6 @@ export function WordQuiz({ words, accent, isMonsterMode = false }: { words: Quiz
     }
   }, [phase, score, total]);
 
-  // 💡 클로드 피드백 1: 보안 강화 (Token 발급 방식으로 변경)
   async function playPronunciation(targetText: string) {
     try {
       if (activeTimeout) { clearTimeout(activeTimeout); activeTimeout = null; }
@@ -201,7 +199,6 @@ export function WordQuiz({ words, accent, isMonsterMode = false }: { words: Quiz
         return;
       }
 
-      // 서버에서 토큰 받아오기 (보안)
       const tokenRes = await getAzureSpeechToken();
       if (!tokenRes.success || !tokenRes.token || !tokenRes.region) {
         fallbackTTS(cleanTargetText)
@@ -302,14 +299,13 @@ export function WordQuiz({ words, accent, isMonsterMode = false }: { words: Quiz
     }
   }
 
-  // 💡 클로드 피드백 2: 타이밍을 넉넉하게 변경하여 안정적인 비교 듣기 환경 구축
   async function playComparison(targetText: string, offsetSec: number, durationSec: number) {
     playPronunciation(targetText);
     
     if (activeTimeout) { clearTimeout(activeTimeout); activeTimeout = null; }
 
     const wordCount = targetText.trim().split(/\s+/).length;
-    const estimatedTtsMs = wordCount * 600 + 1000; // 💡 딜레이를 살짝 늘려서 안전하게 재생 (800 -> 1000)
+    const estimatedTtsMs = wordCount * 600 + 1000; 
     const delay = Math.max(estimatedTtsMs, durationSec * 1000 + 500);
     
     activeTimeout = setTimeout(() => {
@@ -344,7 +340,6 @@ export function WordQuiz({ words, accent, isMonsterMode = false }: { words: Quiz
     }
   }
 
-  // 💡 클로드 피드백 1: 보안 강화 (Token 발급 방식으로 변경)
   async function handlePronunciationAssessment(targetText: string) {
     if (activeTimeout) { clearTimeout(activeTimeout); activeTimeout = null; }
     if (activeAudioSource) { try { activeAudioSource.stop(); } catch(e){} activeAudioSource = null; }
@@ -366,7 +361,6 @@ export function WordQuiz({ words, accent, isMonsterMode = false }: { words: Quiz
     try {
       const sdk = await import("microsoft-cognitiveservices-speech-sdk")
       
-      // 서버에서 토큰 받아오기 (보안)
       const tokenRes = await getAzureSpeechToken();
       if (!tokenRes.success || !tokenRes.token || !tokenRes.region) {
         alert("아빠에게 알려주세요: Azure 발음 평가 키(토큰)를 발급받지 못했습니다.")
@@ -457,7 +451,6 @@ export function WordQuiz({ words, accent, isMonsterMode = false }: { words: Quiz
             
             setWordScores(mappedWords)
             
-            // 💡 클로드 피드백 3: 스피킹 퀴즈에서도 80점을 넘어야 통과(correct) 되도록 엄격하게 변경!
             if (finalResult.score >= 80) {
               setFeedback("correct")
             } else {
@@ -667,7 +660,13 @@ export function WordQuiz({ words, accent, isMonsterMode = false }: { words: Quiz
     if (!guess) return
     try { if (typeof window !== "undefined" && "speechSynthesis" in window) window.speechSynthesis.cancel() } catch (e) {}
 
+    // 💡 환경변수 DAD_PHONE 연동
     if (["아빠최고", "아빠사랑해", "지온천재", "예온천재"].includes(guess)) {
+      if (!DAD_PHONE) {
+        alert("아빠 전화번호가 환경변수(NEXT_PUBLIC_DAD_PHONE)에 설정되지 않았습니다!");
+        setValue("")
+        return;
+      }
       alert(`🎉 삐빅- 비밀 치트키 발견!\n\n아빠한테 진짜 iMessage 문자를 보냅니다! ❤️`)
       setValue("") 
       const message = guess.includes("천재") ? `아빠! 영단어 퀴즈 풀고 있는 천재 ${currentName}이에요! 😎` : `아빠 최고! 퀴즈 풀다가 아빠 생각나서 문자 보내요! 사랑해 ❤️`
