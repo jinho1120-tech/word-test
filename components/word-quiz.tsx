@@ -3,12 +3,14 @@
 import React, { useMemo, useRef, useState, useEffect } from "react"
 import { Lightbulb, Check, X, ArrowRight, Volume2, Sparkles, BrainCircuit, Mic, Loader2, Headphones } from "lucide-react"
 import { cn } from "@/lib/utils"
-import { recordQuizResult, generateContextQuiz, generateSpeakingCoachFeedback } from "@/app/actions/words"
+// 💡 클로드 피드백 반영: 토큰 발급 함수(getAzureSpeechToken) 불러오기
+import { recordQuizResult, generateContextQuiz, generateSpeakingCoachFeedback, getAzureSpeechToken } from "@/app/actions/words"
 import confetti from "canvas-confetti"
 
 import { QuizStart } from "./quiz-start"
 import { QuizResult } from "./quiz-result"
 
+// 💡 추후 환경변수(NEXT_PUBLIC_DAD_PHONE)로 빼는 것을 권장합니다.
 const DAD_PHONE = "01032854101" 
 
 const TTS_VOICES = [
@@ -176,6 +178,7 @@ export function WordQuiz({ words, accent, isMonsterMode = false }: { words: Quiz
     }
   }, [phase, score, total]);
 
+  // 💡 클로드 피드백 1: 보안 강화 (Token 발급 방식으로 변경)
   async function playPronunciation(targetText: string) {
     try {
       if (activeTimeout) { clearTimeout(activeTimeout); activeTimeout = null; }
@@ -198,16 +201,15 @@ export function WordQuiz({ words, accent, isMonsterMode = false }: { words: Quiz
         return;
       }
 
-      const key = process.env.NEXT_PUBLIC_AZURE_SPEECH_KEY
-      const region = process.env.NEXT_PUBLIC_AZURE_SPEECH_REGION
-
-      if (!key || !region) {
+      // 서버에서 토큰 받아오기 (보안)
+      const tokenRes = await getAzureSpeechToken();
+      if (!tokenRes.success || !tokenRes.token || !tokenRes.region) {
         fallbackTTS(cleanTargetText)
         return
       }
 
       const sdk = await import("microsoft-cognitiveservices-speech-sdk")
-      const speechConfig = sdk.SpeechConfig.fromSubscription(key, region)
+      const speechConfig = sdk.SpeechConfig.fromAuthorizationToken(tokenRes.token, tokenRes.region)
       speechConfig.speechSynthesisOutputFormat = sdk.SpeechSynthesisOutputFormat.Riff24Khz16BitMonoPcm;
       
       const synthesizer = new sdk.SpeechSynthesizer(speechConfig, null)
@@ -300,13 +302,14 @@ export function WordQuiz({ words, accent, isMonsterMode = false }: { words: Quiz
     }
   }
 
+  // 💡 클로드 피드백 2: 타이밍을 넉넉하게 변경하여 안정적인 비교 듣기 환경 구축
   async function playComparison(targetText: string, offsetSec: number, durationSec: number) {
     playPronunciation(targetText);
     
     if (activeTimeout) { clearTimeout(activeTimeout); activeTimeout = null; }
 
     const wordCount = targetText.trim().split(/\s+/).length;
-    const estimatedTtsMs = wordCount * 600 + 800; 
+    const estimatedTtsMs = wordCount * 600 + 1000; // 💡 딜레이를 살짝 늘려서 안전하게 재생 (800 -> 1000)
     const delay = Math.max(estimatedTtsMs, durationSec * 1000 + 500);
     
     activeTimeout = setTimeout(() => {
@@ -341,6 +344,7 @@ export function WordQuiz({ words, accent, isMonsterMode = false }: { words: Quiz
     }
   }
 
+  // 💡 클로드 피드백 1: 보안 강화 (Token 발급 방식으로 변경)
   async function handlePronunciationAssessment(targetText: string) {
     if (activeTimeout) { clearTimeout(activeTimeout); activeTimeout = null; }
     if (activeAudioSource) { try { activeAudioSource.stop(); } catch(e){} activeAudioSource = null; }
@@ -361,11 +365,11 @@ export function WordQuiz({ words, accent, isMonsterMode = false }: { words: Quiz
 
     try {
       const sdk = await import("microsoft-cognitiveservices-speech-sdk")
-      const key = process.env.NEXT_PUBLIC_AZURE_SPEECH_KEY
-      const region = process.env.NEXT_PUBLIC_AZURE_SPEECH_REGION
-
-      if (!key || !region) {
-        alert("아빠에게 알려주세요: Azure 발음 평가 키가 등록되지 않았습니다.")
+      
+      // 서버에서 토큰 받아오기 (보안)
+      const tokenRes = await getAzureSpeechToken();
+      if (!tokenRes.success || !tokenRes.token || !tokenRes.region) {
+        alert("아빠에게 알려주세요: Azure 발음 평가 키(토큰)를 발급받지 못했습니다.")
         setIsRecording(false)
         return
       }
@@ -378,7 +382,7 @@ export function WordQuiz({ words, accent, isMonsterMode = false }: { words: Quiz
         } 
       });
 
-      const speechConfig = sdk.SpeechConfig.fromSubscription(key, region)
+      const speechConfig = sdk.SpeechConfig.fromAuthorizationToken(tokenRes.token, tokenRes.region)
       speechConfig.speechRecognitionLanguage = "en-US"
       speechConfig.setProperty(sdk.PropertyId.SpeechServiceConnection_EndSilenceTimeoutMs, "1200");
 
@@ -453,6 +457,7 @@ export function WordQuiz({ words, accent, isMonsterMode = false }: { words: Quiz
             
             setWordScores(mappedWords)
             
+            // 💡 클로드 피드백 3: 스피킹 퀴즈에서도 80점을 넘어야 통과(correct) 되도록 엄격하게 변경!
             if (finalResult.score >= 80) {
               setFeedback("correct")
             } else {
@@ -1135,11 +1140,12 @@ export function WordQuiz({ words, accent, isMonsterMode = false }: { words: Quiz
                     }
                     advance({ word: current, correct: feedback === "correct" })
                   }}
-                  disabled={feedback === "idle"}
-                  className={cn("flex w-full items-center justify-center gap-2 rounded-2xl py-4 text-lg font-bold transition-colors disabled:opacity-30", feedback !== "idle" ? "bg-foreground text-background hover:opacity-90 shadow-md" : "bg-muted text-muted-foreground")}
+                  disabled={feedback === "idle" || feedback === "wrong"}
+                  className={cn("flex w-full items-center justify-center gap-2 rounded-2xl py-4 text-lg font-bold transition-colors disabled:opacity-30", feedback === "correct" ? "bg-green-500 text-white shadow-md hover:bg-green-600" : "bg-muted text-muted-foreground")}
                 >
-                  {feedback === "idle" && "마이크로 문장을 읽어주세요"}
-                  {feedback !== "idle" && "이만하면 됐어요! 다음 문장으로 ➔"}
+                  {feedback === "idle" && "마이크로 문장을 80점 이상 읽어주세요"}
+                  {feedback === "wrong" && "80점을 넘어야 다음으로 갈 수 있어요!"}
+                  {feedback === "correct" && "잘했어요! 다음 문장으로 ➔"}
                 </button>
               ) : (
                 <button 
