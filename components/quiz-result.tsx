@@ -2,80 +2,47 @@
 
 import { useState } from "react"
 import { Trophy, Gift, MessageCircle, RotateCcw, Mic } from "lucide-react"
+import { HapticButton } from "./haptic-button"
 import { cn } from "@/lib/utils"
 import type { QuizWord } from "./word-quiz"
 
-// 💡 하드코딩 제거: Vercel 환경변수에서 아빠 전화번호를 불러옵니다.
 const DAD_PHONE = process.env.NEXT_PUBLIC_DAD_PHONE || ""
 
 interface Props {
-  score: number
-  correctCount: number
-  total: number
-  bestStreak: number
-  wrongWords: QuizWord[]
-  accent: string
-  usedHint?: boolean
-  quizType?: string
-  onRetryWrong: () => void
-  onRetryAll: () => void
+  score: number; correctCount: number; total: number; bestStreak: number;
+  wrongWords: QuizWord[]; accent: string; usedHint?: boolean; quizType?: string;
+  onRetryWrong: () => void; onRetryAll: () => void;
 }
 
-export function QuizResult({ 
-  score, 
-  correctCount, 
-  total, 
-  bestStreak, 
-  wrongWords, 
-  accent, 
-  usedHint = false, 
-  quizType, 
-  onRetryWrong, 
-  onRetryAll 
-}: Props) {
+export function QuizResult({ score, correctCount, total, bestStreak, wrongWords, accent, usedHint = false, quizType, onRetryWrong, onRetryAll }: Props) {
   const [drawnCoupon, setDrawnCoupon] = useState<string | null>(null)
 
   function handleDrawCoupon() {
     const rand = Math.random() * 100
     if (rand < 20) {
-      const penalties = [
-        "💥 꽝! (벌칙: 아빠 볼에 뽀뽀 3번 하기 😘)", 
-        "💥 꽝! (벌칙: 아빠한테 하트 날리며 사랑해요 외치기 🫶)", 
-        "💥 꽝! (벌칙: 아빠 어깨 1분 주물러주기 💆‍♂️)"
-      ]
+      const penalties = ["💥 꽝! (벌칙: 아빠 볼에 뽀뽀 3번 하기 😘)", "💥 꽝! (벌칙: 아빠한테 하트 날리며 사랑해요 외치기 🫶)", "💥 꽝! (벌칙: 아빠 어깨 1분 주물러주기 💆‍♂️)"]
       setDrawnCoupon(penalties[Math.floor(Math.random() * penalties.length)])
-    } else if (rand < 35) { setDrawnCoupon("아빠의 엉덩이 춤 관람권 🕺")
-    } else if (rand < 55) { setDrawnCoupon("인간 놀이기구 탑승권 ✈️")
-    } else if (rand < 80) { setDrawnCoupon("침대까지 어부바 특급열차 🚂")
-    } else { setDrawnCoupon("아빠의 특급 안마 3분 💆‍♀️") }
+    } else if (rand < 35) setDrawnCoupon("아빠의 엉덩이 춤 관람권 🕺")
+    else if (rand < 55) setDrawnCoupon("인간 놀이기구 탑승권 ✈️")
+    else if (rand < 80) setDrawnCoupon("침대까지 어부바 특급열차 🚂")
+    else setDrawnCoupon("아빠의 특급 안마 3분 💆‍♀️")
   }
 
   const isContextMode = quizType === "context"
   const isEligibleForReward = score === 100 && total >= 10 && !usedHint
 
-  // ▼ 스피킹(말하기) 모드 전용 결과 화면 (테마 색상 100% 동기화!)
   if (quizType === "speaking") {
     return (
       <div className="flex flex-col px-6 py-10 animate-in fade-in zoom-in-95 duration-500">
         <div className="mb-6 flex flex-col items-center text-center">
-          {/* 하드코딩된 파란색 제거 -> accent 컬러 적용 */}
-          <div className="mb-3 flex size-16 items-center justify-center rounded-2xl text-white shadow-lg" style={{ backgroundColor: accent }}>
-            <Mic className="size-8" />
-          </div>
-          <h2 className="text-2xl font-black text-foreground">
-            {score === 100 ? "원어민 같은 완벽한 발음!" : "말하기 훈련 완료!"}
-          </h2>
-          <p className="mt-2 text-sm font-semibold text-muted-foreground">
-            {score === 100 
-              ? "정말 대단해요! 완벽하게 읽어냈어요." 
-              : "자신감 있게 말하는 모습이 아주 멋져요!"}
-          </p>
+          <div className="mb-3 flex size-16 items-center justify-center rounded-2xl text-white shadow-lg" style={{ backgroundColor: accent }}><Mic className="size-8" /></div>
+          <h2 className="text-2xl font-black text-foreground">{score === 100 ? "원어민 같은 완벽한 발음!" : "말하기 훈련 완료!"}</h2>
+          <p className="mt-2 text-sm font-semibold text-muted-foreground">{score === 100 ? "정말 대단해요! 완벽하게 읽어냈어요." : "자신감 있게 말하는 모습이 아주 멋져요!"}</p>
         </div>
 
         <div className="mb-6 rounded-2xl bg-muted/50 p-6 text-center shadow-inner">
           <p className="mb-1 text-sm font-bold text-muted-foreground">성공한 문장</p>
           <div className="mb-4 flex items-baseline justify-center gap-1">
-            {/* 하드코딩된 text-blue-500 제거 -> accent 컬러 적용 */}
             <span className="text-6xl font-black" style={{ color: accent }}>{correctCount}</span>
             <span className="text-3xl font-bold text-muted-foreground">/ {total}</span>
           </div>
@@ -86,37 +53,34 @@ export function QuizResult({
 
         <div className="flex flex-col gap-3 mt-2">
           {wrongWords.length > 0 && (
-            <button 
+            <HapticButton 
+              hapticLabel="아쉬웠던 문장 다시 연습하기"
               onClick={onRetryWrong} 
+              wrapperClassName="relative flex w-full"
               className="flex w-full items-center justify-center gap-2 rounded-2xl py-4 text-lg font-bold text-white shadow-md transition-opacity hover:opacity-90" 
               style={{ backgroundColor: accent }}
             >
               <RotateCcw className="size-5" /> 아쉬웠던 문장 다시 연습하기
-            </button>
+            </HapticButton>
           )}
-          
-          <button 
+          <HapticButton 
+            hapticLabel="처음부터 다시 연습하기"
             onClick={onRetryAll} 
-            className={cn(
-              "flex w-full items-center justify-center gap-2 rounded-2xl py-4 text-lg font-bold transition-colors", 
-              wrongWords.length > 0 ? "border border-border text-foreground hover:bg-muted" : "text-white shadow-md hover:opacity-90"
-            )} 
+            wrapperClassName="relative flex w-full"
+            className={cn("flex w-full items-center justify-center gap-2 rounded-2xl py-4 text-lg font-bold transition-colors", wrongWords.length > 0 ? "border border-border text-foreground hover:bg-muted" : "text-white shadow-md hover:opacity-90")} 
             style={wrongWords.length > 0 ? undefined : { backgroundColor: accent }}
           >
             <RotateCcw className="size-5" /> 처음부터 다시 연습하기
-          </button>
+          </HapticButton>
         </div>
       </div>
     )
   }
 
-  // ▼ 그 외 일반 모드 및 실전 문장 모드 화면
   return (
     <div className="flex flex-col px-6 py-10 animate-in fade-in duration-500">
       <div className="mb-6 flex flex-col items-center text-center">
-        <div className="mb-3 flex size-16 items-center justify-center rounded-2xl text-white shadow-md" style={{ backgroundColor: accent }}>
-          <Trophy className="size-8" />
-        </div>
+        <div className="mb-3 flex size-16 items-center justify-center rounded-2xl text-white shadow-md" style={{ backgroundColor: accent }}><Trophy className="size-8" /></div>
         <h2 className="text-2xl font-black text-foreground">학습 완료!</h2>
       </div>
 
@@ -132,42 +96,35 @@ export function QuizResult({
           <div className="mt-6 pt-6 border-t border-border">
             {isEligibleForReward ? (
               !drawnCoupon ? (
-                <button 
+                <HapticButton 
+                  hapticLabel="보상 뽑기"
                   onClick={handleDrawCoupon} 
+                  wrapperClassName="relative flex w-full"
                   className="flex w-full items-center justify-center gap-2 rounded-2xl bg-gradient-to-r from-amber-400 to-orange-500 py-3.5 text-base font-black text-white shadow-lg transition-transform hover:scale-105 active:scale-95"
                 >
                   <Gift className="size-5 animate-bounce" /> 노힌트 100점 달성! 보상 뽑기
-                </button>
+                </HapticButton>
               ) : (
                 <div className="flex flex-col items-center justify-center rounded-2xl border-2 border-dashed border-amber-500 bg-amber-100 p-5 animate-in zoom-in duration-500">
-                  <span className="mb-1.5 text-xs font-bold text-amber-700">
-                    {drawnCoupon.includes("꽝!") ? "앗, 이런! 😅" : "축하합니다! 쿠폰 당첨 🎉"}
-                  </span>
-                  <span className={cn("text-lg font-black text-center break-keep", drawnCoupon.includes("꽝!") ? "text-red-600" : "text-amber-950")}>
-                    {drawnCoupon}
-                  </span>
-                  <button 
+                  <span className="mb-1.5 text-xs font-bold text-amber-700">{drawnCoupon.includes("꽝!") ? "앗, 이런! 😅" : "축하합니다! 쿠폰 당첨 🎉"}</span>
+                  <span className={cn("text-lg font-black text-center break-keep", drawnCoupon.includes("꽝!") ? "text-red-600" : "text-amber-950")}>{drawnCoupon}</span>
+                  <HapticButton 
+                    hapticLabel="아빠한테 문자 보내기"
                     onClick={() => {
-                      if (!DAD_PHONE) {
-                        alert("환경변수(NEXT_PUBLIC_DAD_PHONE)에 아빠 전화번호가 설정되지 않았습니다!");
-                        return;
-                      }
-                      const msg = drawnCoupon.includes("꽝!") 
-                        ? `아빠! 나 영단어 만점 받았는데 뽑기에서 꽝 나왔어 ㅠㅠ\n\n🎯 ${drawnCoupon}` 
-                        : `아빠! 나 영단어 만점 받아서 쿠폰 뽑았어! 빨리 약속 지켜줘!\n\n🎁 당첨된 쿠폰: ${drawnCoupon}`
+                      if (!DAD_PHONE) { alert("환경변수에 아빠 전화번호가 설정되지 않았습니다!"); return; }
+                      const msg = drawnCoupon.includes("꽝!") ? `아빠! 나 영단어 만점 받았는데 뽑기에서 꽝 나왔어 ㅠㅠ\n\n🎯 ${drawnCoupon}` : `아빠! 나 영단어 만점 받아서 쿠폰 뽑았어! 빨리 약속 지켜줘!\n\n🎁 당첨된 쿠폰: ${drawnCoupon}`
                       window.location.href = `sms:${DAD_PHONE}&body=${encodeURIComponent(msg)}`
                     }}
-                    className="mt-5 flex w-full items-center justify-center gap-1.5 rounded-xl bg-[#007AFF] py-3 text-sm font-bold text-white shadow-md transition-transform hover:scale-105 active:scale-95"
+                    wrapperClassName="relative flex w-full mt-5"
+                    className="flex w-full items-center justify-center gap-1.5 rounded-xl bg-[#007AFF] py-3 text-sm font-bold text-white shadow-md transition-transform hover:scale-105 active:scale-95"
                   >
                     <MessageCircle className="size-4" /> 아빠한테 문자 보내기
-                  </button>
+                  </HapticButton>
                 </div>
               )
             ) : (
               <div className="flex flex-col items-center justify-center rounded-2xl bg-muted/50 p-4 text-center">
-                <span className="text-sm font-bold text-muted-foreground">
-                  💡 {usedHint ? "힌트 없이 10문제 이상 풀고 만점을 받으면" : "단어가 10개 이상일 때 만점을 받으면"}<br/>쿠폰 뽑기가 나타나요!
-                </span>
+                <span className="text-sm font-bold text-muted-foreground">💡 {usedHint ? "힌트 없이 10문제 이상 풀고 만점을 받으면" : "단어가 10개 이상일 때 만점을 받으면"}<br/>쿠폰 뽑기가 나타나요!</span>
               </div>
             )}
           </div>
@@ -190,25 +147,25 @@ export function QuizResult({
 
       <div className="flex flex-col gap-3 mt-2">
         {!isContextMode && wrongWords.length > 0 && (
-          <button 
+          <HapticButton 
+            hapticLabel="틀린 단어만 다시 풀기"
             onClick={onRetryWrong} 
+            wrapperClassName="relative flex w-full"
             className="flex w-full items-center justify-center gap-2 rounded-2xl py-4 text-lg font-bold text-white shadow-md transition-opacity hover:opacity-90" 
             style={{ backgroundColor: accent }}
           >
             <RotateCcw className="size-5" /> 틀린 단어만 다시 풀기
-          </button>
+          </HapticButton>
         )}
-        
-        <button 
+        <HapticButton 
+          hapticLabel="처음부터 다시하기"
           onClick={onRetryAll} 
-          className={cn(
-            "flex w-full items-center justify-center gap-2 rounded-2xl py-4 text-lg font-bold transition-colors", 
-            (!isContextMode && wrongWords.length > 0) ? "border border-border text-foreground hover:bg-muted" : "text-white shadow-md hover:opacity-90"
-          )} 
+          wrapperClassName="relative flex w-full"
+          className={cn("flex w-full items-center justify-center gap-2 rounded-2xl py-4 text-lg font-bold transition-colors", (!isContextMode && wrongWords.length > 0) ? "border border-border text-foreground hover:bg-muted" : "text-white shadow-md hover:opacity-90")} 
           style={(!isContextMode && wrongWords.length > 0) ? undefined : { backgroundColor: accent }}
         >
           <RotateCcw className="size-5" /> {isContextMode ? "새로운 AI 문제 도전하기" : "처음부터 다시하기"}
-        </button>
+        </HapticButton>
       </div>
     </div>
   )
