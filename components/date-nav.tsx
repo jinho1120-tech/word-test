@@ -4,6 +4,7 @@ import { useState, useEffect, useRef } from "react"
 import { useRouter } from "next/navigation"
 import { Calendar as CalendarIcon, ChevronLeft, ChevronRight } from "lucide-react"
 import { getActiveDates, type Profile } from "@/app/actions/words"
+import { HapticButton } from "./haptic-button"
 import { cn } from "@/lib/utils"
 
 function formatKorean(date: string): string {
@@ -32,24 +33,12 @@ const SUBJECT_ORDER = ["리딩", "스피킹", "문법", "단어"]
 function sortSubjects(a: string, b: string) {
   let indexA = SUBJECT_ORDER.findIndex(subject => a.includes(subject))
   let indexB = SUBJECT_ORDER.findIndex(subject => b.includes(subject))
-  
   if (indexA === -1) indexA = 99
   if (indexB === -1) indexB = 99
-  
   return indexA - indexB
 }
 
-export function DateNav({
-  profile,
-  date,
-  today,
-  accent,
-}: {
-  profile: Profile
-  date: string
-  today: string
-  accent: string
-}) {
+export function DateNav({ profile, date, today, accent }: { profile: Profile; date: string; today: string; accent: string }) {
   const router = useRouter()
   const [isOpen, setIsOpen] = useState(false)
   const [activeDates, setActiveDates] = useState<{ date: string, subjects: string[] }[]>([])
@@ -58,28 +47,16 @@ export function DateNav({
   const [calYear, calMonth] = date.split("-").map(Number)
   const [viewDate, setViewDate] = useState(new Date(calYear, calMonth - 1, 1))
 
-  // ▼ 최신 데이터를 불러오는 함수를 따로 분리합니다.
   const fetchActiveDates = () => {
     getActiveDates(profile).then(setActiveDates).catch(console.error)
   }
 
-  // 1. 처음 화면이 켜질 때 불러오기
-  useEffect(() => {
-    fetchActiveDates()
-  }, [profile])
-
-  // 2. ▼ 달력 팝업을 '열 때마다' 최신 데이터를 다시 불러오도록 추가! (즉각 반영)
-  useEffect(() => {
-    if (isOpen) {
-      fetchActiveDates()
-    }
-  }, [isOpen])
+  useEffect(() => { fetchActiveDates() }, [profile])
+  useEffect(() => { if (isOpen) fetchActiveDates() }, [isOpen])
 
   useEffect(() => {
     function handleClickOutside(event: MouseEvent) {
-      if (popoverRef.current && !popoverRef.current.contains(event.target as Node)) {
-        setIsOpen(false)
-      }
+      if (popoverRef.current && !popoverRef.current.contains(event.target as Node)) setIsOpen(false)
     }
     if (isOpen) document.addEventListener("mousedown", handleClickOutside)
     return () => document.removeEventListener("mousedown", handleClickOutside)
@@ -105,40 +82,38 @@ export function DateNav({
         <CalendarIcon className="size-4" style={{ color: accent }} />
         <div className="flex flex-col">
           <span className="text-sm font-bold text-foreground">{formatKorean(date)}</span>
-          {date === today && (
-            <span className="text-xs font-medium" style={{ color: accent }}>오늘</span>
-          )}
+          {date === today && <span className="text-xs font-medium" style={{ color: accent }}>오늘</span>}
         </div>
       </div>
 
       <div className="flex items-center gap-2">
-        <button
+        <HapticButton
+          hapticLabel="날짜 변경 메뉴 열기"
           onClick={() => setIsOpen(!isOpen)}
+          wrapperClassName="relative inline-flex"
           className="rounded-lg border border-input bg-background px-3 py-1.5 text-sm font-semibold text-foreground transition-colors hover:bg-muted focus:outline-none focus:ring-2 focus:ring-ring"
         >
           날짜 변경
-        </button>
+        </HapticButton>
         {date !== today && (
-          <button
+          <HapticButton
+            hapticLabel="오늘 날짜로 이동"
             onClick={() => go(today)}
+            wrapperClassName="relative inline-flex"
             className="rounded-lg px-3 py-1.5 text-xs font-semibold text-white shadow-sm transition-opacity hover:opacity-90"
             style={{ backgroundColor: accent }}
           >
             오늘
-          </button>
+          </HapticButton>
         )}
       </div>
 
       {isOpen && (
         <div className="absolute right-0 top-16 z-50 w-72 rounded-xl border border-border bg-card p-4 shadow-lg animate-in fade-in zoom-in-95">
           <div className="mb-4 flex items-center justify-between">
-            <button onClick={() => setViewDate(new Date(year, month - 1, 1))} className="rounded-md p-1 hover:bg-muted">
-              <ChevronLeft className="size-5" />
-            </button>
+            <HapticButton hapticLabel="이전 달" onClick={() => setViewDate(new Date(year, month - 1, 1))} wrapperClassName="relative inline-flex" className="rounded-md p-1 hover:bg-muted"><ChevronLeft className="size-5" /></HapticButton>
             <span className="text-sm font-bold">{year}년 {month + 1}월</span>
-            <button onClick={() => setViewDate(new Date(year, month + 1, 1))} className="rounded-md p-1 hover:bg-muted">
-              <ChevronRight className="size-5" />
-            </button>
+            <HapticButton hapticLabel="다음 달" onClick={() => setViewDate(new Date(year, month + 1, 1))} wrapperClassName="relative inline-flex" className="rounded-md p-1 hover:bg-muted"><ChevronRight className="size-5" /></HapticButton>
           </div>
 
           <div className="grid grid-cols-7 gap-1 text-center text-xs font-medium text-muted-foreground mb-2">
@@ -156,11 +131,13 @@ export function DateNav({
               const hasData = !!activeData && activeData.subjects.length > 0
 
               return (
-                <button
+                <HapticButton
                   key={i}
+                  hapticLabel={`${d}일 선택`}
                   onClick={() => go(dateStr)}
+                  wrapperClassName="relative mx-auto flex h-8 w-8"
                   className={cn(
-                    "relative flex h-8 w-8 items-center justify-center rounded-full text-sm transition-colors hover:bg-muted",
+                    "flex h-full w-full items-center justify-center rounded-full text-sm transition-colors hover:bg-muted",
                     isSelected && "font-bold text-white hover:opacity-90",
                     isToday && !isSelected && "font-bold text-foreground bg-muted"
                   )}
@@ -168,21 +145,13 @@ export function DateNav({
                 >
                   <span className="relative z-10 mb-1">{d}</span>
                   {hasData && (
-                    <div className="absolute bottom-1.5 flex max-w-full flex-wrap justify-center gap-[2px] px-0.5 z-20">
+                    <div className="absolute bottom-1.5 flex max-w-full flex-wrap justify-center gap-[2px] px-0.5 z-20 pointer-events-none">
                       {[...activeData.subjects].sort(sortSubjects).map((sub, idx) => (
-                        <span 
-                          key={idx}
-                          title={sub}
-                          className={cn(
-                            "block h-1.5 w-1.5 rounded-full",
-                            getSubjectColor(sub),
-                            isSelected && "ring-[1.5px] ring-white/90 shadow-sm"
-                          )} 
-                        />
+                        <span key={idx} title={sub} className={cn("block h-1.5 w-1.5 rounded-full", getSubjectColor(sub), isSelected && "ring-[1.5px] ring-white/90 shadow-sm")} />
                       ))}
                     </div>
                   )}
-                </button>
+                </HapticButton>
               )
             })}
           </div>
@@ -190,18 +159,10 @@ export function DateNav({
           <div className="mt-4 pt-3 border-t border-border">
             <p className="text-[10px] font-bold text-muted-foreground text-center mb-2">🎨 과목별 학습 기록</p>
             <div className="flex flex-wrap items-center justify-center gap-2.5 text-[10px] font-semibold text-foreground">
-              <div className="flex items-center gap-1">
-                <div className="w-1.5 h-1.5 rounded-full bg-blue-500" /> <span>리딩</span>
-              </div>
-              <div className="flex items-center gap-1">
-                <div className="w-1.5 h-1.5 rounded-full bg-red-500" /> <span>스피킹</span>
-              </div>
-              <div className="flex items-center gap-1">
-                <div className="w-1.5 h-1.5 rounded-full bg-green-500" /> <span>문법</span>
-              </div>
-              <div className="flex items-center gap-1">
-                <div className="w-1.5 h-1.5 rounded-full bg-amber-500" /> <span>단어</span>
-              </div>
+              <div className="flex items-center gap-1"><div className="w-1.5 h-1.5 rounded-full bg-blue-500" /> <span>리딩</span></div>
+              <div className="flex items-center gap-1"><div className="w-1.5 h-1.5 rounded-full bg-red-500" /> <span>스피킹</span></div>
+              <div className="flex items-center gap-1"><div className="w-1.5 h-1.5 rounded-full bg-green-500" /> <span>문법</span></div>
+              <div className="flex items-center gap-1"><div className="w-1.5 h-1.5 rounded-full bg-amber-500" /> <span>단어</span></div>
             </div>
           </div>
         </div>
