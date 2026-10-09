@@ -5,7 +5,6 @@ import { Lightbulb, Check, X, ArrowRight, Volume2, Sparkles, BrainCircuit, Mic, 
 import { HapticButton } from "./haptic-button"
 import { haptic } from "@/lib/haptics"
 import { cn } from "@/lib/utils"
-// 💡 gradeKoreanMeaningWithGemini 함수 import 추가
 import { recordQuizResult, generateContextQuiz, generateSpeakingCoachFeedback, getAzureSpeechToken, gradeKoreanMeaningWithGemini } from "@/app/actions/words"
 import confetti from "canvas-confetti"
 import { QuizStart } from "./quiz-start"
@@ -15,8 +14,8 @@ const DAD_PHONE = process.env.NEXT_PUBLIC_DAD_PHONE || ""
 const TTS_VOICES = [ { id: "en-US-AnaNeural", label: "👧 Ana (아동)" }, { id: "en-US-JennyNeural", label: "👩 Jenny (여성)" }, { id: "en-US-GuyNeural", label: "👨 Guy (남성)" }, { id: "en-US-AriaNeural", label: "👩 Aria (표준)" } ]
 
 export type QuizWord = { id: number; word: string; meaning: string; example: string | null; subject: string }
-// 💡 "school" 모드 타입 추가
-export type QuizType = "standard" | "listening" | "context" | "speaking" | "school"
+// 💡 "school" 삭제, "listening"이 듀얼 입력 모드로 작동함
+export type QuizType = "standard" | "listening" | "context" | "speaking"
 type Phase = "start" | "quiz" | "result"
 type Feedback = "idle" | "correct" | "wrong" | "grading"
 type Answered = { word: QuizWord; correct: boolean }
@@ -44,7 +43,7 @@ export function WordQuiz({ words, accent, isMonsterMode = false }: { words: Quiz
   const [index, setIndex] = useState(0)
   
   const [value, setValue] = useState("")
-  // 💡 학교 시험 대비용 한글 뜻 입력 state 추가
+  // 💡 리스닝 모드용 뜻 입력창 상태 유지
   const [meaningValue, setMeaningValue] = useState("")
   
   const [feedback, setFeedback] = useState<Feedback>("idle")
@@ -228,7 +227,7 @@ export function WordQuiz({ words, accent, isMonsterMode = false }: { words: Quiz
     
     setIndex(0); setValue(""); setMeaningValue(""); setFeedback("idle"); setAnswered([]); setStreak(0); setBestStreak(0); setHintUsed(false); setUsedHintInQuiz(false); setPronResult(null); setWordScores([]); setAiCoachMsg(null); setUserAudioUrl(null); setPhase("quiz");
     if (quizType !== "speaking") requestAnimationFrame(() => inputRef.current?.focus())
-    if ((quizType === "listening" || quizType === "school") && nextDeck.length > 0) setTimeout(() => playPronunciation(nextDeck[0].word), 800)
+    if (quizType === "listening" && nextDeck.length > 0) setTimeout(() => playPronunciation(nextDeck[0].word), 800)
     else if (quizType === "speaking" && nextContext.length > 0 && nextDeck.length > 0) setTimeout(() => playPronunciation(nextContext[0].sentence.replace(/___/g, nextDeck[0].word)), 800)
   }
 
@@ -259,7 +258,7 @@ export function WordQuiz({ words, accent, isMonsterMode = false }: { words: Quiz
 
     setIndex(0); setValue(""); setMeaningValue(""); setFeedback("idle"); setAnswered([]); setStreak(0); setBestStreak(0); setHintUsed(false); setUsedHintInQuiz(false); setPronResult(null); setWordScores([]); setAiCoachMsg(null); setUserAudioUrl(null); setPhase("quiz")
     if (quizType !== "speaking") requestAnimationFrame(() => inputRef.current?.focus())
-    if ((quizType === "listening" || quizType === "school") && initialDeck.length > 0) setTimeout(() => playPronunciation(initialDeck[0].word), 800)
+    if (quizType === "listening" && initialDeck.length > 0) setTimeout(() => playPronunciation(initialDeck[0].word), 800)
     else if (quizType === "speaking" && initialContext.length > 0 && initialDeck.length > 0) setTimeout(() => playPronunciation(initialContext[0].sentence.replace(/___/g, initialDeck[0].word)), 800)
   }
 
@@ -270,19 +269,18 @@ export function WordQuiz({ words, accent, isMonsterMode = false }: { words: Quiz
     if (nextIndex < total) {
       setAnswered(nextAnswered); setIndex(nextIndex); setValue(""); setMeaningValue(""); setFeedback("idle"); setHintUsed(false); setPronResult(null); setWordScores([]); setAiCoachMsg(null); setUserAudioUrl(null);
       if (quizType !== "speaking") requestAnimationFrame(() => inputRef.current?.focus())
-      if (quizType === "listening" || quizType === "school") setTimeout(() => playPronunciation(deck[nextIndex].word), 300)
+      if (quizType === "listening") setTimeout(() => playPronunciation(deck[nextIndex].word), 300)
       else if (quizType === "speaking" && contextData[nextIndex] && deck[nextIndex]) setTimeout(() => playPronunciation(contextData[nextIndex].sentence.replace(/___/g, deck[nextIndex].word)), 300)
     } else { setAnswered(nextAnswered); setPhase("result") }
   }
 
-  // 💡 [수정] 비동기 AI 채점이 포함되므로 async 함수로 변경되었습니다.
   async function submit() {
     if (!current || feedback !== "idle") return
     
     const guess = value.trim().toLowerCase(); 
     if (!guess) return
     try { if (typeof window !== "undefined" && "speechSynthesis" in window) window.speechSynthesis.cancel() } catch (e) {}
-    haptic() // 💡 키보드 엔터 입력 시에도 햅틱 발동!
+    haptic()
 
     if (["아빠최고", "아빠사랑해", "지온천재", "예온천재"].includes(guess)) {
       if (!DAD_PHONE) { alert("아빠 전화번호 설정 오류!"); setValue(""); return; }
@@ -292,8 +290,8 @@ export function WordQuiz({ words, accent, isMonsterMode = false }: { words: Quiz
 
     const isEngCorrect = guess === current.word.toLowerCase()
 
-    // 💡 [학교 시험 모드] AI 깐깐 채점 로직
-    if (quizType === "school") {
+    // 💡 듣고 쓰기(listening)가 이제 학교 시험 대비(듀얼 입력)로 통합됨
+    if (quizType === "listening") {
       const meaningGuess = meaningValue.trim()
       if (!meaningGuess) {
         alert("한글 뜻도 함께 입력해 주세요!");
@@ -307,7 +305,7 @@ export function WordQuiz({ words, accent, isMonsterMode = false }: { words: Quiz
       if (isEngCorrect && aiRes.isCorrect) {
         const newStreak = streak + 1; setStreak(newStreak); setBestStreak((b) => Math.max(b, newStreak));
         setFeedback("correct"); setHintUsed(true)
-        setAiCoachMsg(aiRes.feedback) // AI 칭찬 메시지
+        setAiCoachMsg(aiRes.feedback) 
         recordQuizResult(current.id, true).catch(console.error)
       } else {
         setStreak(0); setFeedback("wrong"); setHintUsed(true)
@@ -319,7 +317,6 @@ export function WordQuiz({ words, accent, isMonsterMode = false }: { words: Quiz
       return
     }
 
-    // 기존 일반 모드 채점 로직
     if (isEngCorrect) {
       const newStreak = streak + 1; setStreak(newStreak); setBestStreak((b) => Math.max(b, newStreak)); setFeedback("correct"); setHintUsed(true) 
       if (quizType !== "context" && quizType !== "speaking") recordQuizResult(current.id, true).catch(console.error)
@@ -559,7 +556,15 @@ export function WordQuiz({ words, accent, isMonsterMode = false }: { words: Quiz
                       ) : (<p className="text-sm font-medium text-muted-foreground">해석과 힌트를 보려면 아래 힌트 버튼을 눌러 주세요.</p>)}
                     </div>
                   ) : (
-                    <p className="text-pretty text-center font-serif italic leading-relaxed text-muted-foreground">{hintUsed ? (quizType === "listening" || quizType === "school") ? `뜻: ${current.meaning}` : current.example ? current.example.replace(new RegExp(current.word, "gi"), (m) => `${m[0]}${"·".repeat(Math.max(0, m.length - 1))}`) : `첫 글자: ${current.word[0]} (${current.word.length}글자)` : "힌트를 보려면 아래 힌트 버튼을 눌러 주세요."}</p>
+                    <p className="text-pretty text-center font-serif italic leading-relaxed text-muted-foreground">
+                      {hintUsed 
+                        ? quizType === "listening" 
+                          ? `영어 첫 글자: ${current.word[0]}... / 뜻: ${current.meaning}` 
+                          : current.example 
+                            ? current.example.replace(new RegExp(current.word, "gi"), (m) => `${m[0]}${"·".repeat(Math.max(0, m.length - 1))}`) 
+                            : `첫 글자: ${current.word[0]} (${current.word.length}글자)` 
+                        : "힌트를 보려면 아래 힌트 버튼을 눌러 주세요."}
+                    </p>
                   )}
                   {hintUsed && quizType === "standard" && <HapticButton hapticLabel="단어 듣기" onClick={() => playPronunciation(current.word)} wrapperClassName="relative inline-flex" className="flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-bold transition-opacity hover:opacity-80 shadow-sm" style={{ backgroundColor: accent, color: "white" }}><Volume2 className="size-4" /> 단어 듣기</HapticButton>}
                 </div>
@@ -572,7 +577,7 @@ export function WordQuiz({ words, accent, isMonsterMode = false }: { words: Quiz
                     onKeyDown={(e) => { 
                       if (e.key === "Enter" && !e.nativeEvent.isComposing) { 
                         e.preventDefault(); 
-                        if (quizType === "school" && feedback === "idle") meaningInputRef.current?.focus();
+                        if (quizType === "listening" && feedback === "idle") meaningInputRef.current?.focus();
                         else { if (feedback === "idle") submit(); else advance({ word: current, correct: feedback === "correct" }); }
                       } 
                     }} 
@@ -582,8 +587,8 @@ export function WordQuiz({ words, accent, isMonsterMode = false }: { words: Quiz
                     style={feedback === "idle" ? { caretColor: accent } : undefined} 
                   />
                   
-                  {/* 💡 [학교 시험 모드] 뜻 입력창 */}
-                  {quizType === "school" && (
+                  {/* 💡 듣고 영+한 쓰기 모드용 뜻 입력창 */}
+                  {quizType === "listening" && (
                     <input 
                       ref={meaningInputRef} type="text" value={meaningValue} onChange={(e) => setMeaningValue(e.target.value)} 
                       onKeyDown={(e) => { 
@@ -603,11 +608,11 @@ export function WordQuiz({ words, accent, isMonsterMode = false }: { words: Quiz
               
               <div className="mb-4 flex min-h-6 flex-col items-center justify-center">
                 {feedback === "correct" && quizType !== "speaking" && <p className="flex items-center gap-1.5 text-sm font-semibold text-green-600"><Check className="size-4" /> 정답입니다!</p>}
-                {feedback === "wrong" && quizType !== "speaking" && quizType !== "school" && <p className="flex items-center gap-1.5 text-sm font-semibold text-red-500"><X className="size-4" /> 정답: {current.word}</p>}
+                {feedback === "wrong" && quizType !== "speaking" && quizType !== "listening" && <p className="flex items-center gap-1.5 text-sm font-semibold text-red-500"><X className="size-4" /> 정답: {current.word}</p>}
                 {feedback === "idle" && hintUsed && quizType === "standard" && <p className="text-sm text-muted-foreground">첫 글자: <span className="font-bold text-foreground">{current.word[0]}</span></p>}
                 
-                {/* 💡 [학교 시험 모드] AI 선생님 피드백 노출 */}
-                {(feedback === "correct" || feedback === "wrong") && quizType === "school" && aiCoachMsg && (
+                {/* 💡 듣고 영+한 쓰기 모드 AI 선생님 피드백 노출 */}
+                {(feedback === "correct" || feedback === "wrong") && quizType === "listening" && aiCoachMsg && (
                   <p className="mt-2 text-sm font-semibold whitespace-pre-line text-center px-4" style={{ color: feedback === "correct" ? "#16a34a" : "#ef4444" }}>
                     {aiCoachMsg}
                   </p>
