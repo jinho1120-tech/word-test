@@ -14,7 +14,6 @@ const DAD_PHONE = process.env.NEXT_PUBLIC_DAD_PHONE || ""
 const TTS_VOICES = [ { id: "en-US-AnaNeural", label: "👧 Ana (아동)" }, { id: "en-US-JennyNeural", label: "👩 Jenny (여성)" }, { id: "en-US-GuyNeural", label: "👨 Guy (남성)" }, { id: "en-US-AriaNeural", label: "👩 Aria (표준)" } ]
 
 export type QuizWord = { id: number; word: string; meaning: string; example: string | null; subject: string }
-// 💡 "school" 삭제, "listening"이 듀얼 입력 모드로 작동함
 export type QuizType = "standard" | "listening" | "context" | "speaking"
 type Phase = "start" | "quiz" | "result"
 type Feedback = "idle" | "correct" | "wrong" | "grading"
@@ -43,7 +42,6 @@ export function WordQuiz({ words, accent, isMonsterMode = false }: { words: Quiz
   const [index, setIndex] = useState(0)
   
   const [value, setValue] = useState("")
-  // 💡 리스닝 모드용 뜻 입력창 상태 유지
   const [meaningValue, setMeaningValue] = useState("")
   
   const [feedback, setFeedback] = useState<Feedback>("idle")
@@ -76,37 +74,7 @@ export function WordQuiz({ words, accent, isMonsterMode = false }: { words: Quiz
 
   const current = deck[index]; const total = deck.length
   const currentName = accent === "#6366f1" || accent === "#a78bfa" || accent === "#c4b5fd" ? "지온" : "예온"
-  const loadingMessages = [ `🤖 ${currentName}이를 위한 맞춤 문장 생성 중...`, "✨ AI 선생님이 신나는 문제를 고르고 있어요!", "📝 힌트와 예문을 예쁘게 포장하는 중...", "🚀 준비 완료! 거의 다 되었어요!" ]
-
-  const score = useMemo(() => { if (total === 0) return 0; return Math.round((answered.filter((a) => a.correct).length / total) * 100) }, [answered, total])
-  const correctCount = useMemo(() => answered.filter((a) => a.correct).length, [answered])
-  const wrongWords = useMemo(() => answered.filter((a) => !a.correct).map((a) => a.word), [answered])
-
-  useEffect(() => { if (!isGenerating) return; const interval = setInterval(() => { setLoadingMsgIdx((prev) => (prev + 1) % loadingMessages.length) }, 800); return () => clearInterval(interval) }, [isGenerating, loadingMessages.length])
-
-  useEffect(() => {
-    if (phase === "result" && score === 100 && total >= 5) {
-      const duration = 3000; const animationEnd = Date.now() + duration; const defaults = { startVelocity: 30, spread: 360, ticks: 60, zIndex: 9999 };
-      const randomInRange = (min: number, max: number) => Math.random() * (max - min) + min;
-      const interval: any = setInterval(() => {
-        const timeLeft = animationEnd - Date.now(); if (timeLeft <= 0) return clearInterval(interval);
-        const particleCount = 50 * (timeLeft / duration);
-        confetti({ ...defaults, particleCount, origin: { x: randomInRange(0.1, 0.3), y: Math.random() - 0.2 } });
-        confetti({ ...defaults, particleCount, origin: { x: randomInRange(0.7, 0.9), y: Math.random() - 0.2 } });
-      }, 250);
-      return () => clearInterval(interval);
-    }
-  }, [phase, score, total]);
-
-  async function playPronunciation(targetText: string) {
-    try {
-      if (activeTimeout) { clearTimeout(activeTimeout); activeTimeout = null; }
-      if (activeAudioSource) { try { activeAudioSource.stop(); } catch(e){} activeAudioSource = null; }
-      if (typeof window !== "undefined" && "speechSynthesis" in window) window.speechSynthesis.cancel()
-
-      const cleanTargetText = targetText.replace(/\s*\/\s*/g, ' ').trim();
-      const audio = getGlobalAudio();
-      const cacheKey = `${cleanTargetText}_${ttsVoice}_${isSlowMode ? 'slow' : 'normal'}`;
+  const loadingMessages = [ `🤖 ${currentName}이를 위한 맞춤 문장 생성 중...`, "✨ AI 선생님이 신나는 문제를 고르고 있어요!", "📝 힌트와 예문을 예쁘게 포장하는 중...", "🚀 준비 완료! 거의 다 되었어요!" ]    const score = useMemo(() => { if (total === 0) return 0; return Math.round((answered.filter((a) => a.correct).length / total) * 100) }, [answered, total])   const correctCount = useMemo(() => answered.filter((a) => a.correct).length, [answered])   const wrongWords = useMemo(() => answered.filter((a) => !a.correct).map((a) => a.word), [answered])    useEffect(() => { if (!isGenerating) return; const interval = setInterval(() => { setLoadingMsgIdx((prev) => (prev + 1) \% loadingMessages.length) }, 800); return () => clearInterval(interval) }, [isGenerating, loadingMessages.length])    useEffect(() => {     if (phase === "result" && score === 100 && total >= 5) {       const duration = 3000; const animationEnd = Date.now() + duration; const defaults = { startVelocity: 30, spread: 360, ticks: 60, zIndex: 9999 };       const randomInRange = (min: number, max: number) => Math.random() * (max - min) + min;       const interval: any = setInterval(() => {         const timeLeft = animationEnd - Date.now(); if (timeLeft <= 0) return clearInterval(interval);         const particleCount = 50 * (timeLeft / duration);         confetti({ ...defaults, particleCount, origin: { x: randomInRange(0.1, 0.3), y: Math.random() - 0.2 } });         confetti({ ...defaults, particleCount, origin: { x: randomInRange(0.7, 0.9), y: Math.random() - 0.2 } });       }, 250);       return () => clearInterval(interval);     }   }, [phase, score, total]);    async function playPronunciation(targetText: string) {     try {       if (activeTimeout) { clearTimeout(activeTimeout); activeTimeout = null; }       if (activeAudioSource) { try { activeAudioSource.stop(); } catch(e){} activeAudioSource = null; }       if (typeof window !== "undefined" && "speechSynthesis" in window) window.speechSynthesis.cancel()        const cleanTargetText = targetText.replace(/\s*\/\s*/g, ' ').trim();       const audio = getGlobalAudio();       const cacheKey = `${cleanTargetText}_${ttsVoice}_${isSlowMode ? 'slow' : 'normal'}`;
 
       if (audio && ttsCache.has(cacheKey)) { audio.src = ttsCache.get(cacheKey)!; audio.play().catch((e) => { fallbackTTS(cleanTargetText); }); return; }
 
@@ -119,178 +87,15 @@ export function WordQuiz({ words, accent, isMonsterMode = false }: { words: Quiz
       const synthesizer = new sdk.SpeechSynthesizer(speechConfig, null)
       const safeText = cleanTargetText.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
       const speedRate = isSlowMode ? "-20%" : "0%";
-      const ssml = `<speak version="1.0" xmlns="http://www.w3.org/2001/10/synthesis" xml:lang="en-US"><voice name="${ttsVoice}"><prosody rate="${speedRate}">${safeText}</prosody></voice></speak>`.trim();
-
-      synthesizer.speakSsmlAsync(ssml, (result) => {
-          if (result.reason === sdk.ResultReason.SynthesizingAudioCompleted) {
-            const blob = new Blob([result.audioData], { type: "audio/wav" }); const url = URL.createObjectURL(blob); ttsCache.set(cacheKey, url);
-            if (audio) { audio.src = url; audio.play().catch(() => fallbackTTS(cleanTargetText)); } else fallbackTTS(cleanTargetText);
-          } else fallbackTTS(cleanTargetText)
-          synthesizer.close()
-        }, (err) => { fallbackTTS(cleanTargetText); synthesizer.close() }
-      )
-    } catch (e) { fallbackTTS(targetText) }
-  }
-
-  function fallbackTTS(text: string) {
-    if (typeof window !== "undefined" && "speechSynthesis" in window) {
-      const cleanText = text.replace(/\s*\/\s*/g, ' ').trim();
-      const utterance = new SpeechSynthesisUtterance(cleanText); utterance.lang = "en-US"; utterance.rate = isSlowMode ? 0.75 : 0.9; window.speechSynthesis.speak(utterance)
-    }
-  }
-
-  async function playUserWordAudio(offsetSec: number, durationSec: number) {
-    if (!userAudioUrl) return;
-    try {
-      const ctx = getAudioContext(); if (!ctx) return; if (ctx.state === "suspended") await ctx.resume();
-      if (activeAudioSource) { try { activeAudioSource.stop(); } catch(e) {} activeAudioSource.disconnect(); activeAudioSource = null; }
-      const res = await fetch(userAudioUrl); const arrayBuffer = await res.arrayBuffer(); const decodedBuffer = await ctx.decodeAudioData(arrayBuffer);
-      const source = ctx.createBufferSource(); source.buffer = decodedBuffer; source.connect(ctx.destination);
-      activeAudioSource = source; source.start(0, offsetSec, Math.max(0.1, durationSec));
-    } catch(e) {}
-  }
-
-  async function playComparison(targetText: string, offsetSec: number, durationSec: number) {
-    playPronunciation(targetText);
-    if (activeTimeout) { clearTimeout(activeTimeout); activeTimeout = null; }
-    const estimatedTtsMs = targetText.trim().split(/\s+/).length * 600 + 1000; 
-    const delay = Math.max(estimatedTtsMs, durationSec * 1000 + 500);
-    activeTimeout = setTimeout(() => { playUserWordAudio(offsetSec, durationSec); }, delay);
-  }
-
-  async function playFullUserAudio() {
-    if (!userAudioUrl) return;
-    try {
-      if (activeTimeout) { clearTimeout(activeTimeout); activeTimeout = null; }
-      if (activeAudioSource) { try { activeAudioSource.stop(); } catch(e){} activeAudioSource = null; }
-      const audio = getGlobalAudio(); if (audio) { audio.pause(); audio.currentTime = 0; }
-      const ctx = getAudioContext(); if (!ctx) return; if (ctx.state === "suspended") await ctx.resume();
-      const res = await fetch(userAudioUrl); const arrayBuffer = await res.arrayBuffer(); const decodedBuffer = await ctx.decodeAudioData(arrayBuffer);
-      const source = ctx.createBufferSource(); source.buffer = decodedBuffer; source.connect(ctx.destination);
-      activeAudioSource = source; source.start(0);
-    } catch (e) {}
-  }
-
-  async function handlePronunciationAssessment(targetText: string) {
-    if (activeTimeout) { clearTimeout(activeTimeout); activeTimeout = null; }
-    if (activeAudioSource) { try { activeAudioSource.stop(); } catch(e){} activeAudioSource = null; }
-
-    setIsRecording(true); setIsMicReady(false); setPronResult(null); setWordScores([]); setFeedback("idle"); setAiCoachMsg(null); setUserAudioUrl(null);
-    const cleanTargetText = targetText.replace(/\s*\/\s*/g, ' ').trim();
-    let mediaStream: MediaStream | null = null; let mediaRecorder: MediaRecorder | null = null; let audioChunks: Blob[] = [];
-
-    try {
-      const sdk = await import("microsoft-cognitiveservices-speech-sdk")
-      const tokenRes = await getAzureSpeechToken();
-      if (!tokenRes.success || !tokenRes.token || !tokenRes.region) { alert("아빠에게 알려주세요: Azure 발음 평가 키 발급 실패"); setIsRecording(false); return }
-
-      mediaStream = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true } });
-      const speechConfig = sdk.SpeechConfig.fromAuthorizationToken(tokenRes.token, tokenRes.region); speechConfig.speechRecognitionLanguage = "en-US"; speechConfig.setProperty(sdk.PropertyId.SpeechServiceConnection_EndSilenceTimeoutMs, "1200");
-      const audioConfig = sdk.AudioConfig.fromDefaultMicrophoneInput()
-      const pronConfig = new sdk.PronunciationAssessmentConfig(cleanTargetText, sdk.PronunciationAssessmentGradingSystem.HundredMark, sdk.PronunciationAssessmentGranularity.Phoneme, true); pronConfig.enableProsodyAssessment = true;
-      const recognizer = new sdk.SpeechRecognizer(speechConfig, audioConfig); pronConfig.applyTo(recognizer)
-
-      mediaRecorder = new MediaRecorder(mediaStream);
-      mediaRecorder.ondataavailable = (e) => { if (e.data.size > 0) audioChunks.push(e.data); }; mediaRecorder.start();
-      recognizer.sessionStarted = () => setIsMicReady(true)
-
-      const stopRecording = () => {
-        if (mediaRecorder && mediaRecorder.state !== "inactive") { mediaRecorder.onstop = () => { setUserAudioUrl(URL.createObjectURL(new Blob(audioChunks, { type: mediaRecorder?.mimeType || 'audio/webm' }))); }; mediaRecorder.stop(); mediaRecorder = null; }
-        if (mediaStream) { mediaStream.getTracks().forEach((track) => track.stop()); mediaStream = null; }
-      }
-
-      recognizer.recognizeOnceAsync(async (result) => {
-          stopRecording();
-          if (result.reason === sdk.ResultReason.RecognizedSpeech) {
-            const pron = sdk.PronunciationAssessmentResult.fromResult(result)
-            const finalResult = { score: pron.pronunciationScore, accuracy: pron.accuracyScore, fluency: pron.fluencyScore, completeness: pron.completenessScore, prosody: pron.prosodyScore || pron.pronunciationScore }
-            setPronResult(finalResult)
-            const wordsDetail = pron.detailResult?.Words || []
-            const mappedWords: WordScoreDetail[] = wordsDetail.map((w: any) => ({ text: w.Word, score: w.PronunciationAssessment.AccuracyScore, errorType: w.PronunciationAssessment.ErrorType, offsetSec: typeof w.Offset === 'number' ? w.Offset / 10000000 : undefined, durationSec: typeof w.Duration === 'number' ? w.Duration / 10000000 : undefined, phonemes: w.Phonemes?.map((p: any) => ({ phoneme: p.Phoneme, score: p.PronunciationAssessment.AccuracyScore })) || [] }))
-            setWordScores(mappedWords)
-            if (finalResult.score >= 80) setFeedback("correct"); else setFeedback("wrong");
-            setIsCoachLoading(true); const coachRes = await generateSpeakingCoachFeedback({ sentence: cleanTargetText, childName: currentName, pronResult: finalResult, wordScores: mappedWords }); setIsCoachLoading(false);
-            if (coachRes.success && coachRes.feedback) setAiCoachMsg(coachRes.feedback);
-          } else alert("목소리가 너무 작거나 짧게 들렸어요. 화면에 '이제 말씀하세요!'가 뜨면 시작해 주세요.")
-          recognizer.close(); setIsRecording(false); setIsMicReady(false)
-        }, (err) => { stopRecording(); alert("마이크 접근 거부 또는 서버 에러"); recognizer.close(); setIsRecording(false); setIsMicReady(false) }
-      )
-    } catch (error) { if (mediaStream) mediaStream.getTracks().forEach((track) => track.stop()); setIsRecording(false); setIsMicReady(false) }
-  }
-
-  function retryTest(onlyWrong: boolean) {
-    if (activeTimeout) { clearTimeout(activeTimeout); activeTimeout = null; }
-    if (activeAudioSource) { try { activeAudioSource.stop(); } catch(e){} activeAudioSource = null; }
-    let nextDeck = deck; let nextContext = contextData;
-    if (onlyWrong) { nextDeck = answered.filter((a) => !a.correct).map((a) => a.word); if (quizType === "context" || quizType === "speaking") { nextContext = nextDeck.map(w => contextData.find(c => c.word.toLowerCase() === w.word.toLowerCase())!).filter(Boolean); } }
-    setDeck(nextDeck); if (quizType === "context" || quizType === "speaking") setContextData(nextContext);
-    
-    setIndex(0); setValue(""); setMeaningValue(""); setFeedback("idle"); setAnswered([]); setStreak(0); setBestStreak(0); setHintUsed(false); setUsedHintInQuiz(false); setPronResult(null); setWordScores([]); setAiCoachMsg(null); setUserAudioUrl(null); setPhase("quiz");
-    if (quizType !== "speaking") requestAnimationFrame(() => inputRef.current?.focus())
-    if (quizType === "listening" && nextDeck.length > 0) setTimeout(() => playPronunciation(nextDeck[0].word), 800)
-    else if (quizType === "speaking" && nextContext.length > 0 && nextDeck.length > 0) setTimeout(() => playPronunciation(nextContext[0].sentence.replace(/___/g, nextDeck[0].word)), 800)
-  }
-
-  async function begin(list: QuizWord[]) {
-    try {
-      if (activeTimeout) { clearTimeout(activeTimeout); activeTimeout = null; }
-      if (activeAudioSource) { try { activeAudioSource.stop(); } catch(e){} activeAudioSource = null; }
-      if (typeof window !== "undefined") {
-        if ("speechSynthesis" in window) { window.speechSynthesis.cancel(); const unlock = new SpeechSynthesisUtterance(""); unlock.volume = 0; window.speechSynthesis.speak(unlock) }
-        const audio = getGlobalAudio(); if (audio) { audio.src = "data:audio/wav;base64,UklGRigAAABXQVZFZm10IBIAAAABAAEARKwAAIhYAQACABAAAABkYXRhAgAAAAEA"; audio.play().catch(() => {}); }
-      }
-    } catch (e) {}
-
-    let initialDeck = list; let initialContext: ContextQuizItem[] = []
-    if (quizType === "context" || quizType === "speaking") {
-      setIsGenerating(true); setLoadingMsgIdx(0)
-      const countToTake = quizType === "speaking" ? 5 : 10; const d = shuffle(list).slice(0, countToTake); const reqData = d.map(w => ({ word: w.word, meaning: w.meaning }))
-      const res = await generateContextQuiz(reqData, quizType); setIsGenerating(false)
-      if (!res.success || !res.quizData) { if ((res as any).isRateLimit) alert("😴 AI 선생님이 잠시 쉬고 있어요! 1~2분 뒤에 다시 시도해 주세요."); else alert("AI 출제 에러! 다시 시도해 주세요.\n(에러: " + res.error + ")"); return }
-      const newDeck: QuizWord[] = []; const newContextData: ContextQuizItem[] = []
-      for (const item of res.quizData) {
-        const matchedWord = d.find(w => w.word.toLowerCase() === item.word.toLowerCase())
-        if (matchedWord) { newDeck.push(matchedWord); let distractors = words.filter(w => w.word !== matchedWord.word).map(w => w.word); if (distractors.length < 3) distractors = [...distractors, "apple", "happy", "school", "friend", "water"]; newContextData.push({ ...item, options: shuffle([matchedWord.word, ...shuffle(distractors).slice(0, 3)]) }) }
-      }
-      if (newDeck.length === 0) return alert("문제를 만들지 못했습니다. 다시 시도해 주세요.")
-      initialDeck = newDeck; initialContext = newContextData; setDeck(newDeck); setContextData(newContextData)
-    } else { initialDeck = shuffle(list); setDeck(initialDeck) }
-
-    setIndex(0); setValue(""); setMeaningValue(""); setFeedback("idle"); setAnswered([]); setStreak(0); setBestStreak(0); setHintUsed(false); setUsedHintInQuiz(false); setPronResult(null); setWordScores([]); setAiCoachMsg(null); setUserAudioUrl(null); setPhase("quiz")
-    if (quizType !== "speaking") requestAnimationFrame(() => inputRef.current?.focus())
-    if (quizType === "listening" && initialDeck.length > 0) setTimeout(() => playPronunciation(initialDeck[0].word), 800)
-    else if (quizType === "speaking" && initialContext.length > 0 && initialDeck.length > 0) setTimeout(() => playPronunciation(initialContext[0].sentence.replace(/___/g, initialDeck[0].word)), 800)
-  }
-
-  function advance(record: Answered) {
-    if (activeTimeout) { clearTimeout(activeTimeout); activeTimeout = null; }
-    if (activeAudioSource) { try { activeAudioSource.stop(); } catch(e){} activeAudioSource = null; }
-    const nextAnswered = [...answered, record]; const nextIndex = index + 1
-    if (nextIndex < total) {
-      setAnswered(nextAnswered); setIndex(nextIndex); setValue(""); setMeaningValue(""); setFeedback("idle"); setHintUsed(false); setPronResult(null); setWordScores([]); setAiCoachMsg(null); setUserAudioUrl(null);
-      if (quizType !== "speaking") requestAnimationFrame(() => inputRef.current?.focus())
-      if (quizType === "listening") setTimeout(() => playPronunciation(deck[nextIndex].word), 300)
-      else if (quizType === "speaking" && contextData[nextIndex] && deck[nextIndex]) setTimeout(() => playPronunciation(contextData[nextIndex].sentence.replace(/___/g, deck[nextIndex].word)), 300)
-    } else { setAnswered(nextAnswered); setPhase("result") }
-  }
-
-  async function submit() {
-    if (!current || feedback !== "idle") return
-    
-    const guess = value.trim().toLowerCase(); 
-    if (!guess) return
-    try { if (typeof window !== "undefined" && "speechSynthesis" in window) window.speechSynthesis.cancel() } catch (e) {}
-    haptic()
-
-    if (["아빠최고", "아빠사랑해", "지온천재", "예온천재"].includes(guess)) {
-      if (!DAD_PHONE) { alert("아빠 전화번호 설정 오류!"); setValue(""); return; }
-      alert(`🎉 삐빅- 비밀 치트키 발견!\n\n아빠한테 진짜 iMessage 문자를 보냅니다! ❤️`); setValue(""); const message = guess.includes("천재") ? `아빠! 영단어 퀴즈 풀고 있는 천재 ${currentName}이에요! 😎` : `아빠 최고! 퀴즈 풀다가 아빠 생각나서 문자 보내요! 사랑해 ❤️`
+      const ssml = `<speak version="1.0" xmlns="http://www.w3.org/2001/10/synthesis" xml:lang="en-US"><voice name="${ttsVoice}"><prosody rate="${speedRate}">${safeText}</prosody></voice></speak>`.trim();        synthesizer.speakSsmlAsync(ssml, (result) => {           if (result.reason === sdk.ResultReason.SynthesizingAudioCompleted) {             const blob = new Blob([result.audioData], { type: "audio/wav" }); const url = URL.createObjectURL(blob); ttsCache.set(cacheKey, url);             if (audio) { audio.src = url; audio.play().catch(() => fallbackTTS(cleanTargetText)); } else fallbackTTS(cleanTargetText);           } else fallbackTTS(cleanTargetText)           synthesizer.close()         }, (err) => { fallbackTTS(cleanTargetText); synthesizer.close() }       )     } catch (e) { fallbackTTS(targetText) }   }    function fallbackTTS(text: string) {     if (typeof window !== "undefined" && "speechSynthesis" in window) {       const cleanText = text.replace(/\s*\/\s*/g, ' ').trim();       const utterance = new SpeechSynthesisUtterance(cleanText); utterance.lang = "en-US"; utterance.rate = isSlowMode ? 0.75 : 0.9; window.speechSynthesis.speak(utterance)     }   }    async function playUserWordAudio(offsetSec: number, durationSec: number) {     if (!userAudioUrl) return;     try {       const ctx = getAudioContext(); if (!ctx) return; if (ctx.state === "suspended") await ctx.resume();       if (activeAudioSource) { try { activeAudioSource.stop(); } catch(e) {} activeAudioSource.disconnect(); activeAudioSource = null; }       const res = await fetch(userAudioUrl); const arrayBuffer = await res.arrayBuffer(); const decodedBuffer = await ctx.decodeAudioData(arrayBuffer);       const source = ctx.createBufferSource(); source.buffer = decodedBuffer; source.connect(ctx.destination);       activeAudioSource = source; source.start(0, offsetSec, Math.max(0.1, durationSec));     } catch(e) {}   }    async function playComparison(targetText: string, offsetSec: number, durationSec: number) {     playPronunciation(targetText);     if (activeTimeout) { clearTimeout(activeTimeout); activeTimeout = null; }     const estimatedTtsMs = targetText.trim().split(/\s+/).length * 600 + 1000;      const delay = Math.max(estimatedTtsMs, durationSec * 1000 + 500);     activeTimeout = setTimeout(() => { playUserWordAudio(offsetSec, durationSec); }, delay);   }    async function playFullUserAudio() {     if (!userAudioUrl) return;     try {       if (activeTimeout) { clearTimeout(activeTimeout); activeTimeout = null; }       if (activeAudioSource) { try { activeAudioSource.stop(); } catch(e){} activeAudioSource = null; }       const audio = getGlobalAudio(); if (audio) { audio.pause(); audio.currentTime = 0; }       const ctx = getAudioContext(); if (!ctx) return; if (ctx.state === "suspended") await ctx.resume();       const res = await fetch(userAudioUrl); const arrayBuffer = await res.arrayBuffer(); const decodedBuffer = await ctx.decodeAudioData(arrayBuffer);       const source = ctx.createBufferSource(); source.buffer = decodedBuffer; source.connect(ctx.destination);       activeAudioSource = source; source.start(0);     } catch (e) {}   }    async function handlePronunciationAssessment(targetText: string) {     if (activeTimeout) { clearTimeout(activeTimeout); activeTimeout = null; }     if (activeAudioSource) { try { activeAudioSource.stop(); } catch(e){} activeAudioSource = null; }      setIsRecording(true); setIsMicReady(false); setPronResult(null); setWordScores([]); setFeedback("idle"); setAiCoachMsg(null); setUserAudioUrl(null);     const cleanTargetText = targetText.replace(/\s*\/\s*/g, ' ').trim();     let mediaStream: MediaStream \vert{} null = null; let mediaRecorder: MediaRecorder \vert{} null = null; let audioChunks: Blob[] = [];      try {       const sdk = await import("microsoft-cognitiveservices-speech-sdk")       const tokenRes = await getAzureSpeechToken();       if (!tokenRes.success \vert{}\vert{} !tokenRes.token \vert{}\vert{} !tokenRes.region) { alert("아빠에게 알려주세요: Azure 발음 평가 키 발급 실패"); setIsRecording(false); return }        mediaStream = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true } });       const speechConfig = sdk.SpeechConfig.fromAuthorizationToken(tokenRes.token, tokenRes.region); speechConfig.speechRecognitionLanguage = "en-US"; speechConfig.setProperty(sdk.PropertyId.SpeechServiceConnection_EndSilenceTimeoutMs, "1200");       const audioConfig = sdk.AudioConfig.fromDefaultMicrophoneInput()       const pronConfig = new sdk.PronunciationAssessmentConfig(cleanTargetText, sdk.PronunciationAssessmentGradingSystem.HundredMark, sdk.PronunciationAssessmentGranularity.Phoneme, true); pronConfig.enableProsodyAssessment = true;       const recognizer = new sdk.SpeechRecognizer(speechConfig, audioConfig); pronConfig.applyTo(recognizer)        mediaRecorder = new MediaRecorder(mediaStream);       mediaRecorder.ondataavailable = (e) => { if (e.data.size > 0) audioChunks.push(e.data); }; mediaRecorder.start();       recognizer.sessionStarted = () => setIsMicReady(true)        const stopRecording = () => {         if (mediaRecorder && mediaRecorder.state !== "inactive") { mediaRecorder.onstop = () => { setUserAudioUrl(URL.createObjectURL(new Blob(audioChunks, { type: mediaRecorder?.mimeType \vert{}\vert{} 'audio/webm' }))); }; mediaRecorder.stop(); mediaRecorder = null; }         if (mediaStream) { mediaStream.getTracks().forEach((track) => track.stop()); mediaStream = null; }       }        recognizer.recognizeOnceAsync(async (result) => {           stopRecording();           if (result.reason === sdk.ResultReason.RecognizedSpeech) {             const pron = sdk.PronunciationAssessmentResult.fromResult(result)             const finalResult = { score: pron.pronunciationScore, accuracy: pron.accuracyScore, fluency: pron.fluencyScore, completeness: pron.completenessScore, prosody: pron.prosodyScore \vert{}\vert{} pron.pronunciationScore }             setPronResult(finalResult)             const wordsDetail = pron.detailResult?.Words \vert{}\vert{} []             const mappedWords: WordScoreDetail[] = wordsDetail.map((w: any) => ({ text: w.Word, score: w.PronunciationAssessment.AccuracyScore, errorType: w.PronunciationAssessment.ErrorType, offsetSec: typeof w.Offset === 'number' ? w.Offset / 10000000 : undefined, durationSec: typeof w.Duration === 'number' ? w.Duration / 10000000 : undefined, phonemes: w.Phonemes?.map((p: any) => ({ phoneme: p.Phoneme, score: p.PronunciationAssessment.AccuracyScore })) \vert{}\vert{} [] }))             setWordScores(mappedWords)             if (finalResult.score >= 80) setFeedback("correct"); else setFeedback("wrong");             setIsCoachLoading(true); const coachRes = await generateSpeakingCoachFeedback({ sentence: cleanTargetText, childName: currentName, pronResult: finalResult, wordScores: mappedWords }); setIsCoachLoading(false);             if (coachRes.success && coachRes.feedback) setAiCoachMsg(coachRes.feedback);           } else alert("목소리가 너무 작거나 짧게 들렸어요. 화면에 '이제 말씀하세요!'가 뜨면 시작해 주세요.")           recognizer.close(); setIsRecording(false); setIsMicReady(false)         }, (err) => { stopRecording(); alert("마이크 접근 거부 또는 서버 에러"); recognizer.close(); setIsRecording(false); setIsMicReady(false) }       )     } catch (error) { if (mediaStream) mediaStream.getTracks().forEach((track) => track.stop()); setIsRecording(false); setIsMicReady(false) }   }    function retryTest(onlyWrong: boolean) {     if (activeTimeout) { clearTimeout(activeTimeout); activeTimeout = null; }     if (activeAudioSource) { try { activeAudioSource.stop(); } catch(e){} activeAudioSource = null; }     let nextDeck = deck; let nextContext = contextData;     if (onlyWrong) { nextDeck = answered.filter((a) => !a.correct).map((a) => a.word); if (quizType === "context" \vert{}\vert{} quizType === "speaking") { nextContext = nextDeck.map(w => contextData.find(c => c.word.toLowerCase() === w.word.toLowerCase())!).filter(Boolean); } }     setDeck(nextDeck); if (quizType === "context" \vert{}\vert{} quizType === "speaking") setContextData(nextContext);          setIndex(0); setValue(""); setMeaningValue(""); setFeedback("idle"); setAnswered([]); setStreak(0); setBestStreak(0); setHintUsed(false); setUsedHintInQuiz(false); setPronResult(null); setWordScores([]); setAiCoachMsg(null); setUserAudioUrl(null); setPhase("quiz");     if (quizType !== "speaking") requestAnimationFrame(() => inputRef.current?.focus())     if (quizType === "listening" && nextDeck.length > 0) setTimeout(() => playPronunciation(nextDeck[0].word), 800)     else if (quizType === "speaking" && nextContext.length > 0 && nextDeck.length > 0) setTimeout(() => playPronunciation(nextContext[0].sentence.replace(/___/g, nextDeck[0].word)), 800)   }    async function begin(list: QuizWord[]) {     try {       if (activeTimeout) { clearTimeout(activeTimeout); activeTimeout = null; }       if (activeAudioSource) { try { activeAudioSource.stop(); } catch(e){} activeAudioSource = null; }       if (typeof window !== "undefined") {         if ("speechSynthesis" in window) { window.speechSynthesis.cancel(); const unlock = new SpeechSynthesisUtterance(""); unlock.volume = 0; window.speechSynthesis.speak(unlock) }         const audio = getGlobalAudio(); if (audio) { audio.src = "data:audio/wav;base64,UklGRigAAABXQVZFZm10IBIAAAABAAEARKwAAIhYAQACABAAAABkYXRhAgAAAAEA"; audio.play().catch(() => {}); }       }     } catch (e) {}      let initialDeck = list; let initialContext: ContextQuizItem[] = []     if (quizType === "context" \vert{}\vert{} quizType === "speaking") {       setIsGenerating(true); setLoadingMsgIdx(0)       const countToTake = quizType === "speaking" ? 5 : 10; const d = shuffle(list).slice(0, countToTake); const reqData = d.map(w => ({ word: w.word, meaning: w.meaning }))       const res = await generateContextQuiz(reqData, quizType); setIsGenerating(false)       if (!res.success \vert{}\vert{} !res.quizData) { if ((res as any).isRateLimit) alert("😴 AI 선생님이 잠시 쉬고 있어요! 1~2분 뒤에 다시 시도해 주세요."); else alert("AI 출제 에러! 다시 시도해 주세요.\n(에러: " + res.error + ")"); return }       const newDeck: QuizWord[] = []; const newContextData: ContextQuizItem[] = []       for (const item of res.quizData) {         const matchedWord = d.find(w => w.word.toLowerCase() === item.word.toLowerCase())         if (matchedWord) { newDeck.push(matchedWord); let distractors = words.filter(w => w.word !== matchedWord.word).map(w => w.word); if (distractors.length < 3) distractors = [...distractors, "apple", "happy", "school", "friend", "water"]; newContextData.push({ ...item, options: shuffle([matchedWord.word, ...shuffle(distractors).slice(0, 3)]) }) }       }       if (newDeck.length === 0) return alert("문제를 만들지 못했습니다. 다시 시도해 주세요.")       initialDeck = newDeck; initialContext = newContextData; setDeck(newDeck); setContextData(newContextData)     } else { initialDeck = shuffle(list); setDeck(initialDeck) }      setIndex(0); setValue(""); setMeaningValue(""); setFeedback("idle"); setAnswered([]); setStreak(0); setBestStreak(0); setHintUsed(false); setUsedHintInQuiz(false); setPronResult(null); setWordScores([]); setAiCoachMsg(null); setUserAudioUrl(null); setPhase("quiz")     if (quizType !== "speaking") requestAnimationFrame(() => inputRef.current?.focus())     if (quizType === "listening" && initialDeck.length > 0) setTimeout(() => playPronunciation(initialDeck[0].word), 800)     else if (quizType === "speaking" && initialContext.length > 0 && initialDeck.length > 0) setTimeout(() => playPronunciation(initialContext[0].sentence.replace(/___/g, initialDeck[0].word)), 800)   }    function advance(record: Answered) {     if (activeTimeout) { clearTimeout(activeTimeout); activeTimeout = null; }     if (activeAudioSource) { try { activeAudioSource.stop(); } catch(e){} activeAudioSource = null; }     const nextAnswered = [...answered, record]; const nextIndex = index + 1     if (nextIndex < total) {       setAnswered(nextAnswered); setIndex(nextIndex); setValue(""); setMeaningValue(""); setFeedback("idle"); setHintUsed(false); setPronResult(null); setWordScores([]); setAiCoachMsg(null); setUserAudioUrl(null);       if (quizType !== "speaking") requestAnimationFrame(() => inputRef.current?.focus())       if (quizType === "listening") setTimeout(() => playPronunciation(deck[nextIndex].word), 300)       else if (quizType === "speaking" && contextData[nextIndex] && deck[nextIndex]) setTimeout(() => playPronunciation(contextData[nextIndex].sentence.replace(/___/g, deck[nextIndex].word)), 300)     } else { setAnswered(nextAnswered); setPhase("result") }   }    async function submit() {     if (!current \vert{}\vert{} feedback !== "idle") return          const guess = value.trim().toLowerCase();      if (!guess) return     try { if (typeof window !== "undefined" && "speechSynthesis" in window) window.speechSynthesis.cancel() } catch (e) {}     haptic()      if (["아빠최고", "아빠사랑해", "지온천재", "예온천재"].includes(guess)) {       if (!DAD_PHONE) { alert("아빠 전화번호 설정 오류!"); setValue(""); return; }       alert(`🎉 삐빅- 비밀 치트키 발견!\n\n아빠한테 진짜 iMessage 문자를 보냅니다! ❤️`); setValue(""); const message = guess.includes("천재") ? `아빠! 영단어 퀴즈 풀고 있는 천재 ${currentName}이에요! 😎` : `아빠 최고! 퀴즈 풀다가 아빠 생각나서 문자 보내요! 사랑해 ❤️`
       window.location.href = `sms:${DAD_PHONE}&body=${encodeURIComponent(message)}`; requestAnimationFrame(() => inputRef.current?.focus()); return
     }
 
-    const isEngCorrect = guess === current.word.toLowerCase()
+    // 💡 스마트 따옴표(’‘`)를 기본 따옴표(')로 통일해서 비교합니다.
+    const normalizedGuess = guess.replace(/['‘’`]/g, "'");
+    const normalizedAnswer = current.word.toLowerCase().replace(/['‘’`]/g, "'");
+    const isEngCorrect = normalizedGuess === normalizedAnswer;
 
-    // 💡 듣고 쓰기(listening)가 이제 학교 시험 대비(듀얼 입력)로 통합됨
     if (quizType === "listening") {
       const meaningGuess = meaningValue.trim()
       if (!meaningGuess) {
@@ -587,7 +392,6 @@ export function WordQuiz({ words, accent, isMonsterMode = false }: { words: Quiz
                     style={feedback === "idle" ? { caretColor: accent } : undefined} 
                   />
                   
-                  {/* 💡 듣고 영+한 쓰기 모드용 뜻 입력창 */}
                   {quizType === "listening" && (
                     <input 
                       ref={meaningInputRef} type="text" value={meaningValue} onChange={(e) => setMeaningValue(e.target.value)} 
@@ -611,7 +415,6 @@ export function WordQuiz({ words, accent, isMonsterMode = false }: { words: Quiz
                 {feedback === "wrong" && quizType !== "speaking" && quizType !== "listening" && <p className="flex items-center gap-1.5 text-sm font-semibold text-red-500"><X className="size-4" /> 정답: {current.word}</p>}
                 {feedback === "idle" && hintUsed && quizType === "standard" && <p className="text-sm text-muted-foreground">첫 글자: <span className="font-bold text-foreground">{current.word[0]}</span></p>}
                 
-                {/* 💡 듣고 영+한 쓰기 모드 AI 선생님 피드백 노출 */}
                 {(feedback === "correct" || feedback === "wrong") && quizType === "listening" && aiCoachMsg && (
                   <p className="mt-2 text-sm font-semibold whitespace-pre-line text-center px-4" style={{ color: feedback === "correct" ? "#16a34a" : "#ef4444" }}>
                     {aiCoachMsg}
