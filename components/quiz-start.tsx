@@ -62,6 +62,18 @@ export function QuizStart({ words, accent, quizType, setQuizType, isGenerating, 
             🎧 소리 듣고 쓰기
           </HapticButton>
         </div>
+
+        {/* 💡 새로 추가된 학교 시험 대비 모드 */}
+        <HapticButton 
+          hapticLabel="학교 시험 완벽 대비 모드"
+          onClick={() => setQuizType("school")} 
+          wrapperClassName="relative flex w-full"
+          className={cn("w-full rounded-lg py-2 text-[13px] font-bold transition-all", quizType === "school" ? "bg-background text-foreground shadow-sm" : "text-muted-foreground hover:bg-muted-foreground/10")}
+          style={quizType === "school" ? { boxShadow: `0 0 0 1.5px ${accent} inset` } : undefined}
+        >
+          🏫 학교 시험 대비 (듣고 영+한 쓰기)
+        </HapticButton>
+
         <HapticButton 
           hapticLabel="AI 실전 문장 퀴즈 모드"
           onClick={() => setQuizType("context")} 
