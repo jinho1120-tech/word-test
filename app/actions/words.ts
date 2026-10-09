@@ -136,6 +136,7 @@ export async function scanImageWithGemini(base64Image: string, mimeType: string)
 
     const endpoint = `https://generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash-lite:generateContent?key=${apiKey}`;
     
+    // 💡 [수정] 프롬프트에 불순물 제거(클렌징) 규칙을 대폭 강화했습니다.
     const promptText = `
 이 이미지 속 표나 텍스트에서 '단어' 목록만 필터링하여 추출해줘.
 
@@ -143,10 +144,17 @@ export async function scanImageWithGemini(base64Image: string, mimeType: string)
 1. 단순 회화 문장(예: "Where are you from?", "I'm from Singapore.", 마침표/물음표로 끝나는 문장)은 단어가 아니므로 절대 제외해.
 2. 오직 단어나 명사구(예: Canada, the United Kingdom)만 추출해.
 
+[🚨 필수 뜻 클렌징 규칙 - 가장 중요!!]
+한글 뜻에 포함된 불순물이나 기호를 완벽하게 제거하고 '기본적인 한글 뜻'만 남기세요.
+1. 괄호() 및 대괄호[] 와 그 안의 내용 모두 제거 (예: "(감정·의견) 표현하다" -> "표현하다", "쪽[측]" -> "쪽")
+2. 숫자, 특수기호, 뜻에 섞인 영단어 모두 제거 (예: "2 옆[변]" -> "옆", "녹다; 녹이다 freeze" -> "녹다, 녹이다")
+3. 반의어/유의어 설명 제거 (예: "(폭이) 넓은 narrow" -> "넓은")
+4. 품사를 명확히 유지 (명사, '~하다', '~은/는', '~게/히')
+
 [추출 항목]
 - 'word': 영어 단어
-- 'meaning': 한글 뜻 (뜻이 따로 기재되지 않은 경우 빈값 "")
-- 'example': 이미지 표에 '영어 뜻(English Definition)'이나 '예문/설명' 열이 있다면 그 내용을 추출해줘. 없으면 빈값 "".
+- 'meaning': 클렌징된 한글 뜻 (뜻이 따로 기재되지 않은 경우 빈값 "")
+- 'example': 이미지 표에 '영어 뜻(English Definition)'이나 '예문/설명' 열이 있다면 추출해줘. 없으면 빈값 "".
 
 결과는 반드시 [{"word": "Canada", "meaning": "캐나다", "example": ""}] 형태의 순수 JSON 배열로만 출력해.
     `.trim();
@@ -354,7 +362,6 @@ export async function generateSpeakingCoachFeedback(data: {
 
     const needsProsodyTip = data.pronResult.fluency < 80 || data.pronResult.prosody < 75;
 
-    // 💡 [개선] 쉼표, 마침표, 대소문자 때문에 틀렸다고 오해하지 않도록 정규식으로 전처리한 값을 비교
     const cleanSentence = data.sentence.replace(/[^a-zA-Z0-9\s]/g, '').toLowerCase().trim();
     const cleanActualSpoken = data.actualSpoken ? data.actualSpoken.replace(/[^a-zA-Z0-9\s]/g, '').toLowerCase().trim() : "";
     
@@ -365,10 +372,8 @@ export async function generateSpeakingCoachFeedback(data: {
       spokenContext = `\n[아이가 실제로 마이크에 말한 문장]\n"${data.actualSpoken}"`;
       
       if (cleanSentence !== cleanActualSpoken) {
-        // 순수 텍스트끼리 다를 때만 "틀렸다"고 피드백
         memorizationRule = `3. [암기 피드백]: [정답 문장]과 [실제로 말한 문장]의 단어가 다르거나 빠진 부분이 있어. "원래는 '~'인데, '~'라고 말했네? 다음엔 정확하게 외워서 말해보자!"라고 다정하게 짚어줘. (단, 쉼표나 마침표 같은 문장 부호 차이는 절대로 지적하지 마!)`;
       } else {
-        // 대소문자, 기호만 다르고 글자가 같으면 완벽하게 읽은 것!
         memorizationRule = `3. [암기 피드백]: 문장을 글자 하나 틀리지 않고 완벽하게 외워서 말했어! "문장도 완벽하게 다 외워서 말했네! 진짜 최고야!"라고 폭풍 칭찬해줘. (쉼표나 마침표, 대소문자 차이는 절대 지적 금지)`;
       }
     } else {
@@ -429,69 +434,28 @@ ${prosodyRule}
   }
 }
 
-export async function extractSpeechScriptWithGemini(base64Image: string, mimeType: string) {
+// 💡 [추가] 깐깐한 중학교 AI 선생님의 뜻/품사 채점 함수
+export async function gradeKoreanMeaningWithGemini(expected: string, user: string) {
   try {
     const apiKey = process.env.GEMINI_API_KEY?.trim();
-    if (!apiKey) return { success: false, error: "API 키가 등록되지 않았습니다." };
+    if (!apiKey) return { isCorrect: false, feedback: "API 키 없음" };
 
     const endpoint = `https://generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash-lite:generateContent?key=${apiKey}`;
-    
+
     const promptText = `
-이 이미지는 초등학생의 영어 학습지(워크시트)입니다. 
-인쇄된 영어 문장들과, 연필로 적힌 아이의 손글씨 정답들이 섞여 있습니다.
+당신은 깐깐한 중학교 영어 선생님입니다.
+단어의 원래 뜻은 "${expected}" 이고, 학생이 적은 뜻은 "${user}" 입니다.
 
-[당신의 임무]
-1. 인쇄된 문장의 흐름을 파악하고, 빈칸(밑줄) 자리에 아이가 연필로 적은 손글씨 정답을 완벽하게 끼워 넣으세요.
-2. 뚝뚝 끊어진 문장들을 하나로 자연스럽게 이어서, 아이가 발표(Speech) 연습을 할 수 있는 **하나의 완성된 영어 문단(Paragraph)**으로 만들어주세요.
-3. 지저분한 기호, 화살표, 한글 뜻, 점수 표시 등은 모두 무시하고 오직 "완성된 영어 문단 텍스트"만 출력하세요.
-4. "Here is the text" 같은 부연 설명은 절대 하지 말고, 오직 완성된 영어 텍스트만 결과로 반환하세요.
-    `.trim();
+[채점 기준]
+1. 품사(명사, 동사, 형용사, 부사 등)가 다르면 무조건 틀린 것(false)으로 처리하세요. (예: 원래 뜻이 '~하다(동사)'인데 '~하게(부사)'로 적었으면 오답)
+2. 띄어쓰기 오류나 완전히 뜻이 같은 유의어는 정답(true)으로 인정합니다. 단, 품사는 반드시 같아야 합니다.
+3. 학생이 여러 뜻 중 하나만 맞게 적었어도, 품사가 맞다면 정답으로 인정하세요.
 
-    const response = await fetch(endpoint, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      cache: "no-store",
-      body: JSON.stringify({
-        contents: [{ parts: [{ text: promptText }, { inline_data: { mime_type: mimeType, data: base64Image } }] }],
-        generationConfig: { temperature: 0.2 } 
-      })
-    });
-
-    if (!response.ok) return { success: false, error: "구글 AI 응답 실패" };
-    const data = await response.json();
-    
-    if (!data.candidates || data.candidates.length === 0) {
-      return { success: false, error: "응답 없음" };
-    }
-
-    const scriptText = data.candidates?.[0]?.content?.parts?.[0]?.text || "";
-    
-    if (!scriptText.trim()) {
-       return { success: false, error: "텍스트를 추출하지 못했습니다." };
-    }
-
-    return { success: true, script: scriptText.trim() };
-  } catch (e: any) {
-    return { success: false, error: `서버 에러: ${e.message}` };
-  }
+아래 JSON 형식으로만 응답하세요:
+{
+  "isCorrect": true,
+  "feedback": "왜 틀렸는지(품사 오류 등), 혹은 맞았을 경우 칭찬하는 1~2문장의 짧고 다정한 한국어 피드백"
 }
-
-export async function translateScriptWithGemini(script: string) {
-  try {
-    const apiKey = process.env.GEMINI_API_KEY?.trim();
-    if (!apiKey) return { success: false, error: "API 키가 등록되지 않았습니다." };
-
-    const endpoint = `https://generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash-lite:generateContent?key=${apiKey}`;
-    
-    const promptText = `
-다음 영어 대본을 한 문장씩 자연스러운 한국어로 번역하세요.
-각 문장별 번역을 순수한 JSON 배열 형태로만 출력하세요. (다른 설명이나 마크다운 코드블록 절대 금지)
-
-[대본]
-${script}
-
-[출력 예시]
-["안녕, 얘들아!", "나는 방과 후 클럽에 가입할까 생각 중이야.", "뜨개질 클럽에 들어갈 거야."]
     `.trim();
 
     const response = await fetch(endpoint, {
@@ -500,43 +464,21 @@ ${script}
       cache: "no-store",
       body: JSON.stringify({
         contents: [{ parts: [{ text: promptText }] }],
-        generationConfig: { temperature: 0.1 } 
+        generationConfig: { temperature: 0.1, responseMimeType: "application/json" }
       })
     });
 
-    if (!response.ok) return { success: false, error: "구글 AI 응답 실패" };
+    if (!response.ok) throw new Error("API 실패");
     const data = await response.json();
-    
-    const text = data.candidates?.[0]?.content?.parts?.[0]?.text || "[]";
+    const text = data.candidates?.[0]?.content?.parts?.[0]?.text || "{}";
     const cleanText = text.replace(/```json/g, "").replace(/```/g, "").trim();
-
-    return { success: true, translations: JSON.parse(cleanText) };
-  } catch (e: any) {
-    return { success: false, error: `서버 에러: ${e.message}` };
-  }
-}
-
-export async function getAzureSpeechToken() {
-  try {
-    const key = process.env.AZURE_SPEECH_KEY || process.env.NEXT_PUBLIC_AZURE_SPEECH_KEY;
-    const region = process.env.AZURE_SPEECH_REGION || process.env.NEXT_PUBLIC_AZURE_SPEECH_REGION;
-
-    if (!key || !region) return { success: false, error: "Azure 설정이 없습니다." };
-
-    const response = await fetch(`https://${region}.api.cognitive.microsoft.com/sts/v1.0/issueToken`, {
-      method: "POST",
-      headers: {
-        "Ocp-Apim-Subscription-Key": key,
-        "Content-Type": "application/x-www-form-urlencoded"
-      },
-      cache: "no-store"
-    });
-
-    if (!response.ok) return { success: false, error: "토큰 발급 실패" };
-    const token = await response.text();
-    
-    return { success: true, token, region };
-  } catch (e: any) {
-    return { success: false, error: `서버 에러: ${e.message}` };
+    return JSON.parse(cleanText);
+  } catch (e) {
+    console.error("AI 뜻 채점 에러:", e);
+    // API 장애 시 띄어쓰기 무시하고 단순 문자열 비교로 Fallback 처리
+    return {
+      isCorrect: expected.replace(/\s/g, "").includes(user.replace(/\s/g, "")),
+      feedback: "AI 채점 서버에 연결하지 못해 자동 채점되었습니다."
+    };
   }
 }
