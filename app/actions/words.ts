@@ -129,6 +129,7 @@ export async function updateWord(
   revalidatePath("/")
 }
 
+// 💡 [클렌징 규칙이 강화된 사진 스캔 함수]
 export async function scanImageWithGemini(base64Image: string, mimeType: string) {
   try {
     const apiKey = process.env.GEMINI_API_KEY?.trim();
@@ -136,7 +137,6 @@ export async function scanImageWithGemini(base64Image: string, mimeType: string)
 
     const endpoint = `https://generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash-lite:generateContent?key=${apiKey}`;
     
-    // 💡 [수정] 프롬프트에 불순물 제거(클렌징) 규칙을 대폭 강화했습니다.
     const promptText = `
 이 이미지 속 표나 텍스트에서 '단어' 목록만 필터링하여 추출해줘.
 
@@ -289,7 +289,7 @@ export async function generateContextQuiz(words: { word: string, meaning: string
       1. 대상 단어가 들어갈 자리는 세 개의 밑줄("___")로 비워둘 것.
       2. 문장은 초등학교 수준의 쉬운 단어로 구성하되, 절대 뻔한 교과서 예문(예: I like apples)을 반복하지 마.
       3. 이번 예문의 배경 테마는 [${randomTheme}]야. 이 테마에 어울리는 상황을 상상해서 매번 완전히 새로운 문장을 만들어줘! (Seed: ${randomSeed})
-      4. clue(해설) 항목에는 문장 속 어떤 단어가 힌트가 되어서 이 정답이 나오게 되었는지 아이들 눈높이에서 친절하게 설명해 줄 것.
+      4. clue(해설) 항목에는 문장 속 어떤 단어가 힌트가 되어서 이 정답이 나오게 되었는지 아이들 눈높이에서 친절하게 설명해 줄 일.
       
       결과는 반드시 아래 JSON 배열 형식으로만 대답할 것 (다른 설명 절대 금지).
       [
@@ -339,6 +339,7 @@ export async function generateContextQuiz(words: { word: string, meaning: string
   }
 }
 
+// 💡 [복구 완료] 발음 코칭 피드백 생성 함수
 export async function generateSpeakingCoachFeedback(data: {
   sentence: string;
   childName: string;
@@ -434,7 +435,7 @@ ${prosodyRule}
   }
 }
 
-// 💡 [추가] 깐깐한 중학교 AI 선생님의 뜻/품사 채점 함수
+// 💡 [추가 완료] 깐깐한 중학교 AI 선생님의 학교 시험용 뜻/품사 채점 함수
 export async function gradeKoreanMeaningWithGemini(expected: string, user: string) {
   try {
     const apiKey = process.env.GEMINI_API_KEY?.trim();
@@ -480,5 +481,120 @@ export async function gradeKoreanMeaningWithGemini(expected: string, user: strin
       isCorrect: expected.replace(/\s/g, "").includes(user.replace(/\s/g, "")),
       feedback: "AI 채점 서버에 연결하지 못해 자동 채점되었습니다."
     };
+  }
+}
+
+// 💡 [복구 완료] 대본 사진에서 텍스트를 추출하는 함수
+export async function extractSpeechScriptWithGemini(base64Image: string, mimeType: string) {
+  try {
+    const apiKey = process.env.GEMINI_API_KEY?.trim();
+    if (!apiKey) return { success: false, error: "API 키가 등록되지 않았습니다." };
+
+    const endpoint = `https://generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash-lite:generateContent?key=${apiKey}`;
+    
+    const promptText = `
+이 이미지는 초등학생의 영어 학습지(워크시트)입니다. 
+인쇄된 영어 문장들과, 연필로 적힌 아이의 손글씨 정답들이 섞여 있습니다.
+
+[당신의 임무]
+1. 인쇄된 문장의 흐름을 파악하고, 빈칸(밑줄) 자리에 아이가 연필로 적은 손글씨 정답을 완벽하게 끼워 넣으세요.
+2. 뚝뚝 끊어진 문장들을 하나로 자연스럽게 이어서, 아이가 발표(Speech) 연습을 할 수 있는 **하나의 완성된 영어 문단(Paragraph)**으로 만들어주세요.
+3. 지저분한 기호, 화살표, 한글 뜻, 점수 표시 등은 모두 무시하고 오직 "완성된 영어 문단 텍스트"만 출력하세요.
+4. "Here is the text" 같은 부연 설명은 절대 하지 말고, 오직 완성된 영어 텍스트만 결과로 반환하세요.
+    `.trim();
+
+    const response = await fetch(endpoint, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      cache: "no-store",
+      body: JSON.stringify({
+        contents: [{ parts: [{ text: promptText }, { inline_data: { mime_type: mimeType, data: base64Image } }] }],
+        generationConfig: { temperature: 0.2 } 
+      })
+    });
+
+    if (!response.ok) return { success: false, error: "구글 AI 응답 실패" };
+    const data = await response.json();
+    
+    if (!data.candidates || data.candidates.length === 0) {
+      return { success: false, error: "응답 없음" };
+    }
+
+    const scriptText = data.candidates?.[0]?.content?.parts?.[0]?.text || "";
+    
+    if (!scriptText.trim()) {
+       return { success: false, error: "텍스트를 추출하지 못했습니다." };
+    }
+
+    return { success: true, script: scriptText.trim() };
+  } catch (e: any) {
+    return { success: false, error: `서버 에러: ${e.message}` };
+  }
+}
+
+// 💡 [복구 완료] 대본 동시통역용 번역 함수
+export async function translateScriptWithGemini(script: string) {
+  try {
+    const apiKey = process.env.GEMINI_API_KEY?.trim();
+    if (!apiKey) return { success: false, error: "API 키가 등록되지 않았습니다." };
+
+    const endpoint = `https://generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash-lite:generateContent?key=${apiKey}`;
+    
+    const promptText = `
+다음 영어 대본을 한 문장씩 자연스러운 한국어로 번역하세요.
+각 문장별 번역을 순수한 JSON 배열 형태로만 출력하세요. (다른 설명이나 마크다운 코드블록 절대 금지)
+
+[대본]
+${script}
+
+[출력 예시]
+["안녕, 얘들아!", "나는 방과 후 클럽에 가입할까 생각 중이야.", "뜨개질 클럽에 들어갈 거야."]
+    `.trim();
+
+    const response = await fetch(endpoint, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      cache: "no-store",
+      body: JSON.stringify({
+        contents: [{ parts: [{ text: promptText }] }],
+        generationConfig: { temperature: 0.1 } 
+      })
+    });
+
+    if (!response.ok) return { success: false, error: "구글 AI 응답 실패" };
+    const data = await response.json();
+    
+    const text = data.candidates?.[0]?.content?.parts?.[0]?.text || "[]";
+    const cleanText = text.replace(/```json/g, "").replace(/```/g, "").trim();
+
+    return { success: true, translations: JSON.parse(cleanText) };
+  } catch (e: any) {
+    return { success: false, error: `서버 에러: ${e.message}` };
+  }
+}
+
+// 💡 [복구 완료] 원어민 TTS 및 발음 평가 통신을 위한 Azure 토큰 발급 함수
+export async function getAzureSpeechToken() {
+  try {
+    const key = process.env.AZURE_SPEECH_KEY || process.env.NEXT_PUBLIC_AZURE_SPEECH_KEY;
+    const region = process.env.AZURE_SPEECH_REGION || process.env.NEXT_PUBLIC_AZURE_SPEECH_REGION;
+
+    if (!key || !region) return { success: false, error: "Azure 설정이 없습니다." };
+
+    const response = await fetch(`https://${region}.api.cognitive.microsoft.com/sts/v1.0/issueToken`, {
+      method: "POST",
+      headers: {
+        "Ocp-Apim-Subscription-Key": key,
+        "Content-Type": "application/x-www-form-urlencoded"
+      },
+      cache: "no-store"
+    });
+
+    if (!response.ok) return { success: false, error: "토큰 발급 실패" };
+    const token = await response.text();
+    
+    return { success: true, token, region };
+  } catch (e: any) {
+    return { success: false, error: `서버 에러: ${e.message}` };
   }
 }
